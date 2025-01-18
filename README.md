@@ -1,0 +1,1 @@
+a static page hosted on cloudflare r2
