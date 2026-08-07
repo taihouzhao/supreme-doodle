@@ -191,6 +191,105 @@ body {
   margin-top: 0.5rem;
 }
 
+.card--quiet {
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+.card--objectives {
+  padding-bottom: 0.65rem;
+}
+
+.objectives {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.objectives__item {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+  font-size: 0.82rem;
+}
+
+.objectives__mark {
+  width: 1rem;
+  text-align: center;
+  color: var(--ink-soft);
+  font-weight: 700;
+}
+
+.objectives__item.is-done .objectives__mark {
+  color: var(--player);
+}
+
+.objectives__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  min-width: 0;
+}
+
+.objectives__body strong {
+  font-size: 0.86rem;
+}
+
+.objectives__body span {
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.objectives__item.is-done .objectives__body strong {
+  color: var(--player);
+}
+
+.sheet__goals {
+  list-style: none;
+  margin: 0.4rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sheet__goals li {
+  position: relative;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.sheet__goals li::before {
+  content: "□";
+  position: absolute;
+  left: 0;
+  color: var(--player);
+  font-weight: 700;
+}
+
+.log__toggle {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  text-transform: uppercase;
+}
+
+.log__toggle:hover {
+  color: var(--ink);
+}
+
+.btn:disabled,
+.topbar__end:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .card--hint p {
   font-size: 0.85rem;
   color: var(--ink-soft);

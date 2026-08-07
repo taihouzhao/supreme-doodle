@@ -1,4 +1,5 @@
-import { CHAPTERS, type ChapterConfig } from "../content/chapter";
+import { CHAPTERS, commanderFromUnitName, rosterUnitName, type ChapterConfig } from "../content/chapter";
+import { designation } from "../content/naming";
 import type { MissionConfig } from "../content/missions/schema";
 import { UNIT_TYPES, veterancyLevel } from "../content/units";
 import { effectiveMaxHp } from "./combat";
@@ -43,7 +44,7 @@ export function createCampaign(chapterId: string, seed: number): CampaignState {
   const chapter = chapterOf(chapterId);
   const roster: RosterUnit[] = chapter.startingRoster.map((spec, index) => ({
     id: `r${index}`,
-    name: spec.name,
+    name: rosterUnitName(spec),
     type: spec.type,
     hp: effectiveMaxHp(spec.type, spec.exp),
     maxHp: effectiveMaxHp(spec.type, spec.exp),
@@ -70,17 +71,30 @@ export function currentMission(campaign: CampaignState): MissionConfig | null {
   return chapter.missions[campaign.missionIndex] ?? null;
 }
 
-/** 补充新兵，保证前一关重创后仍有可行解 */
+/** 补充新兵，保证前一关重创后仍有可行解；每位主将仍只带一支部队 */
 function replenish(campaign: CampaignState, chapter: ChapterConfig): string[] {
   const added: string[] = [];
   let budget = chapter.maxReplacementsPerMission;
+  const usedCommanders = new Set(campaign.roster.map((unit) => commanderFromUnitName(unit.name)));
+  let reserveIndex = 0;
   while (campaign.roster.length < chapter.minRoster && budget > 0) {
+    while (
+      reserveIndex < chapter.reserveCommanders.length &&
+      usedCommanders.has(chapter.reserveCommanders[reserveIndex]!)
+    ) {
+      reserveIndex += 1;
+    }
+    const commander =
+      chapter.reserveCommanders[reserveIndex] ?? `增援${campaign.serial + 1}`;
+    reserveIndex += 1;
+    usedCommanders.add(commander);
+
     const id = `r${campaign.serial}`;
     campaign.serial += 1;
     budget -= 1;
     campaign.roster.push({
       id,
-      name: `补充${campaign.roster.length + 1}连`,
+      name: designation(commander, "rifle"),
       type: "rifle",
       hp: effectiveMaxHp("rifle", 0),
       maxHp: effectiveMaxHp("rifle", 0),

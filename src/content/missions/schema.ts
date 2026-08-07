@@ -28,6 +28,7 @@ export interface ItemDropSpec {
 
 export interface ObjectiveSpec {
   id: string;
+  name: string;
   kind: "capture" | "hold";
   x: number;
   y: number;

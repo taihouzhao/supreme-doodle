@@ -5,10 +5,12 @@ import type { Action, GameState, Unit, Vec2 } from "../core/types";
 import {
   approachTile,
   attackOptions,
+  canBeCountered,
   captureGoal,
   evacGoal,
   nearest,
   standingObjective,
+  stoppableTiles,
   unitsToAct,
 } from "./helpers";
 import type { Agent } from "./types";
@@ -16,12 +18,23 @@ import type { Agent } from "./types";
 function basicGoal(state: GameState, unit: Unit): Vec2 | null {
   const enemies = livingUnits(state, "enemy");
 
+  if (unit.keyUnit) {
+    if (state.missionKind === "withdraw") return evacGoal(state, unit);
+    const posts =
+      state.missionKind === "hold"
+        ? state.objectives.filter((o) => o.kind === "hold" && o.owner === "player")
+        : state.objectives.filter((o) => o.kind === "capture");
+    const post = nearest(unit, posts);
+    if (post && manhattan(unit, post) > 2) return post;
+    return null;
+  }
+
   if (state.missionKind === "breakthrough") {
-    // 只有步兵去占点，其他兵种去打人，免得堵住目标格
     if (UNIT_TYPES[unit.type].canCapture) {
       return captureGoal(state, unit) ?? nearest(unit, enemies);
     }
-    return nearest(unit, enemies);
+    const goal = captureGoal(state, unit) ?? nearest(unit, enemies);
+    return goal;
   }
 
   if (state.missionKind === "withdraw") {
@@ -31,6 +44,20 @@ function basicGoal(state: GameState, unit: Unit): Vec2 | null {
   const held = state.objectives.filter((o) => o.kind === "hold" && o.owner === "player");
   const post = nearest(unit, held);
   if (post && manhattan(unit, post) > 1) return post;
+  return null;
+}
+
+function retreatTile(state: GameState, unit: Unit): Vec2 | null {
+  const enemies = livingUnits(state, "enemy");
+  const threat = nearest(unit, enemies);
+  if (!threat) return null;
+  let best: { x: number; y: number; dist: number } | null = null;
+  for (const tile of stoppableTiles(state, unit)) {
+    if (tile.cost === 0) continue;
+    const dist = manhattan(tile, threat);
+    if (!best || dist > best.dist) best = { x: tile.x, y: tile.y, dist };
+  }
+  if (best && best.dist > manhattan(unit, threat)) return { x: best.x, y: best.y };
   return null;
 }
 
@@ -44,24 +71,43 @@ export const basicAgent: Agent = {
         return { kind: "capture", unitId: unit.id };
       }
 
-      // 先朝目标推进，再打射程内的敌人
+      const fragileKey = Boolean(unit.keyUnit && unit.hp / unit.maxHp < 0.7);
+
       if (unit.mpLeft > 0) {
-        const goal = basicGoal(state, unit);
-        if (goal) {
-          const tile = approachTile(state, unit, goal);
-          if (tile && tile.cost > 0 && manhattan(tile, goal) < manhattan(unit, goal)) {
-            return { kind: "move", unitId: unit.id, to: { x: tile.x, y: tile.y } };
+        if (fragileKey) {
+          const safeGoal =
+            state.missionKind === "withdraw" ? evacGoal(state, unit) : retreatTile(state, unit);
+          if (safeGoal) {
+            const tile =
+              state.missionKind === "withdraw"
+                ? approachTile(state, unit, safeGoal)
+                : { x: safeGoal.x, y: safeGoal.y, cost: 1 };
+            if (tile && (tile.x !== unit.x || tile.y !== unit.y)) {
+              return { kind: "move", unitId: unit.id, to: { x: tile.x, y: tile.y } };
+            }
+          }
+        } else {
+          const goal = basicGoal(state, unit);
+          if (goal) {
+            const tile = approachTile(state, unit, goal);
+            if (tile && tile.cost > 0 && manhattan(tile, goal) < manhattan(unit, goal)) {
+              return { kind: "move", unitId: unit.id, to: { x: tile.x, y: tile.y } };
+            }
           }
         }
       }
 
-      const options = attackOptions(state, unit);
-      if (options.length > 0) {
-        const best = options.reduce((chosen, candidate) => {
-          if (candidate.lethal !== chosen.lethal) return candidate.lethal ? candidate : chosen;
-          return candidate.target.hp < chosen.target.hp ? candidate : chosen;
-        });
-        return { kind: "attack", unitId: unit.id, targetId: best.target.id };
+      if (!fragileKey) {
+        const options = attackOptions(state, unit).filter(
+          (option) => !(unit.keyUnit && canBeCountered(state, unit, option.target)),
+        );
+        if (options.length > 0) {
+          const best = options.reduce((chosen, candidate) => {
+            if (candidate.lethal !== chosen.lethal) return candidate.lethal ? candidate : chosen;
+            return candidate.target.hp < chosen.target.hp ? candidate : chosen;
+          });
+          return { kind: "attack", unitId: unit.id, targetId: best.target.id };
+        }
       }
 
       return { kind: "wait", unitId: unit.id };

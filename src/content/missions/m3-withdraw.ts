@@ -1,15 +1,16 @@
 import type { MissionConfig } from "./schema";
 
 /**
- * M3 主力后撤：北面公路是唯一撤离通道，敌军已在中途设卡并从背后追击。
- * 撤离的单位 100% 保留，被击溃的单位则可能永久损失——这一关是整个切片的验证焦点。
+ * M3 北撤掩护：第二次战役后战线收缩，
+ * 沿公路脱离接触，护送主力北移。撤离单位完整保留。
  */
 export const M3_WITHDRAW: MissionConfig = {
   id: "m3-withdraw",
-  name: "主力后撤",
+  name: "北撤掩护",
   kind: "withdraw",
-  brief: "沿北面公路撤出。撤离的部队完整保留，留在战场上的会付出代价。",
-  maxTurns: 8,
+  brief:
+    "战线收缩。沿北面公路脱离接触，护送主力进入撤离带。撤离的部队完整保留；主力若阵亡则战役失败。敌方在路侧设卡，并试图从南面咬住后卫。",
+  maxTurns: 9,
   map: [
     "==============",
     "..F...==...F..",
@@ -33,19 +34,21 @@ export const M3_WITHDRAW: MissionConfig = {
     { x: 8, y: 8 },
   ],
   enemies: [
-    { type: "mg", x: 4, y: 2, name: "路障火力点", exp: 70 },
-    { type: "mg", x: 9, y: 2, name: "路障火力点", exp: 70 },
-    { type: "rifle", x: 6, y: 3, name: "封锁步兵" },
+    { type: "mg", x: 4, y: 2, name: "沃克机枪", exp: 80 },
+    { type: "mg", x: 9, y: 2, name: "盖伊机枪", exp: 80 },
+    { type: "mg", x: 6, y: 1, name: "科洛姆机枪", exp: 40 },
+    { type: "rifle", x: 7, y: 2, name: "米尔本步兵", exp: 30 },
   ],
   variantSlots: [
-    { index: 2, options: ["rifle", "mortar"] },
+    { index: 3, options: ["rifle", "mg"] },
   ],
   waves: [
     {
       window: [2, 3],
       units: [
-        { type: "tank", x: 6, y: 9, name: "追击装甲" },
-        { type: "rifle", x: 7, y: 9, name: "追击步兵" },
+        { type: "rifle", x: 6, y: 9, name: "奥蒙德步兵", exp: 40 },
+        { type: "rifle", x: 7, y: 9, name: "艾伦步兵", exp: 20 },
+        { type: "mg", x: 5, y: 9, name: "哈里斯机枪", exp: 50 },
       ],
     },
   ],
@@ -53,12 +56,12 @@ export const M3_WITHDRAW: MissionConfig = {
   evacZone: Array.from({ length: 14 }, (_, x) => ({ x, y: 0 })),
   itemDrops: [
     { x: 5, y: 6, options: ["medkit", "at_charge"] },
-    { x: 8, y: 6, options: ["at_charge", "arty_support"] },
+    { x: 8, y: 6, options: ["medkit"] },
   ],
-  rainChance: 0.25,
+  rainChance: 0.35,
   victory: {
     minEvacuated: 3,
-    evacuateRatio: 0.6,
+    evacuateRatio: 0.5,
     requireKeyUnit: true,
   },
 };

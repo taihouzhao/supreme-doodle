@@ -93,6 +93,65 @@ export function pathCost(state: GameState, unit: Unit, to: Vec2): number | null 
   return found ? found.cost : null;
 }
 
+/**
+ * 从起点到终点重建最短路径（含起点与终点），供表现层动画使用。
+ * 不修改单位状态；`from` 可覆盖逻辑坐标（例如移动已结算后仍按原路径回放）。
+ */
+export function findPath(
+  state: GameState,
+  unit: Unit,
+  to: Vec2,
+  from: Vec2 = { x: unit.x, y: unit.y },
+  budget = Math.max(unit.mpLeft, 32),
+): Vec2[] | null {
+  if (from.x === to.x && from.y === to.y) return [{ x: from.x, y: from.y }];
+
+  const key = (x: number, y: number) => y * state.width + x;
+  const best = new Map<number, number>();
+  const cameFrom = new Map<number, number>();
+  best.set(key(from.x, from.y), 0);
+
+  const frontier: ReachableTile[] = [{ x: from.x, y: from.y, cost: 0 }];
+
+  while (frontier.length > 0) {
+    frontier.sort((a, b) => a.cost - b.cost);
+    const current = frontier.shift() as ReachableTile;
+    const currentKey = key(current.x, current.y);
+    if ((best.get(currentKey) ?? Infinity) < current.cost) continue;
+    if (current.x === to.x && current.y === to.y) {
+      const path: Vec2[] = [{ x: to.x, y: to.y }];
+      let cursor = currentKey;
+      while (cameFrom.has(cursor)) {
+        const prev = cameFrom.get(cursor)!;
+        path.push({ x: prev % state.width, y: Math.floor(prev / state.width) });
+        cursor = prev;
+      }
+      path.reverse();
+      return path;
+    }
+
+    for (const step of NEIGHBOURS) {
+      const nx = current.x + step.x;
+      const ny = current.y + step.y;
+      if (!canEnter(state, unit, nx, ny)) continue;
+      const blocker = unitAt(state, nx, ny);
+      if (blocker && blocker.faction !== unit.faction) continue;
+      const isDest = nx === to.x && ny === to.y;
+      if (blocker && blocker.id !== unit.id && isDest) continue;
+
+      const cost = current.cost + tileAt(state, nx, ny).moveCost;
+      if (cost > budget) continue;
+      const nextKey = key(nx, ny);
+      if (cost >= (best.get(nextKey) ?? Infinity)) continue;
+      best.set(nextKey, cost);
+      cameFrom.set(nextKey, currentKey);
+      frontier.push({ x: nx, y: ny, cost });
+    }
+  }
+
+  return null;
+}
+
 export function attackRange(state: GameState, unit: Unit): { min: number; max: number } {
   const def = UNIT_TYPES[unit.type];
   const terrain = tileAt(state, unit.x, unit.y);

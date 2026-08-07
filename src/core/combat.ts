@@ -55,6 +55,7 @@ export function damageComponents(
       : defenderTile.defense;
   const terrain = 1 - rawDefense;
   const defenderVeterancy = 1 - VETERANCY.defensePerLevel * veterancyLevel(defender.exp);
+  const keyGuard = defender.keyUnit ? BALANCE.keyUnitDamageTaken : 1;
   const weather =
     state.weather === "rain" && distance > 1 ? 1 + WEATHER_EFFECT.rain.rangedDamage : 1;
   const setup = !attacker.movedThisTurn ? 1 + attackerDef.setupBonus : 1;
@@ -70,6 +71,7 @@ export function damageComponents(
         flank *
         terrain *
         defenderVeterancy *
+        keyGuard *
         weather *
         setup *
         highGround *

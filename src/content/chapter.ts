@@ -1,11 +1,13 @@
 import type { ItemId, UnitTypeId } from "../core/types";
+import { designation } from "./naming";
 import { M1_BREAKTHROUGH } from "./missions/m1-breakthrough";
 import { M2_HOLD } from "./missions/m2-hold";
 import { M3_WITHDRAW } from "./missions/m3-withdraw";
 import type { MissionConfig } from "./missions/schema";
 
 export interface StartingUnitSpec {
-  name: string;
+  /** 主将名：全军唯一，一将一支部队 */
+  commander: string;
   type: UnitTypeId;
   exp: number;
 }
@@ -15,6 +17,8 @@ export interface ChapterConfig {
   name: string;
   missions: MissionConfig[];
   startingRoster: StartingUnitSpec[];
+  /** 补充兵可用的主将名池（按顺序取尚未在花名册中的） */
+  reserveCommanders: string[];
   startingInventory: Record<ItemId, number>;
   /** 每关开始时补足到的最低编制 */
   minRoster: number;
@@ -30,28 +34,54 @@ export interface ChapterConfig {
   resupply: Partial<Record<ItemId, number>>;
 }
 
+/**
+ * 第一章 · 入朝：云山伏击 → 长津阻击 → 北撤掩护。
+ * 编制以步兵/机枪为主；每支部队对应唯一主将。
+ */
 export const CHAPTER_ONE: ChapterConfig = {
   id: "chapter-one",
-  name: "第一章 · 隘口",
+  name: "第一章 · 入朝",
   missions: [M1_BREAKTHROUGH, M2_HOLD, M3_WITHDRAW],
   startingRoster: [
-    { name: "一连", type: "rifle", exp: 80 },
-    { name: "二连", type: "rifle", exp: 30 },
-    { name: "三连", type: "rifle", exp: 10 },
-    { name: "四连", type: "rifle", exp: 0 },
-    { name: "机枪一班", type: "mg", exp: 50 },
-    { name: "机枪二班", type: "mg", exp: 0 },
-    { name: "迫击炮班", type: "mortar", exp: 40 },
-    { name: "装甲排", type: "tank", exp: 20 },
+    { commander: "梁兴初", type: "rifle", exp: 120 },
+    { commander: "江拥辉", type: "rifle", exp: 40 },
+    { commander: "温玉成", type: "rifle", exp: 20 },
+    { commander: "邓岳", type: "rifle", exp: 0 },
+    { commander: "吴瑞林", type: "rifle", exp: 0 },
+    { commander: "张竭诚", type: "mg", exp: 60 },
+    { commander: "贺晋年", type: "mg", exp: 10 },
+    { commander: "李天佑", type: "mg", exp: 0 },
   ],
-  startingInventory: { medkit: 2, at_charge: 1, arty_support: 1 },
+  reserveCommanders: [
+    "韩先楚",
+    "解方",
+    "杜平",
+    "刘震",
+    "杨得志",
+    "彭德怀",
+    "洪学智",
+    "邓华",
+  ],
+  startingInventory: { medkit: 2, at_charge: 1, arty_support: 0 },
   minRoster: 8,
   maxReplacementsPerMission: 4,
   permanentLossChance: { won: 0.35, lost: 0.5 },
   returningUnit: { hp: 35, expPenalty: 0.3 },
   restRecovery: { hp: 0.5, fatigue: 0.6 },
-  resupply: { medkit: 1 },
+  resupply: { medkit: 1, at_charge: 1 },
 };
+
+export function rosterUnitName(spec: StartingUnitSpec): string {
+  return designation(spec.commander, spec.type);
+}
+
+/** 从番号反推主将名（番号 = 主将 + 兵种名） */
+export function commanderFromUnitName(name: string): string {
+  for (const label of ["迫击炮", "机枪", "步兵", "坦克"]) {
+    if (name.endsWith(label)) return name.slice(0, -label.length);
+  }
+  return name;
+}
 
 export const CHAPTERS: Record<string, ChapterConfig> = {
   [CHAPTER_ONE.id]: CHAPTER_ONE,

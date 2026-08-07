@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - cursor/r2-cicd-eb04
+      - cursor/korea-tactics-ux-eb04
   workflow_dispatch:
     inputs:
       dry_run:

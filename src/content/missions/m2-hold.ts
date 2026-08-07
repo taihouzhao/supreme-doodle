@@ -1,14 +1,15 @@
 import type { MissionConfig } from "./schema";
 
 /**
- * M2 高地阻击：玩家据守中央高地与村庄，敌军分三波从北面压下来。
- * 坚守到回合结束即可，不需要歼灭。
+ * M2 长津阻击（1950.11–12）：第9兵团方向在长津湖地区
+ * 阻击美军陆战第1师，严寒中为主力转移争取时间。
  */
 export const M2_HOLD: MissionConfig = {
   id: "m2-hold",
-  name: "高地阻击",
+  name: "长津阻击",
   kind: "hold",
-  brief: "敌军将从北面反扑。守住中央的两个村庄据点，撑到增援抵达。",
+  brief:
+    "长津湖方向，陆战第1师沿公路北进。据守西长津高地与东长津高地，在风雪中顶住轮番冲击，撑到回合结束。后期可能出现装甲威胁。",
   maxTurns: 10,
   map: [
     "......==......",
@@ -33,45 +34,44 @@ export const M2_HOLD: MissionConfig = {
     { x: 7, y: 7 },
   ],
   enemies: [
-    { type: "rifle", x: 5, y: 1, name: "先头步兵" },
-    { type: "rifle", x: 8, y: 1, name: "先头步兵" },
-    { type: "mg", x: 6, y: 0, name: "支援火力" },
-    { type: "mortar", x: 7, y: 0, name: "迫击炮组" },
+    { type: "rifle", x: 5, y: 1, name: "李奇微步兵", exp: 60 },
+    { type: "rifle", x: 8, y: 1, name: "史密斯步兵", exp: 60 },
+    { type: "mg", x: 6, y: 0, name: "利曾伯格机枪", exp: 90 },
+    { type: "rifle", x: 7, y: 0, name: "费思步兵", exp: 20 },
   ],
   variantSlots: [
     { index: 0, options: ["rifle", "mg"] },
-    { index: 1, options: ["rifle", "mortar"] },
+    { index: 1, options: ["rifle", "mg"] },
   ],
   waves: [
     {
       window: [3, 4],
       units: [
-        { type: "rifle", x: 4, y: 0, name: "第二波步兵" },
-        { type: "rifle", x: 9, y: 0, name: "第二波步兵" },
-        { type: "mg", x: 2, y: 0, name: "第二波火力", exp: 110 },
+        { type: "rifle", x: 4, y: 0, name: "普尔勒步兵", exp: 40 },
+        { type: "mg", x: 9, y: 0, name: "默里机枪", exp: 70 },
       ],
     },
     {
       window: [6, 7],
       units: [
-        { type: "tank", x: 6, y: 0, name: "突击装甲" },
-        { type: "rifle", x: 11, y: 0, name: "第三波步兵" },
+        { type: "tank", x: 6, y: 0, name: "德里坦克" },
+        { type: "rifle", x: 11, y: 0, name: "哈里斯步兵" },
       ],
     },
   ],
   objectives: [
-    { id: "hold-west", kind: "hold", x: 4, y: 6, owner: "player" },
-    { id: "hold-east", kind: "hold", x: 9, y: 6, owner: "player" },
+    { id: "hold-west", name: "西长津高地", kind: "hold", x: 4, y: 6, owner: "player" },
+    { id: "hold-east", name: "东长津高地", kind: "hold", x: 9, y: 6, owner: "player" },
   ],
   evacZone: [],
   itemDrops: [
-    { x: 3, y: 6, options: ["medkit", "arty_support"] },
+    { x: 3, y: 6, options: ["medkit", "at_charge"] },
     { x: 10, y: 6, options: ["at_charge", "medkit"] },
   ],
-  rainChance: 0.35,
+  rainChance: 0.4,
   victory: {
     holdUntilEnd: true,
     minPostsHeld: 2,
-    minSurvivors: 4,
+    minSurvivors: 3,
   },
 };
