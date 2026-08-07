@@ -1,0 +1,11 @@
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
+*.local
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+reports/*.json
