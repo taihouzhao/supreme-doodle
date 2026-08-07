@@ -6,6 +6,10 @@ import { imageCache } from "./imageCache";
 import type { VisualFrame } from "./presentation";
 import { FACTION_STYLE, HIGHLIGHT, TERRAIN_STYLE } from "./theme";
 
+/** 决战朝鲜式大格：整图通常大于视口，靠拖拽浏览 */
+const TARGET_CSS_TILE = 72;
+const PAN_THRESHOLD = 8;
+
 export interface BoardOverlay {
   selectedUnitId: string | null;
   moveTiles: Set<number>;
@@ -30,12 +34,29 @@ export const EMPTY_OVERLAY: BoardOverlay = {
 export class Board {
   readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
+  /** 设备像素下的格子边长 */
   private tile = 32;
+  /** CSS 像素下的格子边长（决战朝鲜式大格） */
+  private cssTile = TARGET_CSS_TILE;
+  /** 视口左上角在地图上的 CSS 坐标 */
+  private cameraX = 0;
+  private cameraY = 0;
+  private viewCssW = 0;
+  private viewCssH = 0;
   private originX = 0;
   private originY = 0;
   private state: GameState | null = null;
   private overlay: BoardOverlay = EMPTY_OVERLAY;
   private onAssetsReady: (() => void) | null = null;
+  private focusedMissionKey: string | null = null;
+
+  private pointerId: number | null = null;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private camAtDragStartX = 0;
+  private camAtDragStartY = 0;
+  private didPan = false;
+  private onTap: ((tile: Vec2) => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement, onAssetsReady?: () => void) {
     this.canvas = canvas;
@@ -47,29 +68,107 @@ export class Board {
       if (this.state) this.draw();
       this.onAssetsReady?.();
     });
+    this.bindPointer();
   }
 
-  render(state: GameState, overlay: BoardOverlay): void {
+  /** 点击格子（非拖拽）回调 */
+  setTapHandler(handler: (tile: Vec2) => void): void {
+    this.onTap = handler;
+  }
+
+  render(state: GameState, overlay: BoardOverlay, missionKey?: string): void {
     this.state = state;
     this.overlay = overlay;
+    const key = missionKey ?? `${state.width}x${state.height}`;
+    const missionChanged = this.focusedMissionKey !== key;
     this.resize();
+    if (missionChanged) {
+      this.focusedMissionKey = key;
+      this.focusPlayerArmy(state);
+    }
+    this.clampCamera();
+    this.syncOrigin();
     this.draw();
   }
 
-  /** 把屏幕坐标换算成格子坐标 */
+  /** 把屏幕坐标换算成格子坐标（计入镜头） */
   toTile(clientX: number, clientY: number): Vec2 | null {
-    if (!this.state) return null;
+    if (!this.state || this.cssTile <= 0) return null;
     const rect = this.canvas.getBoundingClientRect();
-    const cssTile = rect.width / this.state.width;
-    const x = Math.floor((clientX - rect.left) / cssTile);
-    const y = Math.floor((clientY - rect.top) / cssTile);
+    const mapX = this.cameraX + (clientX - rect.left);
+    const mapY = this.cameraY + (clientY - rect.top);
+    const x = Math.floor(mapX / this.cssTile);
+    const y = Math.floor(mapY / this.cssTile);
     if (x < 0 || y < 0 || x >= this.state.width || y >= this.state.height) return null;
     return { x, y };
   }
 
+  focusTile(x: number, y: number): void {
+    if (!this.state) return;
+    this.cameraX = x * this.cssTile + this.cssTile / 2 - this.viewCssW / 2;
+    this.cameraY = y * this.cssTile + this.cssTile / 2 - this.viewCssH / 2;
+    this.clampCamera();
+    this.syncOrigin();
+  }
+
+  private focusPlayerArmy(state: GameState): void {
+    const players = state.units.filter((u) => u.faction === "player" && u.alive && !u.evacuated);
+    if (players.length === 0) {
+      this.cameraX = 0;
+      this.cameraY = Math.max(0, state.height * this.cssTile - this.viewCssH);
+      return;
+    }
+    const cx = players.reduce((s, u) => s + u.x, 0) / players.length;
+    const cy = players.reduce((s, u) => s + u.y, 0) / players.length;
+    this.focusTile(cx, cy);
+  }
+
+  private bindPointer(): void {
+    const el = this.canvas;
+    el.style.touchAction = "none";
+    el.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      this.pointerId = event.pointerId;
+      this.didPan = false;
+      this.dragStartX = event.clientX;
+      this.dragStartY = event.clientY;
+      this.camAtDragStartX = this.cameraX;
+      this.camAtDragStartY = this.cameraY;
+      el.setPointerCapture(event.pointerId);
+    });
+    el.addEventListener("pointermove", (event) => {
+      if (this.pointerId !== event.pointerId) return;
+      const dx = event.clientX - this.dragStartX;
+      const dy = event.clientY - this.dragStartY;
+      if (!this.didPan && dx * dx + dy * dy < PAN_THRESHOLD * PAN_THRESHOLD) return;
+      this.didPan = true;
+      this.cameraX = this.camAtDragStartX - dx;
+      this.cameraY = this.camAtDragStartY - dy;
+      this.clampCamera();
+      this.syncOrigin();
+      this.draw();
+    });
+    const end = (event: PointerEvent) => {
+      if (this.pointerId !== event.pointerId) return;
+      const wasPan = this.didPan;
+      this.pointerId = null;
+      this.didPan = false;
+      try {
+        el.releasePointerCapture(event.pointerId);
+      } catch {
+        /* already released */
+      }
+      if (wasPan) return;
+      const tile = this.toTile(event.clientX, event.clientY);
+      if (tile && this.onTap) this.onTap(tile);
+    };
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
+  }
+
   /**
-   * 画布按棋盘比例精确取尺寸，而不是拉满容器，
-   * 否则窄屏上棋盘四周会留出大片空白。
+   * 画布铺满舞台视口；格子用大尺寸，地图整体大于屏幕，靠拖拽浏览。
    */
   private resize(): void {
     const state = this.state;
@@ -83,26 +182,48 @@ export class Board {
       parent.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
     if (availableWidth <= 0 || availableHeight <= 0) return;
 
-    const cssTile = Math.max(
-      12,
-      Math.floor(Math.min(availableWidth / state.width, availableHeight / state.height)),
-    );
-    const cssWidth = cssTile * state.width;
-    const cssHeight = cssTile * state.height;
-    this.canvas.style.width = `${cssWidth}px`;
-    this.canvas.style.height = `${cssHeight}px`;
+    this.viewCssW = availableWidth;
+    this.viewCssH = availableHeight;
+    // 保证至少约 5～6 格宽可见，又不会把整张图塞进屏幕
+    const fitW = availableWidth / Math.max(5.5, state.width * 0.42);
+    const fitH = availableHeight / Math.max(4.5, state.height * 0.42);
+    this.cssTile = Math.max(48, Math.min(TARGET_CSS_TILE, Math.floor(Math.min(fitW, fitH))));
+
+    this.canvas.style.width = `${availableWidth}px`;
+    this.canvas.style.height = `${availableHeight}px`;
 
     const dpr = window.devicePixelRatio || 1;
-    const width = Math.round(cssWidth * dpr);
-    const height = Math.round(cssHeight * dpr);
+    const width = Math.round(availableWidth * dpr);
+    const height = Math.round(availableHeight * dpr);
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;
       this.canvas.height = height;
     }
 
-    this.tile = cssTile * dpr;
-    this.originX = 0;
-    this.originY = 0;
+    this.tile = this.cssTile * dpr;
+    this.clampCamera();
+    this.syncOrigin();
+  }
+
+  private mapCssWidth(): number {
+    return (this.state?.width ?? 0) * this.cssTile;
+  }
+
+  private mapCssHeight(): number {
+    return (this.state?.height ?? 0) * this.cssTile;
+  }
+
+  private clampCamera(): void {
+    const maxX = Math.max(0, this.mapCssWidth() - this.viewCssW);
+    const maxY = Math.max(0, this.mapCssHeight() - this.viewCssH);
+    this.cameraX = Math.min(maxX, Math.max(0, this.cameraX));
+    this.cameraY = Math.min(maxY, Math.max(0, this.cameraY));
+  }
+
+  private syncOrigin(): void {
+    const dpr = window.devicePixelRatio || 1;
+    this.originX = -this.cameraX * dpr;
+    this.originY = -this.cameraY * dpr;
   }
 
   private drawImage(
@@ -129,16 +250,30 @@ export class Board {
     const { ctx, tile } = this;
 
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // 视口外衬底（地图卷轴感）
+    ctx.fillStyle = "#2a3228";
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
     ctx.save();
     ctx.translate(this.originX, this.originY);
 
-    for (let y = 0; y < state.height; y += 1) {
-      for (let x = 0; x < state.width; x += 1) {
+    const dpr = window.devicePixelRatio || 1;
+    const x0 = Math.max(0, Math.floor(this.cameraX / this.cssTile) - 1);
+    const y0 = Math.max(0, Math.floor(this.cameraY / this.cssTile) - 1);
+    const x1 = Math.min(state.width - 1, Math.ceil((this.cameraX + this.viewCssW) / this.cssTile) + 1);
+    const y1 = Math.min(
+      state.height - 1,
+      Math.ceil((this.cameraY + this.viewCssH) / this.cssTile) + 1,
+    );
+
+    for (let y = y0; y <= y1; y += 1) {
+      for (let x = x0; x <= x1; x += 1) {
         this.drawTile(state, x, y);
       }
     }
 
     for (const zone of state.evacZone) {
+      if (zone.x < x0 || zone.x > x1 || zone.y < y0 || zone.y > y1) continue;
       ctx.fillStyle = HIGHLIGHT.evac;
       ctx.fillRect(zone.x * tile, zone.y * tile, tile, tile);
       const pad = tile * 0.18;
@@ -203,6 +338,61 @@ export class Board {
     }
 
     ctx.restore();
+    this.drawMinimap(state, dpr);
+  }
+
+  /** 右下角小地图，点击可跳转镜头（通过 tap 与拖拽分离，仅展示） */
+  private drawMinimap(state: GameState, dpr: number): void {
+    const { ctx } = this;
+    const pad = 10 * dpr;
+    const maxW = Math.min(140 * dpr, this.canvas.width * 0.28);
+    const scale = maxW / (state.width * this.tile);
+    const mw = state.width * this.tile * scale;
+    const mh = state.height * this.tile * scale;
+    const mx = this.canvas.width - mw - pad;
+    const my = this.canvas.height - mh - pad;
+
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = "rgba(20, 24, 18, 0.82)";
+    ctx.fillRect(mx - 4 * dpr, my - 4 * dpr, mw + 8 * dpr, mh + 8 * dpr);
+    ctx.strokeStyle = "rgba(245, 215, 110, 0.55)";
+    ctx.lineWidth = Math.max(1, dpr);
+    ctx.strokeRect(mx - 4 * dpr, my - 4 * dpr, mw + 8 * dpr, mh + 8 * dpr);
+
+    for (let y = 0; y < state.height; y += 1) {
+      for (let x = 0; x < state.width; x += 1) {
+        const terrainId = state.tiles[y * state.width + x]!;
+        ctx.fillStyle = TERRAIN_STYLE[terrainId].fill;
+        ctx.fillRect(mx + x * this.tile * scale, my + y * this.tile * scale, this.tile * scale + 0.5, this.tile * scale + 0.5);
+      }
+    }
+
+    for (const unit of state.units) {
+      if (!unit.alive || unit.evacuated) continue;
+      ctx.fillStyle = unit.faction === "player" ? FACTION_STYLE.player.body : FACTION_STYLE.enemy.body;
+      const r = Math.max(1.5 * dpr, this.tile * scale * 0.35);
+      ctx.beginPath();
+      ctx.arc(
+        mx + (unit.x + 0.5) * this.tile * scale,
+        my + (unit.y + 0.5) * this.tile * scale,
+        r,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+
+    // 当前视口框
+    ctx.strokeStyle = "#f5d76e";
+    ctx.lineWidth = Math.max(1.5, 1.5 * dpr);
+    ctx.strokeRect(
+      mx + this.cameraX * dpr * scale,
+      my + this.cameraY * dpr * scale,
+      this.viewCssW * dpr * scale,
+      this.viewCssH * dpr * scale,
+    );
+    ctx.restore();
   }
 
   private drawTile(state: GameState, x: number, y: number): void {
@@ -213,18 +403,19 @@ export class Board {
     ctx.fillStyle = style.fill;
     ctx.fillRect(x * tile, y * tile, tile, tile);
 
-    // 底色铺满 + 居中小符号，避免整格贴图造成「印章网格」
-    if (terrainId !== "plain") {
-      const glyph = tile * 0.58;
-      const dx = x * tile + (tile - glyph) / 2;
-      const dy = y * tile + (tile - glyph) / 2;
-      const drawn = this.drawImage(TERRAIN_ICON[terrainId], dx, dy, glyph, glyph, 0.88);
-      if (!drawn) this.drawTerrainIconFallback(terrainId, x, y);
-    }
+    // 决战朝鲜式：整格贴图铺满
+    const drawn = this.drawImage(
+      TERRAIN_ICON[terrainId],
+      x * tile,
+      y * tile,
+      tile,
+      tile,
+      1,
+    );
+    if (!drawn) this.drawTerrainIconFallback(terrainId, x, y);
 
-    // 默认网格极轻；移动/攻击范围另用高亮描边
-    ctx.strokeStyle = "rgba(38, 43, 34, 0.07)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgba(20, 24, 16, 0.18)";
+    ctx.lineWidth = Math.max(1, tile * 0.02);
     ctx.strokeRect(x * tile + 0.5, y * tile + 0.5, tile - 1, tile - 1);
   }
 
