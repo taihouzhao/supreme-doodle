@@ -65,6 +65,7 @@ export class View {
     }
 
     this.board = new Board(this.regions.canvas as HTMLCanvasElement);
+    this.board.setTapHandler((tile) => this.session.clickTile(tile));
     this.bindEvents();
     window.addEventListener("resize", () => this.render(this.session.current));
   }
@@ -94,6 +95,10 @@ export class View {
           break;
         case "select-unit":
           this.session.selectUnit(value ?? null);
+          {
+            const unit = this.session.selectedUnit;
+            if (unit) this.board.focusTile(unit.x, unit.y);
+          }
           break;
         case "unit-wait":
           if (value) this.session.dispatch({ kind: "wait", unitId: value });
@@ -114,13 +119,6 @@ export class View {
         default:
           break;
       }
-    });
-
-    const canvas = this.regions.canvas as HTMLCanvasElement;
-    canvas.addEventListener("pointerdown", (event) => {
-      event.preventDefault();
-      const tile = this.board.toTile(event.clientX, event.clientY);
-      if (tile) this.session.clickTile(tile);
     });
   }
 
@@ -163,15 +161,20 @@ export class View {
   }
 
   private paintBoard(state: SessionState, battle: GameState): void {
-    this.board.render(battle, {
-      selectedUnitId: state.selectedUnitId,
-      moveTiles: this.session.moveTiles(),
-      attackTiles: this.session.attackTiles(),
-      itemTiles: this.session.itemTiles(),
-      inspected: state.inspectedTile,
-      visual: this.session.presentation.visual,
-      objectiveDone: (o) => o.owner === "player",
-    });
+    const missionKey = state.mission?.id ?? `${battle.width}x${battle.height}-${battle.turn}`;
+    this.board.render(
+      battle,
+      {
+        selectedUnitId: state.selectedUnitId,
+        moveTiles: this.session.moveTiles(),
+        attackTiles: this.session.attackTiles(),
+        itemTiles: this.session.itemTiles(),
+        inspected: state.inspectedTile,
+        visual: this.session.presentation.visual,
+        objectiveDone: (o) => o.owner === "player",
+      },
+      missionKey,
+    );
   }
 
   private renderNotice(state: SessionState): void {

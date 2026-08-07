@@ -1,7 +1,7 @@
 import type { Faction, ItemId, TerrainId, UnitTypeId } from "../core/types";
 
 /** Cache-bust when swapping generated art without renaming. */
-const V = "?v=2";
+const V = "?v=3";
 
 /** Static art under /assets (served from public/). */
 
