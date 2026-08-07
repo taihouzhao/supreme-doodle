@@ -23,7 +23,7 @@
 
 ### 2. GitHub Secrets（一次性）
 
-仓库 → **Settings → Secrets and variables → Actions**，新增：
+仓库 → **Settings → Secrets and variables → Actions → Repository secrets**，新增：
 
 | Secret | 值 |
 |--------|----|
@@ -31,6 +31,15 @@
 | `R2_ACCESS_KEY_ID` | 上一步的 Access Key ID |
 | `R2_SECRET_ACCESS_KEY` | 上一步的 Secret Access Key |
 | `R2_BUCKET_NAME` | 桶名，如 `korea-tactics` |
+
+兼容别名：`CF_ACCOUNT_ID` / `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `R2_BUCKET`。
+
+**常见踩坑：**
+
+- 加在 **Variables** 里无效，必须是 **Secrets**
+- 加在 **Environment secrets** 里，而 workflow 没有声明 `environment:`，Actions 读不到
+- 名称拼写不一致（多空格、大小写不对）
+- 用了普通 Cloudflare API Token，而不是 R2 的 Access Key ID / Secret Access Key
 
 可选（一般不用）：
 
