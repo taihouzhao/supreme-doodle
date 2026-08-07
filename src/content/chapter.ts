@@ -6,19 +6,19 @@ import { M3_WITHDRAW } from "./missions/m3-withdraw";
 import type { MissionConfig } from "./missions/schema";
 
 export interface StartingUnitSpec {
+  /** 主将名：全军唯一，一将一支部队 */
+  commander: string;
   type: UnitTypeId;
-  /** 同将领同兵种下的部队序号 */
-  serial: number;
   exp: number;
 }
 
 export interface ChapterConfig {
   id: string;
   name: string;
-  /** 番号用将领名，如梁兴初 */
-  commander: string;
   missions: MissionConfig[];
   startingRoster: StartingUnitSpec[];
+  /** 补充兵可用的主将名池（按顺序取尚未在花名册中的） */
+  reserveCommanders: string[];
   startingInventory: Record<ItemId, number>;
   /** 每关开始时补足到的最低编制 */
   minRoster: number;
@@ -36,22 +36,31 @@ export interface ChapterConfig {
 
 /**
  * 第一章 · 入朝：云山伏击 → 长津阻击 → 北撤掩护。
- * 编制以步兵/机枪为主，贴合入朝初期缺少成建制装甲与师属炮兵的现实。
+ * 编制以步兵/机枪为主；每支部队对应唯一主将。
  */
 export const CHAPTER_ONE: ChapterConfig = {
   id: "chapter-one",
   name: "第一章 · 入朝",
-  commander: "梁兴初",
   missions: [M1_BREAKTHROUGH, M2_HOLD, M3_WITHDRAW],
   startingRoster: [
-    { type: "rifle", serial: 1, exp: 120 },
-    { type: "rifle", serial: 2, exp: 40 },
-    { type: "rifle", serial: 3, exp: 20 },
-    { type: "rifle", serial: 4, exp: 0 },
-    { type: "rifle", serial: 5, exp: 0 },
-    { type: "mg", serial: 1, exp: 60 },
-    { type: "mg", serial: 2, exp: 10 },
-    { type: "mg", serial: 3, exp: 0 },
+    { commander: "梁兴初", type: "rifle", exp: 120 },
+    { commander: "江拥辉", type: "rifle", exp: 40 },
+    { commander: "温玉成", type: "rifle", exp: 20 },
+    { commander: "邓岳", type: "rifle", exp: 0 },
+    { commander: "吴瑞林", type: "rifle", exp: 0 },
+    { commander: "张竭诚", type: "mg", exp: 60 },
+    { commander: "贺晋年", type: "mg", exp: 10 },
+    { commander: "李天佑", type: "mg", exp: 0 },
+  ],
+  reserveCommanders: [
+    "韩先楚",
+    "解方",
+    "杜平",
+    "刘震",
+    "杨得志",
+    "彭德怀",
+    "洪学智",
+    "邓华",
   ],
   startingInventory: { medkit: 2, at_charge: 1, arty_support: 0 },
   minRoster: 8,
@@ -62,8 +71,16 @@ export const CHAPTER_ONE: ChapterConfig = {
   resupply: { medkit: 1, at_charge: 1 },
 };
 
-export function rosterUnitName(chapter: ChapterConfig, spec: StartingUnitSpec): string {
-  return designation(chapter.commander, spec.type, spec.serial);
+export function rosterUnitName(spec: StartingUnitSpec): string {
+  return designation(spec.commander, spec.type);
+}
+
+/** 从番号反推主将名（番号 = 主将 + 兵种名） */
+export function commanderFromUnitName(name: string): string {
+  for (const label of ["迫击炮", "机枪", "步兵", "坦克"]) {
+    if (name.endsWith(label)) return name.slice(0, -label.length);
+  }
+  return name;
 }
 
 export const CHAPTERS: Record<string, ChapterConfig> = {

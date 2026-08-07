@@ -95,7 +95,7 @@ describe("战役继承", () => {
     const campaign = createCampaign("chapter-one", 11);
     const started = startMission(campaign);
     const key = started.state.units.find((u) => u.keyUnit)!;
-    expect(key.name).toMatch(/^梁兴初(步兵|机枪)/);
+    expect(key.name).toMatch(/^(梁兴初|张竭诚|江拥辉|温玉成|邓岳|吴瑞林|贺晋年|李天佑)(步兵|机枪)$/);
     key.alive = false;
     key.hp = 0;
     const verdict = evaluateVictory(started.state, started.mission.victory, false);
@@ -103,8 +103,13 @@ describe("战役继承", () => {
     expect(verdict.reason).toContain("主力阵亡");
   });
 
-  it("部队番号为将领+兵种+序号", () => {
+  it("部队番号为唯一主将+兵种，不带序号", () => {
     const campaign = createCampaign("chapter-one", 1);
-    expect(campaign.roster.every((u) => /^梁兴初(步兵|机枪)\d+$/.test(u.name))).toBe(true);
+    expect(campaign.roster.every((u) => /^[\u4e00-\u9fa5]+(步兵|机枪|迫击炮|坦克)$/.test(u.name))).toBe(
+      true,
+    );
+    expect(campaign.roster.every((u) => !/\d/.test(u.name))).toBe(true);
+    const commanders = campaign.roster.map((u) => u.name.replace(/(步兵|机枪|迫击炮|坦克)$/, ""));
+    expect(new Set(commanders).size).toBe(commanders.length);
   });
 });

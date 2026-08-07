@@ -34,10 +34,10 @@ export const M1_BREAKTHROUGH: MissionConfig = {
     { x: 9, y: 9 },
   ],
   enemies: [
-    { type: "rifle", x: 3, y: 2, name: "骑1师步兵1", exp: 50 },
-    { type: "rifle", x: 10, y: 2, name: "骑1师步兵2", exp: 10 },
-    { type: "mg", x: 6, y: 3, name: "骑1师机枪1", exp: 40 },
-    { type: "rifle", x: 7, y: 1, name: "骑1师步兵3", exp: 0 },
+    { type: "rifle", x: 3, y: 2, name: "米尔本步兵", exp: 50 },
+    { type: "rifle", x: 10, y: 2, name: "盖章步兵", exp: 10 },
+    { type: "mg", x: 6, y: 3, name: "科洛姆机枪", exp: 40 },
+    { type: "rifle", x: 7, y: 1, name: "奥蒙德步兵", exp: 0 },
   ],
   variantSlots: [
     { index: 3, options: ["rifle", "mg"] },
@@ -45,7 +45,7 @@ export const M1_BREAKTHROUGH: MissionConfig = {
   waves: [
     {
       window: [5, 7],
-      units: [{ type: "rifle", x: 7, y: 0, name: "骑1师步兵4" }],
+      units: [{ type: "rifle", x: 7, y: 0, name: "艾伦步兵" }],
     },
   ],
   objectives: [

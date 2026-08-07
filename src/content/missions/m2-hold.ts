@@ -34,10 +34,10 @@ export const M2_HOLD: MissionConfig = {
     { x: 7, y: 7 },
   ],
   enemies: [
-    { type: "rifle", x: 5, y: 1, name: "陆战1师步兵1", exp: 60 },
-    { type: "rifle", x: 8, y: 1, name: "陆战1师步兵2", exp: 60 },
-    { type: "mg", x: 6, y: 0, name: "陆战1师机枪1", exp: 90 },
-    { type: "rifle", x: 7, y: 0, name: "陆战1师步兵3", exp: 20 },
+    { type: "rifle", x: 5, y: 1, name: "李奇微步兵", exp: 60 },
+    { type: "rifle", x: 8, y: 1, name: "史密斯步兵", exp: 60 },
+    { type: "mg", x: 6, y: 0, name: "利曾伯格机枪", exp: 90 },
+    { type: "rifle", x: 7, y: 0, name: "费思步兵", exp: 20 },
   ],
   variantSlots: [
     { index: 0, options: ["rifle", "mg"] },
@@ -47,15 +47,15 @@ export const M2_HOLD: MissionConfig = {
     {
       window: [3, 4],
       units: [
-        { type: "rifle", x: 4, y: 0, name: "陆战1师步兵4", exp: 40 },
-        { type: "mg", x: 9, y: 0, name: "陆战1师机枪2", exp: 70 },
+        { type: "rifle", x: 4, y: 0, name: "普尔勒步兵", exp: 40 },
+        { type: "mg", x: 9, y: 0, name: "默里机枪", exp: 70 },
       ],
     },
     {
       window: [6, 7],
       units: [
-        { type: "tank", x: 6, y: 0, name: "陆战1师坦克1" },
-        { type: "rifle", x: 11, y: 0, name: "陆战1师步兵5" },
+        { type: "tank", x: 6, y: 0, name: "德里坦克" },
+        { type: "rifle", x: 11, y: 0, name: "哈里斯步兵" },
       ],
     },
   ],

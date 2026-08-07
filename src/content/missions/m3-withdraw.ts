@@ -34,10 +34,10 @@ export const M3_WITHDRAW: MissionConfig = {
     { x: 8, y: 8 },
   ],
   enemies: [
-    { type: "mg", x: 4, y: 2, name: "骑1师机枪1", exp: 80 },
-    { type: "mg", x: 9, y: 2, name: "骑1师机枪2", exp: 80 },
-    { type: "mg", x: 6, y: 1, name: "骑1师机枪3", exp: 40 },
-    { type: "rifle", x: 7, y: 2, name: "骑1师步兵1", exp: 30 },
+    { type: "mg", x: 4, y: 2, name: "沃克机枪", exp: 80 },
+    { type: "mg", x: 9, y: 2, name: "盖伊机枪", exp: 80 },
+    { type: "mg", x: 6, y: 1, name: "科洛姆机枪", exp: 40 },
+    { type: "rifle", x: 7, y: 2, name: "米尔本步兵", exp: 30 },
   ],
   variantSlots: [
     { index: 3, options: ["rifle", "mg"] },
@@ -46,9 +46,9 @@ export const M3_WITHDRAW: MissionConfig = {
     {
       window: [2, 3],
       units: [
-        { type: "rifle", x: 6, y: 9, name: "骑1师步兵2", exp: 40 },
-        { type: "rifle", x: 7, y: 9, name: "骑1师步兵3", exp: 20 },
-        { type: "mg", x: 5, y: 9, name: "骑1师机枪4", exp: 50 },
+        { type: "rifle", x: 6, y: 9, name: "奥蒙德步兵", exp: 40 },
+        { type: "rifle", x: 7, y: 9, name: "艾伦步兵", exp: 20 },
+        { type: "mg", x: 5, y: 9, name: "哈里斯机枪", exp: 50 },
       ],
     },
   ],
