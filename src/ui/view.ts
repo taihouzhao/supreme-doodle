@@ -7,7 +7,7 @@ import { isEvacTile } from "../core/mission";
 import type { GameState, ItemId, Unit } from "../core/types";
 import { ITEM_ICON, TERRAIN_ICON, UI_ICON, UNIT_ICON } from "./assets";
 import { Board, terrainName } from "./board";
-import { breakdownFactors, factionLabel, unitLabel } from "./format";
+import { factionLabel } from "./format";
 import { briefVictoryLines, objectiveLines } from "./objectives";
 import type { Session, SessionState } from "./session";
 import { downloadReplay, loadReplays } from "./storage";
@@ -46,8 +46,6 @@ export class View {
   private readonly session: Session;
   private readonly board: Board;
   private readonly regions: Record<string, HTMLElement>;
-  private logCollapsed = true;
-
   constructor(root: HTMLElement, session: Session) {
     this.root = root;
     this.session = session;
@@ -96,6 +94,9 @@ export class View {
             this.renderBoard();
           });
           break;
+        case "clear-focus":
+          this.session.clearFocus();
+          break;
         case "unit-wait":
           if (value) this.session.dispatch({ kind: "wait", unitId: value });
           break;
@@ -107,10 +108,6 @@ export class View {
           break;
         case "download-replay":
           this.downloadLatestReplay();
-          break;
-        case "toggle-log":
-          this.logCollapsed = !this.logCollapsed;
-          this.render(this.session.current);
           break;
         default:
           break;
@@ -226,7 +223,7 @@ export class View {
 
   private renderSheet(state: SessionState, battle: GameState): void {
     const unit = this.session.selectedUnit;
-    const hasFocus = Boolean(unit || state.inspectedTile || state.lastStrike);
+    const hasFocus = Boolean(unit || state.inspectedTile);
     const panel = this.regions.panel!;
 
     if (!hasFocus) {
@@ -235,16 +232,17 @@ export class View {
       return;
     }
 
-    const bits: string[] = [];
-    if (unit) bits.push(this.unitCard(state, battle, unit));
-    else if (state.inspectedTile) {
-      bits.push(this.inspectCard(battle, state.inspectedTile.x, state.inspectedTile.y));
-    }
-    if (state.lastStrike) bits.push(this.strikeCard(state, battle));
-    bits.push(this.logCard(state));
+    const body = unit
+      ? this.unitCard(state, battle, unit)
+      : this.inspectCard(battle, state.inspectedTile!.x, state.inspectedTile!.y);
 
     panel.hidden = false;
-    panel.innerHTML = bits.join("");
+    panel.innerHTML = `
+      <div class="hud-sheet__head">
+        <div class="hud-sheet__body">${body}</div>
+        <button class="hud-sheet__close" data-action="clear-focus" type="button" aria-label="关闭">×</button>
+      </div>
+    `;
   }
 
   private inspectCard(battle: GameState, x: number, y: number): string {
@@ -273,42 +271,23 @@ export class View {
           ? UI_ICON.evac
           : TERRAIN_ICON[terrainId];
 
-    const bits: string[] = [];
-    bits.push(
-      `<p class="card__sub">${ico(TERRAIN_ICON[terrainId], "ico ico--sm")}${esc(terrain.name)} · 移动 ${terrain.moveCost} · ${esc(defenseText(terrain.defense))}</p>`,
-    );
-    if (terrain.regen) bits.push(`<p class="card__dim">驻留回复 ${terrain.regen}</p>`);
-    if (terrain.rangeBonus) bits.push(`<p class="card__dim">射程 +${terrain.rangeBonus}</p>`);
-    if (objective) {
-      const owner =
-        objective.owner === "player"
-          ? "志愿军控制"
+    const extras = [
+      fieldItem ? `补给${ITEMS[fieldItem.item].name}` : "",
+      objective
+        ? objective.owner === "player"
+          ? "己方控制"
           : objective.owner === "enemy"
-            ? "联合军控制"
-            : "中立";
-      bits.push(
-        `<p><span class="tag ${objective.owner === "player" ? "tag--player" : "tag--enemy"}">${esc(objective.name)}</span> ${owner}</p>`,
-      );
-    }
-    if (evac)
-      bits.push(
-        `<p>${ico(UI_ICON.evac, "ico ico--sm")}<span class="tag tag--player">撤离带</span> 进入即撤离</p>`,
-      );
-    if (fieldItem)
-      bits.push(
-        `<p class="card__dim">${ico(ITEM_ICON[fieldItem.item], "ico ico--sm")}地面补给：${esc(ITEMS[fieldItem.item].name)}</p>`,
-      );
-    if (occupant) {
-      bits.push(
-        `<p>${ico(UNIT_ICON[occupant.type][occupant.faction], "ico ico--sm")}${esc(factionLabel(occupant.faction))} · ${esc(UNIT_TYPES[occupant.type].name)} · ${esc(veterancyName(occupant.exp))} · ${occupant.hp}/${occupant.maxHp}${occupant.keyUnit ? ` · ${ico(UI_ICON.keyUnit, "ico ico--xs")}主力` : ""}</p>`,
-      );
-    } else {
-      bits.push(`<p class="card__dim">无人驻守</p>`);
-    }
+            ? "敌方控制"
+            : "中立"
+        : "",
+    ]
+      .filter(Boolean)
+      .map((t) => ` · ${t}`)
+      .join("");
 
-    return `<section class="card">
-      <header class="card__head"><h2 class="card__title">${ico(titleIcon, "ico ico--title")}${esc(title)}</h2></header>
-      ${bits.join("")}
+    return `<section class="card card--compact">
+      <header class="card__head"><h2 class="card__title">${ico(titleIcon, "ico ico--sm")}${esc(title)}</h2></header>
+      <p class="card__sub">${ico(TERRAIN_ICON[terrainId], "ico ico--xs")}${esc(terrain.name)} · 移 ${terrain.moveCost}${terrain.defense ? ` · ${esc(defenseText(terrain.defense))}` : ""}${occupant ? ` · ${esc(UNIT_TYPES[occupant.type].name)} ${occupant.hp}/${occupant.maxHp}` : " · 无人"}${evac ? " · 撤离带" : ""}${extras}</p>
     </section>`;
   }
 
@@ -342,7 +321,7 @@ export class View {
 
     return `<section class="card card--compact">
       <header class="card__head">
-        <h2 class="card__title">${ico(UNIT_ICON[unit.type][unit.faction], "ico ico--title")}${esc(unit.name)}${unit.keyUnit ? ` ${ico(UI_ICON.keyUnit, "ico ico--sm")}<span class="tag tag--key">主力</span>` : ""}</h2>
+        <h2 class="card__title">${ico(UNIT_ICON[unit.type][unit.faction], "ico ico--sm")}${esc(unit.name)}${unit.keyUnit ? ` ${ico(UI_ICON.keyUnit, "ico ico--xs")}` : ""}</h2>
         <span class="tag ${isMine ? "tag--player" : "tag--enemy"}">${esc(factionLabel(unit.faction))}</span>
       </header>
       <p class="card__sub">${esc(def.name)} · ${esc(veterancyName(unit.exp))} · ${esc(terrain)} · ${unit.hp}/${unit.maxHp} · 移 ${unit.mpLeft}/${def.move}</p>
@@ -350,40 +329,6 @@ export class View {
     </section>`;
   }
 
-  private strikeCard(state: SessionState, battle: GameState): string {
-    const strike = state.lastStrike!;
-    const factors = breakdownFactors(strike.breakdown);
-    return `<section class="card card--strike">
-      <h3>上一次交火</h3>
-      <p class="card__sub">${esc(unitLabel(battle, strike.attackerId))} → ${esc(unitLabel(battle, strike.defenderId))}</p>
-      <p class="strike__total">造成 <strong>${strike.damage}</strong> 伤害${strike.counterDamage > 0 ? `，被反击 <strong>${strike.counterDamage}</strong>` : ""}</p>
-      <ul class="factors">
-        ${factors
-          .map(
-            (factor) =>
-              `<li class="${factor.favourable ? "is-up" : "is-down"}"><span>${esc(factor.label)}</span><strong>×${factor.value.toFixed(2)}</strong></li>`,
-          )
-          .join("")}
-      </ul>
-    </section>`;
-  }
-
-  private logCard(state: SessionState): string {
-    const entries = state.log
-      .slice(-8)
-      .reverse()
-      .map(
-        (entry) =>
-          `<li class="log__item log__item--${entry.tone}"><span class="log__turn">T${entry.turn}</span>${esc(entry.text)}</li>`,
-      )
-      .join("");
-    return `<section class="card card--log">
-      <button class="log__toggle" data-action="toggle-log" type="button">
-        战斗记录 ${this.logCollapsed ? "▸" : "▾"}
-      </button>
-      ${this.logCollapsed ? "" : `<ul class="log">${entries}</ul>`}
-    </section>`;
-  }
 
   private renderOverlay(state: SessionState): void {
     const overlay = this.regions.overlay!;

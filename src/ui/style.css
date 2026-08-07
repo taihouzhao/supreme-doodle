@@ -233,29 +233,56 @@ body {
 
 .hud-sheet {
   position: absolute;
+  top: 3.6rem;
   left: 0.55rem;
-  bottom: 4.1rem;
+  bottom: auto;
   z-index: 4;
-  width: min(360px, calc(100% - 1.1rem));
-  max-height: min(42dvh, 360px);
+  width: min(260px, 42vw);
+  max-width: calc(100% - 5.5rem); /* 给右上角小地图留空 */
+  max-height: min(36dvh, 280px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  padding: 0.55rem;
-  background: rgba(247, 243, 234, 0.94);
+  gap: 0.35rem;
+  padding: 0.45rem 0.5rem;
+  background: rgba(247, 243, 234, 0.92);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   backdrop-filter: blur(8px);
-  box-shadow: 0 10px 28px rgba(20, 24, 16, 0.22);
+  box-shadow: 0 8px 20px rgba(20, 24, 16, 0.2);
+  pointer-events: auto;
 }
 
 .hud-sheet[hidden] {
   display: none;
 }
 
+.hud-sheet__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.hud-sheet__body {
+  min-width: 0;
+  flex: 1;
+}
+
+.hud-sheet__close {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.1rem 0.25rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
 .hud-sheet .card {
-  padding: 0.55rem 0.65rem;
+  padding: 0;
   box-shadow: none;
   background: transparent;
   border: none;
@@ -264,16 +291,28 @@ body {
 
 .hud-sheet .card + .card {
   border-top: 1px dashed var(--line);
-  padding-top: 0.55rem;
+  padding-top: 0.4rem;
+  margin-top: 0.15rem;
+}
+
+.card--compact .card__title {
+  font-size: 0.92rem;
 }
 
 .card--compact .card__sub {
-  margin-top: 0.2rem;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
 }
 
-.log__toggle--alone {
-  font-size: 0.75rem;
-  padding: 0.1rem 0;
+.hud-sheet .actions {
+  margin-top: 0.45rem;
+  gap: 0.28rem;
+}
+
+.hud-sheet .actions .btn {
+  font-size: 0.72rem;
+  padding: 0.32rem 0.5rem;
 }
 
 /* ---------- Icons ---------- */
@@ -899,8 +938,10 @@ body {
   }
 
   .hud-sheet {
-    width: calc(100% - 1.1rem);
-    max-height: min(38dvh, 300px);
+    width: min(240px, 58vw);
+    max-width: calc(100% - 4.8rem);
+    max-height: min(32dvh, 240px);
+    top: 3.35rem;
   }
 
   .log {
