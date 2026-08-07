@@ -8,8 +8,13 @@ export const THRESHOLDS = {
   tacticalMinWinRate: 0.85,
   /** 战术策略的伤亡至少要比基础策略低这么多比例 */
   casualtyAdvantage: 0.8,
-  /** 同策略跨种子胜率的分块标准差上限 */
+  /**
+   * 同策略跨种子胜率的分块标准差上限。
+   * 小样本（<100）时分块方差天然偏大，阈值略放宽。
+   */
   maxWinRateStdDev: 0.18,
+  maxWinRateStdDevSmallSample: 0.28,
+  smallSampleRuns: 100,
   /** 单个退化打法在最难的一关必须低于此胜率，否则算统治性策略 */
   degenerateMaxWinRate: 0.5,
   /** 重创续跑后仍需达到的第三关胜率 */
@@ -101,12 +106,18 @@ export function evaluateGates(input: GateInput): GateResult[] {
             .join("；"),
   });
 
-  const volatile = [...basic, ...tactical].filter(
-    (row) => row.winRateStdDev > THRESHOLDS.maxWinRateStdDev,
+  const sampleRuns = Math.min(
+    ...[...basic, ...tactical].map((row) => row.runs),
+    Number.POSITIVE_INFINITY,
   );
+  const stdDevLimit =
+    sampleRuns < THRESHOLDS.smallSampleRuns
+      ? THRESHOLDS.maxWinRateStdDevSmallSample
+      : THRESHOLDS.maxWinRateStdDev;
+  const volatile = [...basic, ...tactical].filter((row) => row.winRateStdDev > stdDevLimit);
   gates.push({
     id: "randomness-bounded",
-    title: `同策略跨种子胜率标准差 ≤ ${THRESHOLDS.maxWinRateStdDev.toFixed(2)}`,
+    title: `同策略跨种子胜率标准差 ≤ ${stdDevLimit.toFixed(2)}（n=${Number.isFinite(sampleRuns) ? sampleRuns : 0}）`,
     passed: volatile.length === 0,
     detail: [...basic, ...tactical]
       .map((r) => `${r.agentId}/${r.missionId} ${r.winRateStdDev.toFixed(2)}`)

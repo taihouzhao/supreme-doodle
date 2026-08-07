@@ -34,8 +34,15 @@
 - [ ] 按 04 的四项观察进行试玩
 - [ ] 依据结果决定重做规则 / 关卡 / 战役机制
 
+## 阶段 6 — 托管上线
+
+- [x] GitHub Actions：CI（类型检查 / 测试 / 构建 / 平衡门槛）
+- [x] GitHub Actions：`dist/` 同步到 Cloudflare R2
+- [ ] 在 Cloudflare 创建桶并开启公共访问（需账号操作）
+- [ ] 配置 GitHub Secrets 并完成首次真实部署
+- [ ] （可选）自定义域名与 Cache Everything
+
 ## 第一版之后
 
 - 扩展到约十场任务
 - 剧情分支与更完整的部队成长
-- 对象存储托管与上线流程

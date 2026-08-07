@@ -26,7 +26,14 @@ npm run dev      # 本地开发
 npm run build    # 构建静态产物到 dist/
 npm run test     # 规则、确定性、战役与平衡测试
 npm run sim      # 批量模拟并重新生成 reports/balance.md
+npm run deploy:r2  # 把 dist/ 同步到 Cloudflare R2（需先配置凭证）
 ```
+
+## 部署到 R2
+
+CI 会在 PR 上跑测试与构建；合并进 `main` 后自动把 `dist/` 同步到 R2。
+
+你需要在 Cloudflare 创建桶、开启公共访问、生成 R2 API Token，并把四个值写进 GitHub Secrets。完整步骤见 [`docs/deploy-r2.md`](./docs/deploy-r2.md)。
 
 模拟器参数：
 
