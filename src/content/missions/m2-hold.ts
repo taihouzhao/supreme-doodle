@@ -1,15 +1,15 @@
 import type { MissionConfig } from "./schema";
 
 /**
- * M2 长津阻击：玩家据守中央高地与村庄，敌军分三波从北面压下来。
- * 坚守到回合结束即可，不需要歼灭。
+ * M2 长津阻击（1950.11–12）：第9兵团方向在长津湖地区
+ * 阻击美军陆战第1师，严寒中为主力转移争取时间。
  */
 export const M2_HOLD: MissionConfig = {
   id: "m2-hold",
   name: "长津阻击",
   kind: "hold",
   brief:
-    "联合军将从北面反扑。守住西长津高地与东长津高地两处据点，撑到增援抵达。",
+    "长津湖方向，陆战第1师沿公路北进。据守西长津高地与东长津高地，在风雪中顶住轮番冲击，撑到回合结束。后期可能出现装甲威胁。",
   maxTurns: 10,
   map: [
     "......==......",
@@ -34,29 +34,28 @@ export const M2_HOLD: MissionConfig = {
     { x: 7, y: 7 },
   ],
   enemies: [
-    { type: "rifle", x: 5, y: 1, name: "陆战队先头" },
-    { type: "rifle", x: 8, y: 1, name: "陆战队先头" },
-    { type: "mg", x: 6, y: 0, name: "史密斯火力" },
-    { type: "mortar", x: 7, y: 0, name: "寒带迫击炮" },
+    { type: "rifle", x: 5, y: 1, name: "陆战1师步兵1", exp: 60 },
+    { type: "rifle", x: 8, y: 1, name: "陆战1师步兵2", exp: 60 },
+    { type: "mg", x: 6, y: 0, name: "陆战1师机枪1", exp: 90 },
+    { type: "rifle", x: 7, y: 0, name: "陆战1师步兵3", exp: 20 },
   ],
   variantSlots: [
     { index: 0, options: ["rifle", "mg"] },
-    { index: 1, options: ["rifle", "mortar"] },
+    { index: 1, options: ["rifle", "mg"] },
   ],
   waves: [
     {
       window: [3, 4],
       units: [
-        { type: "rifle", x: 4, y: 0, name: "第二波步兵" },
-        { type: "rifle", x: 9, y: 0, name: "第二波步兵" },
-        { type: "mg", x: 2, y: 0, name: "第二波火力", exp: 110 },
+        { type: "rifle", x: 4, y: 0, name: "陆战1师步兵4", exp: 40 },
+        { type: "mg", x: 9, y: 0, name: "陆战1师机枪2", exp: 70 },
       ],
     },
     {
       window: [6, 7],
       units: [
-        { type: "tank", x: 6, y: 0, name: "突击装甲" },
-        { type: "rifle", x: 11, y: 0, name: "第三波步兵" },
+        { type: "tank", x: 6, y: 0, name: "陆战1师坦克1" },
+        { type: "rifle", x: 11, y: 0, name: "陆战1师步兵5" },
       ],
     },
   ],
@@ -66,13 +65,13 @@ export const M2_HOLD: MissionConfig = {
   ],
   evacZone: [],
   itemDrops: [
-    { x: 3, y: 6, options: ["medkit", "arty_support"] },
+    { x: 3, y: 6, options: ["medkit", "at_charge"] },
     { x: 10, y: 6, options: ["at_charge", "medkit"] },
   ],
-  rainChance: 0.35,
+  rainChance: 0.4,
   victory: {
     holdUntilEnd: true,
     minPostsHeld: 2,
-    minSurvivors: 4,
+    minSurvivors: 3,
   },
 };

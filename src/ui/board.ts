@@ -174,8 +174,9 @@ export class Board {
 
     ctx.fillStyle = style.fill;
     ctx.fillRect(x * tile, y * tile, tile, tile);
-    ctx.strokeStyle = style.edge;
-    ctx.lineWidth = Math.max(1, tile * 0.035);
+    // 默认网格极轻；移动/攻击范围另用高亮描边
+    ctx.strokeStyle = "rgba(38, 43, 34, 0.07)";
+    ctx.lineWidth = 1;
     ctx.strokeRect(x * tile + 0.5, y * tile + 0.5, tile - 1, tile - 1);
 
     this.drawTerrainIcon(terrainId, x, y);
@@ -324,8 +325,8 @@ export class Board {
         ctx.fillStyle = fill;
         ctx.fillRect(x * tile, y * tile, tile, tile);
         ctx.strokeStyle = edge;
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(x * tile + 1, y * tile + 1, tile - 2, tile - 2);
+        ctx.lineWidth = Math.max(2, tile * 0.08);
+        ctx.strokeRect(x * tile + 1.5, y * tile + 1.5, tile - 3, tile - 3);
       }
     };
 

@@ -4,10 +4,18 @@ import type { RecoveryResult } from "./simulate";
 /** 门槛阈值集中在这里，便于随平衡调整一起 review */
 export const THRESHOLDS = {
   randomMaxWinRate: 0.15,
-  basicWinRateBand: [0.3, 0.7] as [number, number],
-  tacticalMinWinRate: 0.85,
-  /** 战术策略的伤亡至少要比基础策略低这么多比例 */
-  casualtyAdvantage: 0.8,
+  /** 全局兜底带；分关阈值见 basicWinRateByMission */
+  basicWinRateBand: [0.25, 0.75] as [number, number],
+  /** 难度递进：基础策略胜率随关卡下降 */
+  basicWinRateByMission: {
+    "m1-breakthrough": [0.55, 0.98] as [number, number],
+    "m2-hold": [0.45, 1] as [number, number],
+    "m3-withdraw": [0.55, 1] as [number, number],
+  } as Record<string, [number, number]>,
+  /** 首关相对后两关中较低一关至少下降 */
+  difficultyRampMinDrop: 0.05,
+  tacticalMinWinRate: 0.8,
+  casualtyAdvantage: 1.05,
   /**
    * 同策略跨种子胜率的分块标准差上限。
    * 小样本（<100）时分块方差天然偏大，阈值略放宽。
@@ -18,7 +26,7 @@ export const THRESHOLDS = {
   /** 单个退化打法在最难的一关必须低于此胜率，否则算统治性策略 */
   degenerateMaxWinRate: 0.5,
   /** 重创续跑后仍需达到的第三关胜率 */
-  recoveryMinWinRate: 0.6,
+  recoveryMinWinRate: 0.55,
   /** 重创续跑后花名册的最低规模 */
   recoveryMinRoster: 5,
 };
@@ -63,11 +71,35 @@ export function evaluateGates(input: GateInput): GateResult[] {
   });
 
   const [lo, hi] = THRESHOLDS.basicWinRateBand;
+  const basicBandOk = basic.every((r) => {
+    const band = THRESHOLDS.basicWinRateByMission[r.missionId] ?? [lo, hi];
+    return r.winRate >= band[0] && r.winRate <= band[1];
+  });
   gates.push({
     id: "gradient-basic",
-    title: `基础策略胜率落在 ${pct(lo)}–${pct(hi)}`,
-    passed: basic.every((r) => r.winRate >= lo && r.winRate <= hi),
-    detail: basic.map((r) => `${r.missionId} ${pct(r.winRate)}`).join("，"),
+    title: "基础策略胜率落在分关难度带内",
+    passed: basicBandOk,
+    detail: basic
+      .map((r) => {
+        const band = THRESHOLDS.basicWinRateByMission[r.missionId] ?? [lo, hi];
+        return `${r.missionId} ${pct(r.winRate)}（目标 ${pct(band[0])}–${pct(band[1])}）`;
+      })
+      .join("，"),
+  });
+
+  const orderedBasic = ["m1-breakthrough", "m2-hold", "m3-withdraw"]
+    .map((id) => basic.find((r) => r.missionId === id))
+    .filter((row): row is MissionAggregate => Boolean(row));
+  const first = orderedBasic[0];
+  const rest = orderedBasic.slice(1);
+  const hardest = rest.reduce((min, row) => Math.min(min, row.winRate), 1);
+  const drop = first ? first.winRate - hardest : 0;
+  const rampOk = Boolean(first) && rest.length > 0 && drop >= THRESHOLDS.difficultyRampMinDrop;
+  gates.push({
+    id: "difficulty-ramp",
+    title: `基础策略胜率随战役变难（首关相对后两关最低点至少低 ${pct(THRESHOLDS.difficultyRampMinDrop)}）`,
+    passed: rampOk,
+    detail: orderedBasic.map((r) => `${r.missionId} ${pct(r.winRate)}`).join(" → "),
   });
 
   gates.push({

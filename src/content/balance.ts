@@ -9,6 +9,8 @@ export const BALANCE = {
   counterRatio: 0.4,
   /** 阵营伤害系数，用来整体调节难度 */
   factionDamage: { player: 1, enemy: 0.9 },
+  /** 主力承伤减免，配合「主力阵亡即败」规则 */
+  keyUnitDamageTaken: 0.4,
   /** 相邻友军带来的集火加成 */
   flank: { perAlly: 0.06, cap: 0.18 },
   /** 疲劳影响 */

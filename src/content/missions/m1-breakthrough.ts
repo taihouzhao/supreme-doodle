@@ -1,15 +1,15 @@
 import type { MissionConfig } from "./schema";
 
 /**
- * M1 云山隘口：河流把地图切成两半，唯一桥梁在中央道路。
- * 玩家必须在回合上限内占领两侧村庄，同时保住部队。
+ * M1 云山伏击（1950.11）：志愿军第38军（军长梁兴初）在云山附近
+ * 伏击美军骑兵第1师。夜战近战穿插，双方均以步兵与机枪为主。
  */
 export const M1_BREAKTHROUGH: MissionConfig = {
   id: "m1-breakthrough",
-  name: "云山隘口",
+  name: "云山伏击",
   kind: "breakthrough",
   brief:
-    "云山河谷北岸的两个村庄扼守隘口。中央是桥，两翼各有一处浅滩——联合军守不住全部三条路。占领西云山村与东云山村并守住两回合。",
+    "1950年11月，第38军进至云山。骑兵第1师据守河谷两侧村落。夜色下穿插分割，夺取西云山村与东云山村并守住。此战尚无成建制炮兵与装甲配合，全凭步兵与机枪。主力阵亡则战役失败。",
   maxTurns: 14,
   map: [
     "^^..FF==FF..^^",
@@ -34,21 +34,18 @@ export const M1_BREAKTHROUGH: MissionConfig = {
     { x: 9, y: 9 },
   ],
   enemies: [
-    { type: "rifle", x: 3, y: 2, name: "沃克前哨", exp: 170 },
-    { type: "rifle", x: 10, y: 2, name: "骑一师警戒", exp: 40 },
-    { type: "mg", x: 6, y: 3, name: "桥头火力点", exp: 160 },
-    { type: "mortar", x: 7, y: 1, name: "史密斯迫击炮" },
-    { type: "mg", x: 3, y: 1, name: "西翼掩护" },
-    { type: "rifle", x: 10, y: 1, name: "东翼预备队" },
+    { type: "rifle", x: 3, y: 2, name: "骑1师步兵1", exp: 50 },
+    { type: "rifle", x: 10, y: 2, name: "骑1师步兵2", exp: 10 },
+    { type: "mg", x: 6, y: 3, name: "骑1师机枪1", exp: 40 },
+    { type: "rifle", x: 7, y: 1, name: "骑1师步兵3", exp: 0 },
   ],
   variantSlots: [
-    { index: 3, options: ["mortar", "mg"] },
-    { index: 5, options: ["rifle", "mortar"] },
+    { index: 3, options: ["rifle", "mg"] },
   ],
   waves: [
     {
-      window: [3, 5],
-      units: [{ type: "tank", x: 7, y: 0, name: "仁川增援" }],
+      window: [5, 7],
+      units: [{ type: "rifle", x: 7, y: 0, name: "骑1师步兵4" }],
     },
   ],
   objectives: [
@@ -57,13 +54,13 @@ export const M1_BREAKTHROUGH: MissionConfig = {
   ],
   evacZone: [],
   itemDrops: [
-    { x: 3, y: 6, options: ["medkit", "at_charge"] },
-    { x: 10, y: 6, options: ["at_charge", "arty_support"] },
+    { x: 3, y: 6, options: ["medkit"] },
+    { x: 10, y: 6, options: ["medkit"] },
   ],
-  rainChance: 0.3,
+  rainChance: 0.2,
   victory: {
     requiredCaptures: 2,
-    holdTurns: 2,
+    holdTurns: 1,
     minSurvivors: 3,
   },
 };

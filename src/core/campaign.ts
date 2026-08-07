@@ -1,4 +1,5 @@
-import { CHAPTERS, type ChapterConfig } from "../content/chapter";
+import { CHAPTERS, rosterUnitName, type ChapterConfig } from "../content/chapter";
+import { designation } from "../content/naming";
 import type { MissionConfig } from "../content/missions/schema";
 import { UNIT_TYPES, veterancyLevel } from "../content/units";
 import { effectiveMaxHp } from "./combat";
@@ -43,7 +44,7 @@ export function createCampaign(chapterId: string, seed: number): CampaignState {
   const chapter = chapterOf(chapterId);
   const roster: RosterUnit[] = chapter.startingRoster.map((spec, index) => ({
     id: `r${index}`,
-    name: spec.name,
+    name: rosterUnitName(chapter, spec),
     type: spec.type,
     hp: effectiveMaxHp(spec.type, spec.exp),
     maxHp: effectiveMaxHp(spec.type, spec.exp),
@@ -80,7 +81,7 @@ function replenish(campaign: CampaignState, chapter: ChapterConfig): string[] {
     budget -= 1;
     campaign.roster.push({
       id,
-      name: `增援${campaign.roster.length + 1}连`,
+      name: designation(chapter.commander, "rifle", campaign.serial + 1),
       type: "rifle",
       hp: effectiveMaxHp("rifle", 0),
       maxHp: effectiveMaxHp("rifle", 0),

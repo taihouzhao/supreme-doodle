@@ -65,7 +65,10 @@ function makeUnit(params: {
   fatigue?: number;
   keyUnit?: boolean;
 }): Unit {
-  const maxHp = effectiveMaxHp(params.type, params.exp);
+  const keyBonus = params.keyUnit ? 60 : 0;
+  const baseMax = effectiveMaxHp(params.type, params.exp);
+  const maxHp = baseMax + keyBonus;
+  const rawHp = params.hp ?? baseMax;
   return {
     id: params.id,
     rosterId: params.rosterId,
@@ -74,7 +77,7 @@ function makeUnit(params: {
     name: params.name,
     x: params.x,
     y: params.y,
-    hp: Math.min(params.hp ?? maxHp, maxHp),
+    hp: Math.min(rawHp + keyBonus, maxHp),
     maxHp,
     exp: params.exp,
     fatigue: params.fatigue ?? 0,
@@ -105,7 +108,11 @@ export function createMissionState(setup: MissionSetup): GameState {
 
   const units: Unit[] = [];
 
-  const keyRosterId = roster.reduce<RosterUnit | null>((best, unit) => {
+  const capturers = roster.filter((unit) => UNIT_TYPES[unit.type].canCapture);
+  const anchors = roster.filter((unit) => !UNIT_TYPES[unit.type].canCapture);
+  // 主力优先标在不能占点的支援单位上，避免为了占村把主力送进枪口
+  const keyPool = anchors.length > 0 ? anchors : capturers;
+  const keyRosterId = keyPool.reduce<RosterUnit | null>((best, unit) => {
     if (!best) return unit;
     if (unit.exp > best.exp) return unit;
     return best;
@@ -357,6 +364,12 @@ export function evaluateVictory(
   const enemyAlive = livingUnits(state, "enemy");
   const timeUp = state.turn > state.maxTurns;
 
+  // 主力阵亡：任一关立即失败（撤离成功的主力不算阵亡）
+  const keyFallen = state.units.some((u) => u.keyUnit && !u.alive && !u.evacuated);
+  if (keyFallen) {
+    return { status: "lost", reason: "主力阵亡，战役无法继续" };
+  }
+
   if (state.missionKind === "withdraw") {
     const evacuated = state.stats.playerEvacuated;
     const required = requiredEvacuations(state, rule);
@@ -365,7 +378,13 @@ export function evaluateVictory(
       return { status: "won", reason: `已撤离 ${evacuated} 个单位，主力安全脱离` };
     }
     if (playerAlive.length === 0) {
-      return { status: "lost", reason: "部队未能撤出，全部被击溃" };
+      return {
+        status: "lost",
+        reason:
+          evacuated > 0
+            ? `仅撤离 ${evacuated}/${required} 个单位，剩余部队被击溃`
+            : "部队未能撤出，全部被击溃",
+      };
     }
     if (timeUp) {
       const keyLost = rule.requireKeyUnit && !keyEvacuated;

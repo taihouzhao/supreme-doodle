@@ -240,7 +240,7 @@ export class View {
         const ratio = Math.round((unit.hp / unit.maxHp) * 100);
         return `<button class="chip${active}${done}" data-action="select-unit" data-value="${unit.id}">
           <span class="chip__name">${esc(unit.name)}${unit.keyUnit ? " ★" : ""}</span>
-          <span class="chip__meta">${esc(UNIT_TYPES[unit.type].name)} ${ratio}%</span>
+          <span class="chip__meta">${esc(UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} ${ratio}%</span>
         </button>`;
       })
       .join("");
@@ -254,27 +254,43 @@ export class View {
     const fieldItem = battle.fieldItems.find((i) => i.x === x && i.y === y);
     const evac = isEvacTile(battle, x, y);
 
+    const title = occupant
+      ? occupant.name
+      : objective
+        ? objective.name
+        : evac
+          ? "撤离带"
+          : terrain.name;
+
     const bits: string[] = [];
-    bits.push(`<p class="card__sub">${esc(terrain.name)} · 移动消耗 ${terrain.moveCost} · ${esc(defenseText(terrain.defense))}</p>`);
+    bits.push(
+      `<p class="card__sub">${esc(terrain.name)} · 移动 ${terrain.moveCost} · ${esc(defenseText(terrain.defense))}</p>`,
+    );
     if (terrain.regen) bits.push(`<p class="card__dim">驻留回复 ${terrain.regen}</p>`);
     if (terrain.rangeBonus) bits.push(`<p class="card__dim">射程 +${terrain.rangeBonus}</p>`);
     if (objective) {
+      const owner =
+        objective.owner === "player"
+          ? "志愿军控制"
+          : objective.owner === "enemy"
+            ? "联合军控制"
+            : "中立";
       bits.push(
-        `<p><span class="tag ${objective.owner === "player" ? "tag--player" : "tag--enemy"}">${esc(objective.name)}</span> ${objective.owner === "player" ? "志愿军控制" : objective.owner === "enemy" ? "联合军控制" : "中立"}</p>`,
+        `<p><span class="tag ${objective.owner === "player" ? "tag--player" : "tag--enemy"}">${esc(objective.name)}</span> ${owner}</p>`,
       );
     }
-    if (evac) bits.push(`<p><span class="tag tag--player">撤离带</span></p>`);
+    if (evac) bits.push(`<p><span class="tag tag--player">撤离带</span> 进入即撤离</p>`);
     if (fieldItem) bits.push(`<p class="card__dim">地面补给：${esc(ITEMS[fieldItem.item].name)}</p>`);
     if (occupant) {
       bits.push(
-        `<p><strong>${esc(occupant.name)}</strong> · ${esc(factionLabel(occupant.faction))} · ${esc(UNIT_TYPES[occupant.type].name)} · ${occupant.hp}/${occupant.maxHp}</p>`,
+        `<p>${esc(factionLabel(occupant.faction))} · ${esc(UNIT_TYPES[occupant.type].name)} · ${esc(veterancyName(occupant.exp))} · ${occupant.hp}/${occupant.maxHp}${occupant.keyUnit ? " · 主力" : ""}</p>`,
       );
     } else {
-      bits.push(`<p class="card__dim">空地</p>`);
+      bits.push(`<p class="card__dim">无人驻守</p>`);
     }
 
     return `<section class="card">
-      <header class="card__head"><h2>格子 ${x},${y}</h2></header>
+      <header class="card__head"><h2>${esc(title)}</h2></header>
       ${bits.join("")}
     </section>`;
   }
@@ -312,7 +328,7 @@ export class View {
         <h2>${esc(unit.name)}${unit.keyUnit ? " <span class=\"tag tag--key\">主力</span>" : ""}</h2>
         <span class="tag ${isMine ? "tag--player" : "tag--enemy"}">${esc(factionLabel(unit.faction))}</span>
       </header>
-      <p class="card__sub">${esc(def.name)} · ${esc(veterancyName(unit.exp))} · ${esc(terrain)}</p>
+      <p class="card__sub">${esc(def.name)} · 级别 ${esc(veterancyName(unit.exp))} · ${esc(terrain)}</p>
       <div class="stats">
         <div><span>生命</span><strong>${unit.hp}/${unit.maxHp}</strong></div>
         <div><span>攻击</span><strong>${def.attack}</strong></div>
@@ -373,8 +389,8 @@ export class View {
       case "title":
         return `<div class="sheet sheet--title">
           <p class="sheet__eyebrow">战棋纵向切片</p>
-          <h1>云山</h1>
-          <p class="sheet__lead">三场连续任务。志愿军会带着伤势、经验和疲劳走进下一场——撤下来的人才是你的。</p>
+          <h1>入朝</h1>
+          <p class="sheet__lead">三场连续任务：云山伏击、长津阻击、北撤掩护。部队带着伤势与经验走进下一场——主力若阵亡，战役即告失败。</p>
           <div class="sheet__actions">
             <button class="btn btn--primary" data-action="new-campaign">新的战役</button>
             ${state.hasSave ? `<button class="btn" data-action="continue">继续（第 ${state.campaign.missionIndex + 1} 关）</button>` : ""}

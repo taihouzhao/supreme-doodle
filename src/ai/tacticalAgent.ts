@@ -6,6 +6,7 @@ import type { ReachableTile } from "../core/grid";
 import type { Rng } from "../core/rng";
 import type { Action, GameState, Unit, Vec2 } from "../core/types";
 import {
+  attackOptions,
   canBeCountered,
   dangerAt,
   dangerMap,
@@ -28,9 +29,10 @@ const WEIGHTS = {
   breakthroughPull: 4,
   holdPull: 3,
   garrison: 45,
-  withdrawPull: 4,
-  keyUnitWithdrawPull: 7,
-  retreatHpRatio: 0.5,
+  withdrawPull: 7,
+  keyUnitWithdrawPull: 11,
+  keyUnitProtect: 55,
+  retreatHpRatio: 0.55,
   retreatDangerRatio: 0.4,
   cohesion: 7,
   cohesionCap: 21,
@@ -49,9 +51,10 @@ function alliesAround(state: GameState, unit: Unit, tile: Vec2): number {
  * 老兵越贵，越不该拿去换。
  */
 function deathRisk(unit: Unit, projectedDamage: number): number {
-  if (projectedDamage < unit.hp) return projectedDamage * 0.35;
+  const keyWeight = unit.keyUnit ? 3.5 : 1;
+  if (projectedDamage < unit.hp) return projectedDamage * 0.35 * keyWeight;
   const veteranWeight = 1 + veterancyLevel(unit.exp) * 0.8;
-  return (80 + (projectedDamage - unit.hp)) * veteranWeight;
+  return (80 + (projectedDamage - unit.hp)) * veteranWeight * keyWeight + (unit.keyUnit ? 120 : 0);
 }
 
 /** 据点必须有人站着，否则回合结束就会被敌人占走 */
@@ -113,7 +116,9 @@ function missionBonus(state: GameState, unit: Unit, tile: Vec2): number {
   const evac = nearest(tile, state.evacZone);
   if (!evac) return 0;
   const pull = unit.keyUnit ? WEIGHTS.keyUnitWithdrawPull : WEIGHTS.withdrawPull;
-  return -manhattan(tile, evac) * pull;
+  let bonus = -manhattan(tile, evac) * pull;
+  if (unit.keyUnit) bonus += WEIGHTS.keyUnitProtect;
+  return bonus;
 }
 
 interface Plan {
@@ -263,7 +268,7 @@ function planRetreat(state: GameState, unit: Unit, danger: number[]): Plan | nul
 
 function priority(state: GameState, unit: Unit): number {
   let score = 0;
-  if (state.missionKind === "withdraw" && unit.keyUnit) score += 60;
+  if (unit.keyUnit) score += state.missionKind === "withdraw" ? 60 : 40;
   if (UNIT_TYPES[unit.type].indirect) score += 30;
   if (unit.type === "mg") score += 20;
   if (unit.type === "tank") score += 10;
@@ -290,6 +295,24 @@ export const tacticalAgent: Agent = {
       return { kind: "capture", unitId: unit.id };
     }
 
+    // 阻击关：站在据点上不离开，但射程内照常开火
+    if (state.missionKind === "hold") {
+      const onPost = state.objectives.some(
+        (o) => o.kind === "hold" && o.owner === "player" && o.x === unit.x && o.y === unit.y,
+      );
+      if (onPost) {
+        const options = attackOptions(state, unit);
+        if (options.length > 0) {
+          const best = options.reduce((chosen, candidate) => {
+            if (candidate.lethal !== chosen.lethal) return candidate.lethal ? candidate : chosen;
+            return candidate.damage > chosen.damage ? candidate : chosen;
+          });
+          return { kind: "attack", unitId: unit.id, targetId: best.target.id };
+        }
+        return { kind: "wait", unitId: unit.id };
+      }
+    }
+
     if (state.missionKind === "withdraw" && unit.mpLeft > 0) {
       const evac = evacGoal(state, unit);
       if (evac) {
@@ -299,6 +322,16 @@ export const tacticalAgent: Agent = {
         if (onEvac && onEvac.cost > 0) {
           return { kind: "move", unitId: unit.id, to: { x: onEvac.x, y: onEvac.y } };
         }
+        // 北撤关：优先脱离，只有挡住去路才交火
+        let best: { x: number; y: number; dist: number } | null = null;
+        for (const tile of stoppableTiles(state, unit)) {
+          if (tile.cost === 0) continue;
+          const dist = manhattan(tile, evac);
+          if (!best || dist < best.dist) best = { x: tile.x, y: tile.y, dist };
+        }
+        if (best && best.dist < manhattan(unit, evac)) {
+          return { kind: "move", unitId: unit.id, to: { x: best.x, y: best.y } };
+        }
       }
     }
 
@@ -306,11 +339,14 @@ export const tacticalAgent: Agent = {
     const item = planItem(state, unit);
     const combat = planCombat(state, unit, danger);
 
-    const hurt = unit.hp / unit.maxHp < WEIGHTS.retreatHpRatio;
-    const exposed = dangerAt(state, danger, unit) > unit.hp * WEIGHTS.retreatDangerRatio;
-    if (hurt && exposed && unit.mpLeft > 0 && state.missionKind !== "hold") {
+    const hurt = unit.hp / unit.maxHp < (unit.keyUnit ? 0.7 : WEIGHTS.retreatHpRatio);
+    const exposed =
+      dangerAt(state, danger, unit) > unit.hp * (unit.keyUnit ? 0.25 : WEIGHTS.retreatDangerRatio);
+    if ((hurt && exposed || (unit.keyUnit && hurt)) && unit.mpLeft > 0 && state.missionKind !== "hold") {
       const retreat = planRetreat(state, unit, danger);
-      if (retreat && (!combat || retreat.score > combat.score)) return retreat.action;
+      if (retreat && (!combat || retreat.score > combat.score - (unit.keyUnit ? 30 : 0))) {
+        return retreat.action;
+      }
     }
 
     if (item && (!combat || item.score > combat.score)) return item.action;
