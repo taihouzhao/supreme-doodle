@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      # 在特性分支合入 main 前，允许用本分支直接验证 R2 部署
       - cursor/r2-cicd-eb04
   workflow_dispatch:
     inputs:
@@ -12,6 +11,10 @@ on:
         description: "只打印将要上传的文件，不真正写入 R2"
         type: boolean
         default: false
+      environment:
+        description: "若 secrets 配在 GitHub Environment 里，填写环境名（如 production）；否则留空"
+        type: string
+        default: ""
 
 concurrency:
   group: deploy-r2
@@ -22,12 +25,15 @@ jobs:
     name: Build and sync dist/ to R2
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # 需要仓库里先配好 secrets，否则 workflow_dispatch 也能看到失败原因
+    # 若你把密钥建在 Environment 而非 Repository secrets，取消下一行注释并改成环境名：
+    # environment: production
+    environment: ${{ inputs.environment != '' && inputs.environment || vars.R2_DEPLOY_ENVIRONMENT || '' }}
     env:
-      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+      # 兼容几种常见命名
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || secrets.CF_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || secrets.R2_BUCKET }}
       DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
 
     steps:
@@ -43,12 +49,25 @@ jobs:
           missing=0
           for name in CLOUDFLARE_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET_NAME; do
             if [ -z "${!name}" ]; then
-              echo "::error::缺少 GitHub secret: $name"
+              echo "::error::缺少可用的 secret: $name"
               missing=1
+            else
+              echo "找到 $name（长度 ${#!name}）"
             fi
           done
           if [ "$missing" -ne 0 ]; then
-            echo "请按 docs/deploy-r2.md 配置 secrets 后重试。"
+            cat <<'EOF'
+          请确认密钥加在 **Repository secrets**（Settings → Secrets and variables → Actions → Repository secrets），
+          名称必须是下面之一：
+
+            CLOUDFLARE_ACCOUNT_ID   （或 CF_ACCOUNT_ID）
+            R2_ACCESS_KEY_ID       （或 AWS_ACCESS_KEY_ID）
+            R2_SECRET_ACCESS_KEY   （或 AWS_SECRET_ACCESS_KEY）
+            R2_BUCKET_NAME         （或 R2_BUCKET）
+
+          如果建在 GitHub Environment 里，请用 Actions → Deploy to R2 → Run workflow，
+          并在 environment 输入框填入环境名（例如 production）。
+          EOF
             exit 1
           fi
 
@@ -76,6 +95,5 @@ jobs:
             echo "- Account: \`${CLOUDFLARE_ACCOUNT_ID}\`"
             echo "- Dry run: \`${DRY_RUN:-0}\`"
             echo ""
-            echo "公共访问需在 Cloudflare Dashboard 里开启："
-            echo "R2 → 桶 → Settings → Public Development URL 或 Custom Domains"
+            echo "验证地址：https://korea-tactics.dashjie.net/"
           } >> "$GITHUB_STEP_SUMMARY"
