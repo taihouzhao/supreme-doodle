@@ -4,8 +4,8 @@ import { TERRAIN } from "../content/terrain";
 import { UNIT_TYPES, veterancyName } from "../content/units";
 import { livingUnits, unitAt } from "../core/grid";
 import { isEvacTile } from "../core/mission";
-import type { GameState, ItemId, Unit } from "../core/types";
-import { ITEM_ICON, TERRAIN_ICON, UI_ICON, UNIT_ICON } from "./assets";
+import type { GameState, ItemId, Unit, Weather } from "../core/types";
+import { COMMANDER_PORTRAIT, ITEM_ICON, TERRAIN_ICON, UI_ICON, UNIT_ICON } from "./assets";
 import { Board, terrainName } from "./board";
 import { factionLabel } from "./format";
 import { briefVictoryLines, objectiveLines } from "./objectives";
@@ -41,6 +41,16 @@ function defenseText(value: number): string {
   if (value === 0) return "无";
   const pct = Math.round(value * 100);
   return pct > 0 ? `防御 +${pct}%` : `防御 ${pct}%`;
+}
+
+function weatherPresentation(weather: Weather): { label: string; icon: string } {
+  switch (weather) {
+    case "rain": return { label: "雨", icon: UI_ICON.weatherRain };
+    case "snow": return { label: "雪", icon: UI_ICON.weatherSnow };
+    case "fog": return { label: "雾", icon: UI_ICON.weatherFog };
+    case "overcast": return { label: "阴", icon: UI_ICON.weatherOvercast };
+    default: return { label: "晴", icon: UI_ICON.weatherClear };
+  }
 }
 
 export class View {
@@ -187,8 +197,7 @@ export class View {
           `<span class="hud-top__obj${line.done ? " is-done" : ""}" title="${esc(line.detail)}">${ico(line.done ? UI_ICON.objDone : UI_ICON.objPending, "ico ico--xs")}<span>${esc(line.name)}</span></span>`,
       )
       .join("");
-    const weatherSrc =
-      battle.weather === "rain" ? UI_ICON.weatherRain : UI_ICON.weatherClear;
+    const weather = weatherPresentation(battle.weather);
     this.regions["hud-top"]!.innerHTML = `
       <div class="hud-top__left">
         <strong class="hud-top__name">${esc(state.mission?.name ?? "")}</strong>
@@ -196,7 +205,7 @@ export class View {
       </div>
       <div class="hud-top__meta">
         <span>T<strong>${battle.turn}</strong>/${battle.maxTurns}</span>
-        <span class="hud-top__pill">${ico(weatherSrc, "ico ico--xs ico--badge")}${battle.weather === "rain" ? "雨" : "晴"}</span>
+        <span class="hud-top__pill" title="${esc(state.mission?.weather?.detail ?? "")}">${ico(weather.icon, "ico ico--xs ico--badge")}${weather.label}</span>
         <span class="hud-top__pill">${ico(UI_ICON.factionPva, "ico ico--xs ico--badge")}${livingUnits(battle, "player").length}</span>
         <span class="hud-top__pill">${ico(UI_ICON.factionUn, "ico ico--xs ico--badge")}${livingUnits(battle, "enemy").length}</span>
       </div>
@@ -327,6 +336,7 @@ export class View {
         <span class="tag ${isMine ? "tag--player" : "tag--enemy"}">${esc(factionLabel(unit.faction))}</span>
       </header>
       <p class="card__sub">${esc(def.name)} · ${esc(veterancyName(unit.exp))} · ${esc(terrain)} · ${unit.hp}/${unit.maxHp} · 移 ${unit.mpLeft}/${def.move}</p>
+      <p class="card__equipment">${esc(unit.equipment)}</p>
       ${actions}
     </section>`;
   }
@@ -343,10 +353,11 @@ export class View {
     switch (state.screen) {
       case "title":
         return `<div class="sheet sheet--title">
-          <div class="sheet__brands">${ico(UI_ICON.factionPva, "ico ico--hero")}${ico(UI_ICON.factionUn, "ico ico--hero")}</div>
-          <p class="sheet__eyebrow">战棋纵向切片</p>
-          <h1>入朝</h1>
-          <p class="sheet__lead">三场连续任务：云山伏击、长津阻击、北撤掩护。部队带着伤势与经验走进下一场——主力若阵亡，战役即告失败。</p>
+          <div class="title-hero">
+            <img class="title-hero__portrait" src="${COMMANDER_PORTRAIT[CHAPTER_ONE.protagonist.portrait]}" alt="高大全肖像" />
+            <div><p class="sheet__eyebrow">历史战役篇 · 1950—1953</p><h1>高大全</h1><p class="title-hero__rank">${esc(CHAPTER_ONE.protagonist.title)}</p></div>
+          </div>
+          <p class="sheet__lead">沿十二场关键战役走过运动战与阵地战。高大全和直属部队是虚构角色；战役时间、主要地形、参战编制、历史将领与代表性装备按公开战史还原。</p>
           <div class="sheet__actions">
             <button class="btn btn--primary" data-action="new-campaign">新的战役</button>
             ${state.hasSave ? `<button class="btn" data-action="continue">继续（第 ${state.campaign.missionIndex + 1} 关）</button>` : ""}
@@ -357,24 +368,45 @@ export class View {
         const mission = CHAPTER_ONE.missions[state.campaign.missionIndex];
         if (!mission) return null;
         const goals = briefVictoryLines(mission);
-        return `<div class="sheet">
-          <p class="sheet__eyebrow">第 ${state.campaign.missionIndex + 1} / ${CHAPTER_ONE.missions.length} 关</p>
-          <h1>${esc(mission.name)}</h1>
-          <p class="sheet__lead">${esc(mission.brief)}</p>
+        const weather = mission.weather ?? { options: ["clear" as Weather], label: "晴", detail: "" };
+        const historicalCommanders = mission.commanders ?? [];
+        return `<div class="sheet sheet--brief">
+          <div class="brief-head">
+            <img class="brief-head__portrait" src="${COMMANDER_PORTRAIT[CHAPTER_ONE.protagonist.portrait]}" alt="高大全肖像" />
+            <div class="brief-head__copy">
+              <p class="sheet__eyebrow">第 ${state.campaign.missionIndex + 1} / ${CHAPTER_ONE.missions.length} 关 · ${esc(mission.date ?? "")}</p>
+              <h1>${esc(mission.name)}</h1>
+              <p class="brief-head__location">${esc(mission.location ?? "")}</p>
+              <p class="sheet__lead">${esc(mission.brief)}</p>
+            </div>
+          </div>
+          <div class="brief-facts">
+            <article><strong>天气</strong><span>${esc(weather.label)}</span><small>${esc(weather.detail)}</small></article>
+            <article><strong>地图</strong><span>${esc(mission.mapNote ?? "战术抽象地图")}</span></article>
+            <article><strong>史实结局</strong><span>${esc(mission.historicalOutcome ?? "")}</span></article>
+          </div>
+          <h3>历史指挥体系</h3>
+          <div class="commander-strip">
+            ${historicalCommanders.map((commander) => `<article class="commander-card">
+              ${commander.portrait && COMMANDER_PORTRAIT[commander.portrait] ? `<img src="${COMMANDER_PORTRAIT[commander.portrait]}" alt="${esc(commander.name)}肖像" />` : `<span class="commander-card__fallback">${esc(commander.name.slice(0, 1))}</span>`}
+              <div><strong>${esc(commander.name)}</strong><small>${esc(commander.formation)} · ${esc(commander.role)}</small></div>
+            </article>`).join("")}
+          </div>
           <h3>任务目标</h3>
           <ul class="sheet__goals">
             ${goals.map((goal) => `<li>${ico(UI_ICON.objPending, "ico ico--sm")}${esc(goal)}</li>`).join("")}
           </ul>
-          <h3>可用部队</h3>
+          <h3>出战部队与代表装备</h3>
           <ul class="sheet__roster">
             ${state.campaign.roster
               .map(
                 (unit) =>
-                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}</span><span>${esc(UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} · ${unit.hp}/${unit.maxHp}</span></li>`,
+                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}${unit.keyUnit ? " · 主角" : ""}</span><span>${esc(mission.playerEquipment?.[unit.type] ?? UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} · ${unit.hp}/${unit.maxHp}</span></li>`,
               )
               .join("")}
           </ul>
-          <div class="sheet__actions"><button class="btn btn--primary" data-action="begin-mission">出发</button></div>
+          <p class="sheet__note">${esc(mission.historicalNote ?? "地图和单位数量均为战术抽象。")}</p>
+          <div class="sheet__actions"><button class="btn btn--primary" data-action="begin-mission">进入战场</button></div>
         </div>`;
       }
 

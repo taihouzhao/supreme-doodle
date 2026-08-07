@@ -5,24 +5,33 @@ import type { RecoveryResult } from "./simulate";
 export const THRESHOLDS = {
   randomMaxWinRate: 0.15,
   /** 全局兜底带；分关阈值见 basicWinRateByMission */
-  basicWinRateBand: [0.25, 0.75] as [number, number],
-  /** 难度递进：基础策略胜率随关卡下降 */
+  basicWinRateBand: [0.45, 1] as [number, number],
+  /** 分关目标带反映任务性质：前期教学关宽松，阵地争夺更考验操作。 */
   basicWinRateByMission: {
-    "m1-breakthrough": [0.45, 1] as [number, number],
-    "m2-hold": [0.35, 1] as [number, number],
-    "m3-withdraw": [0.35, 0.95] as [number, number],
+    "m1-onjong": [0.75, 1] as [number, number],
+    "m2-unsan": [0.75, 1] as [number, number],
+    "m3-chongchon": [0.75, 1] as [number, number],
+    "m4-chosin": [0.75, 1] as [number, number],
+    "m5-third-offensive": [0.35, 0.8] as [number, number],
+    "m6-hoengsong": [0.75, 1] as [number, number],
+    "m7-chipyongni": [0.6, 0.95] as [number, number],
+    "m8-imjin": [0.75, 1] as [number, number],
+    "m9-cheorwon": [0.45, 0.85] as [number, number],
+    "m10-triangle-hill": [0.45, 0.85] as [number, number],
+    "m11-pork-chop": [0.45, 0.9] as [number, number],
+    "m12-kumsong": [0.45, 0.85] as [number, number],
   } as Record<string, [number, number]>,
-  /** 首关相对后两关中较低一关至少下降 */
-  difficultyRampMinDrop: 0.05,
+  minChallengingMissions: 4,
+  challengingWinRateCeiling: 0.9,
   tacticalMinWinRate: 0.75,
   /**
-   * 玩家代理（基础策略）战役三关全胜率靶心 ≈ 胜 6 负 4。
+   * 十二关连续战役以平均任务胜率衡量，避免“全胜”指标随关卡数指数失真。
    * `npm run balance:tune` 以此为优化目标。
    */
-  playerCampaignWinTarget: 0.6,
-  playerCampaignWinTolerance: 0.08,
-  playerCampaignWinBand: [0.52, 0.68] as [number, number],
-  casualtyAdvantage: 1.05,
+  playerCampaignWinTarget: 0.7,
+  playerCampaignWinTolerance: 0.15,
+  playerCampaignWinBand: [0.55, 0.85] as [number, number],
+  casualtyAdvantage: 1.15,
   /**
    * 同策略跨种子胜率的分块标准差上限。
    * 小样本（<100）时分块方差天然偏大，阈值略放宽。
@@ -32,7 +41,7 @@ export const THRESHOLDS = {
   smallSampleRuns: 100,
   /** 单个退化打法在最难的一关必须低于此胜率，否则算统治性策略 */
   degenerateMaxWinRate: 0.5,
-  /** 重创续跑后仍需达到的第三关胜率 */
+  /** 第一关重创后，早期恢复检查（第三关）仍需达到的胜率 */
   recoveryMinWinRate: 0.55,
   /** 重创续跑后花名册的最低规模 */
   recoveryMinRoster: 5,
@@ -94,19 +103,14 @@ export function evaluateGates(input: GateInput): GateResult[] {
       .join("，"),
   });
 
-  const orderedBasic = ["m1-breakthrough", "m2-hold", "m3-withdraw"]
-    .map((id) => basic.find((r) => r.missionId === id))
-    .filter((row): row is MissionAggregate => Boolean(row));
-  const first = orderedBasic[0];
-  const rest = orderedBasic.slice(1);
-  const hardest = rest.reduce((min, row) => Math.min(min, row.winRate), 1);
-  const drop = first ? first.winRate - hardest : 0;
-  const rampOk = Boolean(first) && rest.length > 0 && drop >= THRESHOLDS.difficultyRampMinDrop;
+  const challenging = basic.filter(
+    (row) => row.winRate < THRESHOLDS.challengingWinRateCeiling,
+  );
   gates.push({
     id: "difficulty-ramp",
-    title: `基础策略胜率随战役变难（首关相对后两关最低点至少低 ${pct(THRESHOLDS.difficultyRampMinDrop)}）`,
-    passed: rampOk,
-    detail: orderedBasic.map((r) => `${r.missionId} ${pct(r.winRate)}`).join(" → "),
+    title: `至少 ${THRESHOLDS.minChallengingMissions} 关不能被基础策略稳定碾压`,
+    passed: challenging.length >= THRESHOLDS.minChallengingMissions,
+    detail: challenging.map((r) => `${r.missionId} ${pct(r.winRate)}`).join("，"),
   });
 
   gates.push({
@@ -171,7 +175,7 @@ export function evaluateGates(input: GateInput): GateResult[] {
   });
   gates.push({
     id: "no-dominant-strategy",
-    title: "不存在能通吃三关的无脑打法",
+    title: "不存在能通吃十二关的无脑打法",
     passed: dominant.length === 0,
     detail: degenerateIds
       .map((id) => {
@@ -183,7 +187,7 @@ export function evaluateGates(input: GateInput): GateResult[] {
 
   gates.push({
     id: "campaign-recovery",
-    title: `第一关重创后，第三关胜率 ≥ ${pct(THRESHOLDS.recoveryMinWinRate)} 且编制 ≥ ${THRESHOLDS.recoveryMinRoster}`,
+    title: `第一关重创后，早期恢复关胜率 ≥ ${pct(THRESHOLDS.recoveryMinWinRate)} 且编制 ≥ ${THRESHOLDS.recoveryMinRoster}`,
     passed:
       recovery.finalMissionWinRate >= THRESHOLDS.recoveryMinWinRate &&
       recovery.avgRosterBeforeFinal >= THRESHOLDS.recoveryMinRoster,
@@ -193,13 +197,13 @@ export function evaluateGates(input: GateInput): GateResult[] {
   const campaigns = input.campaigns;
   const basicCampaign = campaigns.find((row) => row.agentId === "basic");
   const [winLo, winHi] = THRESHOLDS.playerCampaignWinBand;
-  const campaignRate = basicCampaign?.fullClearRate ?? 0;
+  const campaignRate = basicCampaign?.avgCompletionRate ?? 0;
   gates.push({
     id: "player-win-band",
-    title: `基础策略战役全胜率落在胜6负4带（${pct(winLo)}–${pct(winHi)}，靶心 ${pct(THRESHOLDS.playerCampaignWinTarget)}）`,
+    title: `基础策略十二关平均任务胜率处于可玩带（${pct(winLo)}–${pct(winHi)}，靶心 ${pct(THRESHOLDS.playerCampaignWinTarget)}）`,
     passed: campaignRate >= winLo && campaignRate <= winHi,
     detail: basicCampaign
-      ? `三关全胜 ${pct(campaignRate)}，平均通关 ${basicCampaign.avgMissionsWon.toFixed(2)}`
+      ? `平均任务胜率 ${pct(campaignRate)}，平均通关 ${basicCampaign.avgMissionsWon.toFixed(2)}/12`
       : "缺少基础策略战役数据",
   });
 

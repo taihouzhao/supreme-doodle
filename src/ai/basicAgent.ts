@@ -33,8 +33,8 @@ function basicGoal(state: GameState, unit: Unit): Vec2 | null {
     if (UNIT_TYPES[unit.type].canCapture) {
       return captureGoal(state, unit) ?? nearest(unit, enemies);
     }
-    const goal = captureGoal(state, unit) ?? nearest(unit, enemies);
-    return goal;
+    // 支援兵种只向敌人靠近，不占住目标格堵住真正能占领的步兵。
+    return nearest(unit, enemies);
   }
 
   if (state.missionKind === "withdraw") {

@@ -61,7 +61,7 @@ describe("关卡装载", () => {
   it("不同种子会改变敌军编成或天气", () => {
     const signatures = new Set<string>();
     for (let seed = 1; seed <= 12; seed += 1) {
-      const state = freshState("m1-breakthrough", seed);
+      const state = freshState("m1-onjong", seed);
       signatures.add(
         `${state.weather}|${state.units
           .filter((u) => u.faction === "enemy")
@@ -73,9 +73,9 @@ describe("关卡装载", () => {
   });
 
   it("核心要素在所有种子下保持不变", () => {
-    const baseline = freshState("m1-breakthrough", 1);
+    const baseline = freshState("m1-onjong", 1);
     for (let seed = 2; seed <= 20; seed += 1) {
-      const state = freshState("m1-breakthrough", seed);
+      const state = freshState("m1-onjong", seed);
       expect(state.tiles).toEqual(baseline.tiles);
       expect(state.objectives.map((o) => `${o.id}:${o.x},${o.y}`)).toEqual(
         baseline.objectives.map((o) => `${o.id}:${o.x},${o.y}`),
@@ -91,7 +91,7 @@ describe("关卡装载", () => {
 
 describe("applyAction", () => {
   it("是纯函数，不修改传入状态", () => {
-    const state = freshState("m1-breakthrough", 3);
+    const state = freshState("m1-onjong", 3);
     const before = hashState(state);
     const move = legalActions(state).find((a) => a.kind === "move")!;
     applyAction(state, move);
@@ -99,7 +99,7 @@ describe("applyAction", () => {
   });
 
   it("非法动作会抛错而不是静默失败", () => {
-    const state = freshState("m1-breakthrough", 3);
+    const state = freshState("m1-onjong", 3);
     expect(() => applyAction(state, { kind: "attack", unitId: "p0", targetId: "e0" })).toThrow();
   });
 });
@@ -115,8 +115,8 @@ describe("重放", () => {
   });
 
   it("同一 Agent 同一种子两次运行结果一致", () => {
-    const a = playStandaloneMission("chapter-one", "m2-hold", getAgent("tactical"), 5);
-    const b = playStandaloneMission("chapter-one", "m2-hold", getAgent("tactical"), 5);
+    const a = playStandaloneMission("chapter-one", "m4-chosin", getAgent("tactical"), 5);
+    const b = playStandaloneMission("chapter-one", "m4-chosin", getAgent("tactical"), 5);
     expect(hashState(a.finalState)).toBe(hashState(b.finalState));
     expect(a.actions).toEqual(b.actions);
   });

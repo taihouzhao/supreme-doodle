@@ -1,11 +1,29 @@
-import type { ItemId, MissionKind, UnitTypeId, Vec2 } from "../../core/types";
+import type { Faction, ItemId, MissionKind, UnitTypeId, Vec2, Weather } from "../../core/types";
+
+export interface HistoricalCommander {
+  id: string;
+  name: string;
+  faction: Faction;
+  role: string;
+  formation: string;
+  portrait?: string;
+}
+
+export interface WeatherSpec {
+  /** 仅在史实合理的天气集合内按种子选择；单元素即固定天气。 */
+  options: Weather[];
+  label: string;
+  detail: string;
+}
 
 export interface EnemySpec {
   type: UnitTypeId;
   x: number;
   y: number;
   exp?: number;
+  hp?: number;
   name?: string;
+  equipment?: string;
 }
 
 /** 受约束随机：只允许在预算内替换敌军编成 */
@@ -59,6 +77,15 @@ export interface MissionConfig {
   name: string;
   kind: MissionKind;
   brief: string;
+  date?: string;
+  location?: string;
+  historicalOutcome?: string;
+  historicalNote?: string;
+  commanders?: HistoricalCommander[];
+  /** 棋盘是战术抽象；此字段说明地图上真实地标与方向。 */
+  mapNote?: string;
+  weather?: WeatherSpec;
+  playerEquipment?: Partial<Record<UnitTypeId, string>>;
   maxTurns: number;
   map: string[];
   playerSpawns: Vec2[];
@@ -68,7 +95,7 @@ export interface MissionConfig {
   objectives: ObjectiveSpec[];
   evacZone: Vec2[];
   itemDrops: ItemDropSpec[];
-  /** 下雨概率，天气属于受约束随机 */
-  rainChance: number;
+  /** 旧关卡兼容；新关卡统一使用 weather。 */
+  rainChance?: number;
   victory: VictoryRule;
 }

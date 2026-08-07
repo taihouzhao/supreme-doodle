@@ -51,6 +51,7 @@ export function createCampaign(chapterId: string, seed: number): CampaignState {
     exp: spec.exp,
     fatigue: 0,
     missionsSurvived: 0,
+    keyUnit: spec.keyUnit ?? false,
   }));
 
   return {
@@ -101,6 +102,7 @@ function replenish(campaign: CampaignState, chapter: ChapterConfig): string[] {
       exp: 0,
       fatigue: 0,
       missionsSurvived: 0,
+      keyUnit: false,
     });
     added.push(id);
   }
@@ -165,6 +167,22 @@ export function finishMission(
         hp: Math.max(1, deployed.hp),
         maxHp: deployed.maxHp,
         exp: deployed.exp,
+        fatigue: deployed.fatigue,
+        missionsSurvived: rosterUnit.missionsSurvived + 1,
+      });
+      continue;
+    }
+
+    // 高大全是连续战役主角：单关被击溃会导致该关失败，但叙事上按重伤后送处理，
+    // 不参与随机永久减员，确保人物跨12关稳定存在。
+    if (rosterUnit.keyUnit) {
+      const exp = Math.round(deployed.exp * 0.9);
+      returningUnits.push(rosterUnit.id);
+      roster.push({
+        ...rosterUnit,
+        hp: Math.max(25, chapter.returningUnit.hp),
+        maxHp: effectiveMaxHp(rosterUnit.type, exp),
+        exp,
         fatigue: deployed.fatigue,
         missionsSurvived: rosterUnit.missionsSurvived + 1,
       });

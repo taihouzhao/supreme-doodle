@@ -476,6 +476,13 @@ body {
   border-top: 1px dashed var(--line);
 }
 
+.card__equipment {
+  margin-top: 0.32rem;
+  font-size: 0.72rem;
+  color: var(--gold);
+  line-height: 1.35;
+}
+
 .card__dim {
   font-size: 0.78rem;
   color: var(--ink-soft);
@@ -821,6 +828,132 @@ body {
   animation: rise 0.28s ease both;
 }
 
+.sheet--brief {
+  width: min(100%, 820px);
+  max-height: min(92dvh, 920px);
+  overflow-y: auto;
+}
+
+.title-hero,
+.brief-head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.title-hero__portrait,
+.brief-head__portrait {
+  width: 110px;
+  height: 110px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 2px solid rgba(184, 134, 43, 0.55);
+  box-shadow: 0 8px 20px rgba(34, 31, 26, 0.18);
+  flex: 0 0 auto;
+}
+
+.title-hero__rank,
+.brief-head__location {
+  color: var(--gold);
+  font-size: 0.82rem;
+}
+
+.brief-head {
+  align-items: flex-start;
+}
+
+.brief-head__copy {
+  min-width: 0;
+}
+
+.brief-head__portrait {
+  width: 132px;
+  height: 164px;
+}
+
+.brief-facts {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr 1.6fr;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
+.brief-facts article {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  min-width: 0;
+  padding: 0.58rem 0.65rem;
+  background: rgba(227, 219, 201, 0.55);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.brief-facts strong {
+  color: var(--gold);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+}
+
+.brief-facts small {
+  color: var(--ink-soft);
+  line-height: 1.4;
+}
+
+.commander-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.45rem;
+}
+
+.commander-card {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.45rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(239, 233, 220, 0.7);
+}
+
+.commander-card img,
+.commander-card__fallback {
+  width: 50px;
+  height: 58px;
+  flex: 0 0 auto;
+  object-fit: cover;
+  border-radius: 5px;
+  filter: saturate(0.82) contrast(1.04);
+}
+
+.commander-card__fallback {
+  display: grid;
+  place-items: center;
+  background: #d4c5a7;
+  color: #5d4b2d;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.commander-card div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.commander-card strong {
+  font-size: 0.82rem;
+}
+
+.commander-card small {
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
 @keyframes rise {
   from {
     opacity: 0;
@@ -955,5 +1088,27 @@ body {
 
   .log {
     max-height: 110px;
+  }
+
+  .sheet--brief {
+    padding: 1rem;
+  }
+
+  .brief-head__portrait {
+    width: 84px;
+    height: 110px;
+  }
+
+  .brief-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .sheet__roster li {
+    align-items: flex-start;
+  }
+
+  .sheet__roster li span:last-child {
+    max-width: 58%;
+    white-space: normal;
   }
 }

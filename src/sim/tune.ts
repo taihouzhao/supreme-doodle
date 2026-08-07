@@ -7,7 +7,7 @@ import { renderReport } from "./report";
 import { runSimulation, type SimulationResult } from "./simulate";
 
 /**
- * 以「基础策略战役全胜率 ≈ 60%」为靶心，搜索敌军伤害系数。
+ * 以「基础策略十二关平均任务胜率 ≈ 70%」为靶心，搜索敌军伤害系数。
  * 玩法数值变更后应跑此工具反复打磨，再部署试玩。
  */
 
@@ -39,7 +39,7 @@ export interface TuneResult {
 
 function basicCampaignWinRate(result: SimulationResult): number {
   const row = result.campaigns.find((c) => c.agentId === "basic");
-  return row?.fullClearRate ?? 0;
+  return row?.avgCompletionRate ?? 0;
 }
 
 function applyEnemyDamage(value: number): void {
@@ -88,8 +88,8 @@ function evaluateTrial(
 }
 
 /**
- * 在敌军伤害系数上做有界搜索，优先「全部门槛通过且最接近 60%」，
- * 其次「最接近 60%」。
+ * 在敌军伤害系数上做有界搜索，优先「全部门槛通过且最接近目标」，
+ * 其次「最接近目标」。
  */
 export function tuneBalance(options: TuneOptions = {}): TuneResult {
   const target = options.target ?? THRESHOLDS.playerCampaignWinTarget;
@@ -110,7 +110,7 @@ export function tuneBalance(options: TuneOptions = {}): TuneResult {
     trials.push(trial);
     if (!quiet) {
       console.log(
-        `  enemy×${trial.enemyDamage.toFixed(3)}  基础战役全胜 ${pct(trial.basicCampaignWinRate)}  门槛 ${trial.gatesPassed}/${trial.gatesTotal}${trial.allGatesPassed ? " ✓" : ""}`,
+        `  enemy×${trial.enemyDamage.toFixed(3)}  基础平均任务胜率 ${pct(trial.basicCampaignWinRate)}  门槛 ${trial.gatesPassed}/${trial.gatesTotal}${trial.allGatesPassed ? " ✓" : ""}`,
       );
     }
     if (!best || prefer(trial, best, target)) {
@@ -154,7 +154,7 @@ export function tuneBalance(options: TuneOptions = {}): TuneResult {
 
   if (!quiet) {
     console.log(
-      `\n靶心 基础战役全胜率 ${pct(target)} ± ${pct(tolerance)} → 最佳 enemy×${best.enemyDamage.toFixed(3)} = ${pct(best.basicCampaignWinRate)}`,
+      `\n靶心 基础平均任务胜率 ${pct(target)} ± ${pct(tolerance)} → 最佳 enemy×${best.enemyDamage.toFixed(3)} = ${pct(best.basicCampaignWinRate)}`,
     );
     console.log(
       `报告已写入 ${out}${written ? "；已写回 balance.ts" : "（未写回 balance.ts，加 --write）"}`,

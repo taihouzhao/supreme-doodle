@@ -26,6 +26,8 @@ export interface RosterUnit {
   exp: number;
   fatigue: number;
   missionsSurvived: number;
+  /** 跨关稳定的主角标记；不会因为兵种或经验排序漂移。 */
+  keyUnit: boolean;
 }
 
 export interface MissionSetup {
@@ -58,6 +60,7 @@ function makeUnit(params: {
   faction: Unit["faction"];
   type: Unit["type"];
   name: string;
+  equipment?: string;
   x: number;
   y: number;
   exp: number;
@@ -75,6 +78,7 @@ function makeUnit(params: {
     faction: params.faction,
     type: params.type,
     name: params.name,
+    equipment: params.equipment ?? UNIT_TYPES[params.type].name,
     x: params.x,
     y: params.y,
     hp: Math.min(rawHp + keyBonus, maxHp),
@@ -108,15 +112,7 @@ export function createMissionState(setup: MissionSetup): GameState {
 
   const units: Unit[] = [];
 
-  const capturers = roster.filter((unit) => UNIT_TYPES[unit.type].canCapture);
-  const anchors = roster.filter((unit) => !UNIT_TYPES[unit.type].canCapture);
-  // 主力优先标在不能占点的支援单位上，避免为了占村把主力送进枪口
-  const keyPool = anchors.length > 0 ? anchors : capturers;
-  const keyRosterId = keyPool.reduce<RosterUnit | null>((best, unit) => {
-    if (!best) return unit;
-    if (unit.exp > best.exp) return unit;
-    return best;
-  }, null)?.id;
+  const keyRosterId = roster.find((unit) => unit.keyUnit)?.id;
 
   roster.forEach((rosterUnit, index) => {
     const spawn = mission.playerSpawns[index];
@@ -128,6 +124,7 @@ export function createMissionState(setup: MissionSetup): GameState {
         faction: "player",
         type: rosterUnit.type,
         name: rosterUnit.name,
+        equipment: mission.playerEquipment?.[rosterUnit.type],
         x: spawn.x,
         y: spawn.y,
         exp: rosterUnit.exp,
@@ -146,9 +143,11 @@ export function createMissionState(setup: MissionSetup): GameState {
         faction: "enemy",
         type: spec.type,
         name: spec.name ?? UNIT_TYPES[spec.type].name,
+        equipment: spec.equipment,
         x: spec.x,
         y: spec.y,
         exp: spec.exp ?? 0,
+        hp: spec.hp,
       }),
     );
   });
@@ -162,9 +161,11 @@ export function createMissionState(setup: MissionSetup): GameState {
         faction: "enemy",
         type: spec.type,
         name: spec.name ?? UNIT_TYPES[spec.type].name,
+        equipment: spec.equipment,
         x: spec.x,
         y: spec.y,
         exp: spec.exp ?? 0,
+        hp: spec.hp,
       }),
     );
     return { turn, units: waveUnits };
@@ -202,7 +203,11 @@ export function createMissionState(setup: MissionSetup): GameState {
     fieldItems,
     evacZone: mission.evacZone.map((v) => ({ ...v })),
     inventory: { ...emptyInventory(), ...inventory },
-    weather: weatherRng.chance(mission.rainChance) ? "rain" : "clear",
+    weather: mission.weather
+      ? weatherRng.pick(mission.weather.options)
+      : weatherRng.chance(mission.rainChance ?? 0)
+        ? "rain"
+        : "clear",
     pending,
     captureStreak: 0,
     deployedCount: units.filter((u) => u.faction === "player").length,
@@ -231,8 +236,8 @@ export function movementBudget(unit: Unit, weather: GameState["weather"]): numbe
   const base = UNIT_TYPES[unit.type].move;
   const fatiguePenalty =
     1 - BALANCE.fatigue.movePenalty * (unit.fatigue / BALANCE.fatigue.max);
-  const rainPenalty = weather === "rain" ? 1 : 0;
-  return Math.max(1, Math.floor(base * fatiguePenalty) - rainPenalty);
+  const weatherPenalty = weather === "rain" || weather === "snow" ? 1 : 0;
+  return Math.max(1, Math.floor(base * fatiguePenalty) - weatherPenalty);
 }
 
 export function beginPhase(state: GameState, faction: Unit["faction"]): void {

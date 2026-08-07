@@ -1,14 +1,14 @@
 # 产品需求文档（PRD）
 
-第一版目标是一个**可验证的战棋纵向切片**：一个小章节、三场连续任务、可批量模拟验证，而不是完整复刻《决战朝鲜》。
+当前版本是一个**可验证的朝鲜战争战棋章节**：十二场连续任务、固定虚构主角、历史资料边界与可批量模拟验证；仍是战术抽象，不宣称完整复刻战争。
 
 ## 文档索引
 
 | 文档 | 说明 |
 |------|------|
 | [00-original-brief.md](./00-original-brief.md) | 原始需求原文（逐字归档，冲突时以此为准） |
-| [01-product-scope.md](./01-product-scope.md) | 第一版目标、核心假设、范围与非范围 |
-| [02-game-design.md](./02-game-design.md) | 棋盘、兵种、地形、道具、战斗、战役继承、三关 |
+| [01-product-scope.md](./01-product-scope.md) | 当前目标、核心假设、范围与非范围 |
+| [02-game-design.md](./02-game-design.md) | 棋盘、兵种、地形、道具、战斗、战役继承、十二关 |
 | [03-tech-architecture.md](./03-tech-architecture.md) | 四部分架构、目录、确定性与重放 |
 | [04-validation-and-balance.md](./04-validation-and-balance.md) | 数学验证门槛与真人验证观察项 |
 | [05-roadmap.md](./05-roadmap.md) | 阶段划分 |

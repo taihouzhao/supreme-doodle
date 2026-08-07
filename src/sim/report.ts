@@ -66,11 +66,11 @@ export function renderReport(result: SimulationResult): string {
   sections.push("## 连续战役");
   sections.push(
     [
-      "| 策略 | 三关全胜率 | 平均通关数 | 结束时老兵数 | 结束时编制 | 平均永久损失 |",
-      "|------|------------|------------|--------------|------------|--------------|",
+      "| 策略 | 十二关全胜率 | 平均任务胜率 | 平均通关数 | 结束时老兵数 | 结束时编制 | 平均永久损失 |",
+      "|------|--------------|--------------|------------|--------------|------------|--------------|",
       ...result.campaigns.map(
         (row) =>
-          `| ${agentName(row.agentId)} | ${pct(row.fullClearRate)} | ${row.avgMissionsWon.toFixed(2)} | ${row.avgVeteransAtEnd.toFixed(1)} | ${row.avgRosterAtEnd.toFixed(1)} | ${row.avgPermanentLosses.toFixed(1)} |`,
+          `| ${agentName(row.agentId)} | ${pct(row.fullClearRate)} | ${pct(row.avgCompletionRate)} | ${row.avgMissionsWon.toFixed(2)} | ${row.avgVeteransAtEnd.toFixed(1)} | ${row.avgRosterAtEnd.toFixed(1)} | ${row.avgPermanentLosses.toFixed(1)} |`,
       ),
     ].join("\n"),
   );
@@ -78,7 +78,7 @@ export function renderReport(result: SimulationResult): string {
   sections.push("## 重创后的恢复能力");
   sections.push(
     [
-      "第一关交给随机策略制造损失，后两关交给战术策略，用来检查是否存在隐性死档。",
+      "第一关交给随机策略制造损失，后续交给战术策略；这里以第三关作为早期恢复检查点，另由十二关战役统计验证长期恢复。",
       "",
       `- 第一关胜率：${pct(result.recovery.firstMissionWinRate)}`,
       `- 第三关胜率：${pct(result.recovery.finalMissionWinRate)}`,

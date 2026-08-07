@@ -6,7 +6,7 @@ export type TerrainId = "road" | "plain" | "forest" | "hill" | "village" | "rive
 
 export type ItemId = "medkit" | "at_charge" | "arty_support";
 
-export type Weather = "clear" | "rain";
+export type Weather = "clear" | "overcast" | "rain" | "snow" | "fog";
 
 export type MissionKind = "breakthrough" | "hold" | "withdraw";
 
@@ -74,6 +74,8 @@ export interface Unit {
   faction: Faction;
   type: UnitTypeId;
   name: string;
+  /** 本关实际使用的代表性武器/装备，仅用于历史呈现，不额外叠加数值。 */
+  equipment: string;
   x: number;
   y: number;
   hp: number;
@@ -85,7 +87,7 @@ export interface Unit {
   hasActed: boolean;
   alive: boolean;
   evacuated: boolean;
-  /** 第三关的指定主力，撤离条件之一 */
+  /** 固定主力标记；高大全在撤离关中也是必需撤离单位。 */
   keyUnit: boolean;
 }
 

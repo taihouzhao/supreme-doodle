@@ -180,7 +180,10 @@ export class Session {
           text: `${started.mission.name}：${started.mission.brief}`,
         },
       ],
-      notice: started.state.weather === "rain" ? "雨天：远程伤害与移动力下降" : null,
+      notice:
+        started.state.weather === "clear"
+          ? null
+          : `${started.mission.weather?.label ?? "复杂天气"}：${started.mission.weather?.detail ?? "移动与远程火力受到影响"}`,
     });
   }
 

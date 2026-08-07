@@ -73,9 +73,13 @@ export const TERRAIN_CHARS: Record<string, TerrainId> = {
 };
 
 export const WEATHER_EFFECT = {
+  clear: { rangedDamage: 0, movePenalty: 0 },
+  overcast: { rangedDamage: -0.04, movePenalty: 0 },
   rain: {
     /** 射程大于 1 的攻击伤害修正 */
     rangedDamage: -0.15,
     movePenalty: 1,
   },
+  snow: { rangedDamage: -0.08, movePenalty: 1 },
+  fog: { rangedDamage: -0.18, movePenalty: 0 },
 };

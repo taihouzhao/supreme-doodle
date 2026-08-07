@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "可验证的战棋纵向切片：确定性规则核心 + 网页表现 + 蒙特卡洛模拟器",
+  "description": "十二关朝鲜战争历史战棋：确定性规则核心 + 网页表现 + 蒙特卡洛平衡",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "sim": "tsx src/sim/cli.ts",
-    "balance:tune": "tsx src/sim/tune.ts",
+    "sim": "node --import tsx src/sim/cli.ts",
+    "balance:tune": "node --import tsx src/sim/tune.ts",
     "ship": "bash scripts/ship.sh",
     "deploy:r2": "node scripts/deploy-r2.mjs"
   },
@@ -22,6 +22,6 @@
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.0.11",
-    "vitest": "^3.0.5"
+    "vitest": "^4.1.10"
   }
 }

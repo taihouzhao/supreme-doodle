@@ -1,7 +1,7 @@
 import type { CampaignState } from "../core/campaign";
 import type { Action } from "../core/types";
 
-const SAVE_KEY = "korea-tactics/save/v1";
+const SAVE_KEY = "korea-tactics/save/v2";
 const REPLAY_KEY = "korea-tactics/replays/v1";
 
 export interface SaveData {

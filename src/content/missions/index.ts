@@ -1,9 +1,7 @@
-import { M1_BREAKTHROUGH } from "./m1-breakthrough";
-import { M2_HOLD } from "./m2-hold";
-import { M3_WITHDRAW } from "./m3-withdraw";
+import { HISTORICAL_MISSIONS } from "./historical-campaign";
 import type { MissionConfig } from "./schema";
 
-export const MISSION_LIST: MissionConfig[] = [M1_BREAKTHROUGH, M2_HOLD, M3_WITHDRAW];
+export const MISSION_LIST: MissionConfig[] = HISTORICAL_MISSIONS;
 
 export const MISSIONS: Record<string, MissionConfig> = Object.fromEntries(
   MISSION_LIST.map((mission) => [mission.id, mission]),
@@ -15,5 +13,8 @@ export function getMission(id: string): MissionConfig {
   return mission;
 }
 
-export { M1_BREAKTHROUGH, M2_HOLD, M3_WITHDRAW };
+export const M1_BREAKTHROUGH = MISSION_LIST[0]!;
+export const M2_HOLD = MISSION_LIST[3]!;
+export const M3_WITHDRAW = MISSION_LIST[6]!;
+export { HISTORICAL_MISSIONS };
 export type { MissionConfig };

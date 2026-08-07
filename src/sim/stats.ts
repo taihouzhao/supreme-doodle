@@ -21,6 +21,7 @@ export interface CampaignAggregate {
   runs: number;
   fullClearRate: number;
   avgMissionsWon: number;
+  avgCompletionRate: number;
   avgVeteransAtEnd: number;
   avgRosterAtEnd: number;
   avgPermanentLosses: number;
@@ -69,12 +70,17 @@ export function aggregateMission(missionId: string, agentId: string, runs: Missi
 }
 
 export function aggregateCampaign(agentId: string, runs: CampaignRun[]): CampaignAggregate {
+  const missionCount = runs[0]?.missions.length ?? 0;
   return {
     agentId,
     runs: runs.length,
     fullClearRate:
-      runs.length === 0 ? 0 : runs.filter((run) => run.missionsWon === 3).length / runs.length,
+      runs.length === 0 || missionCount === 0
+        ? 0
+        : runs.filter((run) => run.missionsWon === missionCount).length / runs.length,
     avgMissionsWon: mean(runs.map((run) => run.missionsWon)),
+    avgCompletionRate:
+      missionCount === 0 ? 0 : mean(runs.map((run) => run.missionsWon / missionCount)),
     avgVeteransAtEnd: mean(runs.map((run) => run.veteransAtEnd)),
     avgRosterAtEnd: mean(runs.map((run) => run.rosterAtEnd)),
     avgPermanentLosses: mean(

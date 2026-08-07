@@ -1,8 +1,6 @@
 import type { ItemId, UnitTypeId } from "../core/types";
 import { designation } from "./naming";
-import { M1_BREAKTHROUGH } from "./missions/m1-breakthrough";
-import { M2_HOLD } from "./missions/m2-hold";
-import { M3_WITHDRAW } from "./missions/m3-withdraw";
+import { MISSION_LIST } from "./missions";
 import type { MissionConfig } from "./missions/schema";
 
 export interface StartingUnitSpec {
@@ -10,11 +8,18 @@ export interface StartingUnitSpec {
   commander: string;
   type: UnitTypeId;
   exp: number;
+  keyUnit?: boolean;
 }
 
 export interface ChapterConfig {
   id: string;
   name: string;
+  protagonist: {
+    name: string;
+    title: string;
+    bio: string;
+    portrait: string;
+  };
   missions: MissionConfig[];
   startingRoster: StartingUnitSpec[];
   /** 补充兵可用的主将名池（按顺序取尚未在花名册中的） */
@@ -35,40 +40,53 @@ export interface ChapterConfig {
 }
 
 /**
- * 第一章 · 入朝：云山伏击 → 长津阻击 → 北撤掩护。
- * 编制以步兵/机枪为主；每支部队对应唯一主将。
+ * 历史战役篇：主角与直属部队均为虚构，历史将领只作为战役背景出现。
  */
 export const CHAPTER_ONE: ChapterConfig = {
   id: "chapter-one",
-  name: "第一章 · 入朝",
-  missions: [M1_BREAKTHROUGH, M2_HOLD, M3_WITHDRAW],
+  name: "朝鲜战场 · 1950—1953",
+  protagonist: {
+    name: "高大全",
+    title: "志司直属加强营指挥员",
+    bio: "虚构人物。出身东北野战军，擅长夜战穿插和山地防御；作为志愿军司令部直属机动指挥员，被派往不同军团协同关键战斗。",
+    portrait: "gao-daquan",
+  },
+  missions: MISSION_LIST,
   startingRoster: [
-    { commander: "梁兴初", type: "rifle", exp: 120 },
-    { commander: "江拥辉", type: "rifle", exp: 40 },
-    { commander: "温玉成", type: "rifle", exp: 20 },
-    { commander: "邓岳", type: "rifle", exp: 0 },
-    { commander: "吴瑞林", type: "rifle", exp: 0 },
-    { commander: "张竭诚", type: "mg", exp: 60 },
-    { commander: "贺晋年", type: "mg", exp: 10 },
-    { commander: "李天佑", type: "mg", exp: 0 },
+    { commander: "高大全", type: "rifle", exp: 180, keyUnit: true },
+    { commander: "王铁山", type: "rifle", exp: 55 },
+    { commander: "赵长河", type: "rifle", exp: 35 },
+    { commander: "何满仓", type: "rifle", exp: 20 },
+    { commander: "刘黑牛", type: "mg", exp: 80 },
+    { commander: "陈守义", type: "mg", exp: 45 },
+    { commander: "孙有田", type: "mortar", exp: 65 },
+    { commander: "周文虎", type: "mortar", exp: 30 },
   ],
   reserveCommanders: [
-    "韩先楚",
-    "解方",
-    "杜平",
-    "刘震",
-    "杨得志",
-    "彭德怀",
-    "洪学智",
-    "邓华",
+    "谢大勇",
+    "马振东",
+    "曹立新",
+    "冯树林",
+    "顾平安",
+    "石大川",
+    "罗成武",
+    "丁海峰",
+    "孔庆元",
+    "许长胜",
+    "关万里",
+    "田守信",
+    "郭明山",
+    "沈大江",
+    "章克难",
+    "贾四海",
   ],
   startingInventory: { medkit: 2, at_charge: 1, arty_support: 0 },
   minRoster: 8,
   maxReplacementsPerMission: 4,
-  permanentLossChance: { won: 0.35, lost: 0.5 },
+  permanentLossChance: { won: 0.22, lost: 0.4 },
   returningUnit: { hp: 35, expPenalty: 0.3 },
   restRecovery: { hp: 0.5, fatigue: 0.6 },
-  resupply: { medkit: 1, at_charge: 1 },
+  resupply: { medkit: 1, at_charge: 1, arty_support: 1 },
 };
 
 export function rosterUnitName(spec: StartingUnitSpec): string {

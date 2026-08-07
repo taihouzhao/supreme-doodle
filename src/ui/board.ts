@@ -276,6 +276,8 @@ export class Board {
       }
     }
 
+    this.drawWeatherLayer(state, x0, y0, x1, y1);
+
     for (const zone of state.evacZone) {
       if (zone.x < x0 || zone.x > x1 || zone.y < y0 || zone.y > y1) continue;
       ctx.fillStyle = HIGHLIGHT.evac;
@@ -343,6 +345,71 @@ export class Board {
 
     ctx.restore();
     this.drawMinimap(state, dpr);
+  }
+
+  /** 固定种子下完全静态的天气层：既表现战场气候，又不影响棋子可读性。 */
+  private drawWeatherLayer(
+    state: GameState,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): void {
+    const { ctx, tile } = this;
+    if (state.weather === "clear") return;
+
+    const left = x0 * tile;
+    const top = y0 * tile;
+    const width = (x1 - x0 + 1) * tile;
+    const height = (y1 - y0 + 1) * tile;
+
+    ctx.save();
+    if (state.weather === "overcast") {
+      ctx.fillStyle = "rgba(76, 84, 82, 0.14)";
+      ctx.fillRect(left, top, width, height);
+    } else if (state.weather === "fog") {
+      ctx.fillStyle = "rgba(220, 224, 216, 0.26)";
+      ctx.fillRect(left, top, width, height);
+      ctx.strokeStyle = "rgba(244, 241, 226, 0.2)";
+      ctx.lineWidth = tile * 0.28;
+      for (let y = top + tile * 0.4; y < top + height; y += tile * 1.4) {
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(left + width, y + tile * 0.15);
+        ctx.stroke();
+      }
+    } else if (state.weather === "rain") {
+      ctx.fillStyle = "rgba(47, 70, 82, 0.2)";
+      ctx.fillRect(left, top, width, height);
+      ctx.strokeStyle = "rgba(202, 222, 231, 0.42)";
+      ctx.lineWidth = Math.max(1, tile * 0.018);
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          if ((x * 7 + y * 11 + state.seed) % 3 !== 0) continue;
+          const sx = x * tile + tile * 0.72;
+          const sy = y * tile + tile * 0.18;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx - tile * 0.16, sy + tile * 0.28);
+          ctx.stroke();
+        }
+      }
+    } else if (state.weather === "snow") {
+      ctx.fillStyle = "rgba(226, 235, 237, 0.34)";
+      ctx.fillRect(left, top, width, height);
+      ctx.fillStyle = "rgba(255, 255, 250, 0.75)";
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const hash = (x * 31 + y * 17 + state.seed) >>> 0;
+          const cx = x * tile + tile * (0.2 + ((hash % 57) / 100));
+          const cy = y * tile + tile * (0.18 + (((hash >> 3) % 61) / 100));
+          ctx.beginPath();
+          ctx.arc(cx, cy, Math.max(1.5, tile * 0.035), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
   }
 
   /** 右上角小地图（地图视口内，不再被顶栏遮挡） */

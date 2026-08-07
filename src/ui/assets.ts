@@ -1,7 +1,7 @@
 import type { Faction, ItemId, TerrainId, UnitTypeId } from "../core/types";
 
 /** Cache-bust when swapping generated art without renaming. */
-const V = "?v=3";
+const V = "?v=4";
 
 /** Static art under /assets (served from public/). */
 
@@ -16,20 +16,20 @@ export const TERRAIN_ICON: Record<TerrainId, string> = {
 
 export const UNIT_ICON: Record<UnitTypeId, Record<Faction, string>> = {
   rifle: {
-    player: `/assets/units/rifle-player.png${V}`,
-    enemy: `/assets/units/rifle-enemy.png${V}`,
+    player: `/assets/units/rifle-player-v2.png${V}`,
+    enemy: `/assets/units/rifle-enemy-v2.png${V}`,
   },
   mg: {
-    player: `/assets/units/mg-player.png${V}`,
-    enemy: `/assets/units/mg-enemy.png${V}`,
+    player: `/assets/units/mg-player-v2.png${V}`,
+    enemy: `/assets/units/mg-enemy-v2.png${V}`,
   },
   mortar: {
-    player: `/assets/units/mortar-player.png${V}`,
-    enemy: `/assets/units/mortar-enemy.png${V}`,
+    player: `/assets/units/mortar-player-v2.png${V}`,
+    enemy: `/assets/units/mortar-enemy-v2.png${V}`,
   },
   tank: {
-    player: `/assets/units/tank-player.png${V}`,
-    enemy: `/assets/units/tank-enemy.png${V}`,
+    player: `/assets/units/tank-player-v2.png${V}`,
+    enemy: `/assets/units/tank-enemy-v2.png${V}`,
   },
 };
 
@@ -42,6 +42,9 @@ export const ITEM_ICON: Record<ItemId, string> = {
 export const UI_ICON = {
   weatherClear: `/assets/ui/weather-clear.png${V}`,
   weatherRain: `/assets/ui/weather-rain.png${V}`,
+  weatherSnow: `/assets/ui/weather-snow.svg${V}`,
+  weatherFog: `/assets/ui/weather-fog.svg${V}`,
+  weatherOvercast: `/assets/ui/weather-overcast.svg${V}`,
   objPending: `/assets/ui/obj-pending.png${V}`,
   objDone: `/assets/ui/obj-done.png${V}`,
   evac: `/assets/ui/evac.png${V}`,
@@ -55,6 +58,16 @@ export const UI_ICON = {
   resultLose: `/assets/ui/result-lose.png${V}`,
 } as const;
 
+export const COMMANDER_PORTRAIT: Record<string, string> = {
+  "gao-daquan": `/assets/commanders/gao-daquan.png${V}`,
+  "peng-dehuai": `/assets/commanders/peng-dehuai.png${V}`,
+  "wu-xinquan": `/assets/commanders/wu-xinquan.png${V}`,
+  "song-shilun": `/assets/commanders/song-shilun.png${V}`,
+  "qin-jiwei": `/assets/commanders/qin-jiwei.png${V}`,
+  "matthew-ridgway": `/assets/commanders/matthew-ridgway.png${V}`,
+  "oliver-smith": `/assets/commanders/oliver-smith.png${V}`,
+};
+
 /** Every asset URL used by the game (for preload). */
 export function allAssetUrls(): string[] {
   return [
@@ -62,5 +75,6 @@ export function allAssetUrls(): string[] {
     ...Object.values(UNIT_ICON).flatMap((pair) => Object.values(pair)),
     ...Object.values(ITEM_ICON),
     ...Object.values(UI_ICON),
+    ...Object.values(COMMANDER_PORTRAIT),
   ];
 }
