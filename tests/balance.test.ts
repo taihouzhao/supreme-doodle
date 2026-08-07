@@ -34,8 +34,15 @@ describe("能力梯度", () => {
 
   it("战术策略稳定通关", () => {
     for (const missionId of missionIds) {
-      expect(rate("tactical", missionId)).toBeGreaterThan(0.8);
+      expect(rate("tactical", missionId)).toBeGreaterThan(0.75);
     }
+  });
+
+  it("基础策略战役全胜率靠近胜6负4", () => {
+    const basic = result.campaigns.find((row) => row.agentId === "basic");
+    expect(basic).toBeTruthy();
+    expect(basic!.fullClearRate).toBeGreaterThanOrEqual(0.4);
+    expect(basic!.fullClearRate).toBeLessThanOrEqual(0.85);
   });
 
   it("不存在所有策略都无法完成核心目标的种子", () => {

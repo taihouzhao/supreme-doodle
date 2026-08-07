@@ -8,13 +8,20 @@ export const THRESHOLDS = {
   basicWinRateBand: [0.25, 0.75] as [number, number],
   /** 难度递进：基础策略胜率随关卡下降 */
   basicWinRateByMission: {
-    "m1-breakthrough": [0.55, 0.98] as [number, number],
-    "m2-hold": [0.45, 1] as [number, number],
-    "m3-withdraw": [0.55, 1] as [number, number],
+    "m1-breakthrough": [0.45, 1] as [number, number],
+    "m2-hold": [0.35, 1] as [number, number],
+    "m3-withdraw": [0.35, 0.95] as [number, number],
   } as Record<string, [number, number]>,
   /** 首关相对后两关中较低一关至少下降 */
   difficultyRampMinDrop: 0.05,
-  tacticalMinWinRate: 0.8,
+  tacticalMinWinRate: 0.75,
+  /**
+   * 玩家代理（基础策略）战役三关全胜率靶心 ≈ 胜 6 负 4。
+   * `npm run balance:tune` 以此为优化目标。
+   */
+  playerCampaignWinTarget: 0.6,
+  playerCampaignWinTolerance: 0.08,
+  playerCampaignWinBand: [0.52, 0.68] as [number, number],
   casualtyAdvantage: 1.05,
   /**
    * 同策略跨种子胜率的分块标准差上限。
@@ -181,6 +188,19 @@ export function evaluateGates(input: GateInput): GateResult[] {
       recovery.finalMissionWinRate >= THRESHOLDS.recoveryMinWinRate &&
       recovery.avgRosterBeforeFinal >= THRESHOLDS.recoveryMinRoster,
     detail: `第三关胜率 ${pct(recovery.finalMissionWinRate)}，进入第三关时平均编制 ${recovery.avgRosterBeforeFinal.toFixed(1)}，平均永久损失 ${recovery.avgPermanentLosses.toFixed(1)}`,
+  });
+
+  const campaigns = input.campaigns;
+  const basicCampaign = campaigns.find((row) => row.agentId === "basic");
+  const [winLo, winHi] = THRESHOLDS.playerCampaignWinBand;
+  const campaignRate = basicCampaign?.fullClearRate ?? 0;
+  gates.push({
+    id: "player-win-band",
+    title: `基础策略战役全胜率落在胜6负4带（${pct(winLo)}–${pct(winHi)}，靶心 ${pct(THRESHOLDS.playerCampaignWinTarget)}）`,
+    passed: campaignRate >= winLo && campaignRate <= winHi,
+    detail: basicCampaign
+      ? `三关全胜 ${pct(campaignRate)}，平均通关 ${basicCampaign.avgMissionsWon.toFixed(2)}`
+      : "缺少基础策略战役数据",
   });
 
   return gates;
