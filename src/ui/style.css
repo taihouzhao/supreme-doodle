@@ -136,10 +136,18 @@ body {
   height: 1.15rem;
 }
 
+.ico--badge {
+  border-radius: 50%;
+  background: #f3eee3;
+  box-shadow: inset 0 0 0 1px rgba(34, 31, 26, 0.08);
+  object-fit: cover;
+}
+
 .ico--btn {
   width: 1.15rem;
   height: 1.15rem;
   margin-right: 0.28rem;
+  border-radius: 4px;
 }
 
 .ico--chip {

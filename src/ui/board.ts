@@ -213,16 +213,14 @@ export class Board {
     ctx.fillStyle = style.fill;
     ctx.fillRect(x * tile, y * tile, tile, tile);
 
-    const inset = Math.max(0.5, tile * 0.02);
-    const drawn = this.drawImage(
-      TERRAIN_ICON[terrainId],
-      x * tile + inset,
-      y * tile + inset,
-      tile - inset * 2,
-      tile - inset * 2,
-      terrainId === "plain" ? 0.72 : 0.92,
-    );
-    if (!drawn) this.drawTerrainIconFallback(terrainId, x, y);
+    // 底色铺满 + 居中小符号，避免整格贴图造成「印章网格」
+    if (terrainId !== "plain") {
+      const glyph = tile * 0.58;
+      const dx = x * tile + (tile - glyph) / 2;
+      const dy = y * tile + (tile - glyph) / 2;
+      const drawn = this.drawImage(TERRAIN_ICON[terrainId], dx, dy, glyph, glyph, 0.88);
+      if (!drawn) this.drawTerrainIconFallback(terrainId, x, y);
+    }
 
     // 默认网格极轻；移动/攻击范围另用高亮描边
     ctx.strokeStyle = "rgba(38, 43, 34, 0.07)";
@@ -458,16 +456,20 @@ export class Board {
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
     ctx.fillStyle = this.tokenFace(unit.faction);
     ctx.fill();
-    ctx.lineWidth = Math.max(2, tile * 0.07);
+    ctx.lineWidth = Math.max(2.4, tile * 0.08);
     ctx.strokeStyle = style.body;
     ctx.stroke();
     ctx.beginPath();
-    ctx.arc(cx, cy, radius - tile * 0.025, 0, Math.PI * 2);
+    ctx.arc(cx, cy, radius - tile * 0.03, 0, Math.PI * 2);
     ctx.strokeStyle = style.ring;
     ctx.lineWidth = Math.max(1.2, tile * 0.035);
     ctx.stroke();
 
-    const iconSize = radius * 1.7;
+    const iconSize = radius * 1.95;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 0.86, 0, Math.PI * 2);
+    ctx.clip();
     const iconDrawn = this.drawImage(
       UNIT_ICON[unit.type][unit.faction],
       cx - iconSize / 2,
@@ -475,6 +477,7 @@ export class Board {
       iconSize,
       iconSize,
     );
+    ctx.restore();
     if (!iconDrawn) {
       this.drawUnitSilhouette(unit.type, cx, cy, radius, style.body);
     }

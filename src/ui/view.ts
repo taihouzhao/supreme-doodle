@@ -196,9 +196,9 @@ export class View {
       battle.weather === "rain" ? UI_ICON.weatherRain : UI_ICON.weatherClear;
     this.regions.status!.innerHTML = `
       <span>回合 <strong>${battle.turn}/${battle.maxTurns}</strong></span>
-      <span class="topbar__weather">${ico(weatherSrc, "ico ico--sm")}${battle.weather === "rain" ? "雨" : "晴"}</span>
-      <span class="topbar__faction">${ico(UI_ICON.factionPva, "ico ico--sm")}${livingUnits(battle, "player").length}</span>
-      <span class="topbar__faction">${ico(UI_ICON.factionUn, "ico ico--sm")}${livingUnits(battle, "enemy").length}</span>
+      <span class="topbar__weather">${ico(weatherSrc, "ico ico--sm ico--badge")}${battle.weather === "rain" ? "雨" : "晴"}</span>
+      <span class="topbar__faction">${ico(UI_ICON.factionPva, "ico ico--sm ico--badge")}${livingUnits(battle, "player").length}</span>
+      <span class="topbar__faction">${ico(UI_ICON.factionUn, "ico ico--sm ico--badge")}${livingUnits(battle, "enemy").length}</span>
     `;
   }
 
