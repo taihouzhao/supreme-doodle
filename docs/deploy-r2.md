@@ -13,6 +13,23 @@
 | 创建一个桶 | 例如 `korea-tactics`（名称可自定，后面填进 secret） |
 | 开启公共访问 | 桶 → **Settings** → **Public Development URL** → Enable（测试用）；生产建议绑 **Custom Domain** |
 | R2 API Token | R2 Overview → **Manage R2 API Tokens** → Create → 权限选 **Object Read & Write**，范围限定到该桶 |
+| 根路径 rewrite | R2 **不会**自动把 `/` 映射到 `index.html`。自定义域名下必须加一条 URL Rewrite（见下方） |
+
+#### 自定义域名：让 `/` 打开游戏
+
+上传成功后，`/index.html` 通常已经可用，但访问 `https://你的域名/` 会返回 R2 的 “Not Found / Is this your bucket?”。
+
+在托管该域名的 Cloudflare 站点上加一条 **Transform Rule → Rewrite URL**：
+
+1. 进入域名 → **Rules** → **Overview** → **Create rule** → **URL Rewrite**
+2. 匹配条件（示例）：
+   - `Hostname` equals `korea-tactics.dashjie.net`
+   - **AND** `URI Path` equals `/`
+3. 动作：
+   - Path → **Rewrite to** → **Static** → `/index.html`
+4. 部署规则后，再打开 `https://korea-tactics.dashjie.net/`，应看到标题「隘口 · 战棋纵向切片」
+
+> 这是边缘 rewrite，浏览器地址栏仍可保持 `/`，不会变成跳转到 `/index.html` 的 302。
 
 创建 Token 后立刻复制：
 
@@ -88,7 +105,10 @@ npm run deploy:r2             # 真正上传
 
 ## 常见问题
 
-**上传成功但浏览器 404**  
+**上传成功但 `/` 404，而 `/index.html` 正常**  
+R2 没有目录索引。按上面「根路径 rewrite」加一条把 `/` 改写到 `/index.html` 的 Transform Rule。
+
+**上传成功但 `/index.html` 也 404**  
 桶还没开公共访问。去 Settings 打开 Public Development URL，或绑定自定义域名。
 
 **HTML 更新了但浏览器还是旧页面**  
