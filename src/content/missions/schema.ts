@@ -1,0 +1,73 @@
+import type { ItemId, MissionKind, UnitTypeId, Vec2 } from "../../core/types";
+
+export interface EnemySpec {
+  type: UnitTypeId;
+  x: number;
+  y: number;
+  exp?: number;
+  name?: string;
+}
+
+/** 受约束随机：只允许在预算内替换敌军编成 */
+export interface VariantSlot {
+  index: number;
+  options: UnitTypeId[];
+}
+
+export interface WaveSpec {
+  /** 到达回合窗口，闭区间 */
+  window: [number, number];
+  units: EnemySpec[];
+}
+
+export interface ItemDropSpec {
+  x: number;
+  y: number;
+  options: ItemId[];
+}
+
+export interface ObjectiveSpec {
+  id: string;
+  kind: "capture" | "hold";
+  x: number;
+  y: number;
+  owner: "player" | "enemy" | "none";
+}
+
+export interface VictoryRule {
+  /** 需要占领的目标数量 */
+  requiredCaptures?: number;
+  /** 占领后需要连续守住的回合数，避免「抢点即胜」和援军时间决定胜负 */
+  holdTurns?: number;
+  /** 胜利时至少存活的己方单位 */
+  minSurvivors?: number;
+  /** 需要坚守到回合结束 */
+  holdUntilEnd?: boolean;
+  /** 结束时至少仍持有的据点数 */
+  minPostsHeld?: number;
+  /** 需要撤离的单位数下限 */
+  minEvacuated?: number;
+  /** 需要撤离的出战比例，编制被打残时按比例缩放，避免形成死档 */
+  evacuateRatio?: number;
+  /** 必须包含指定主力单位 */
+  requireKeyUnit?: boolean;
+}
+
+export interface MissionConfig {
+  id: string;
+  name: string;
+  kind: MissionKind;
+  brief: string;
+  maxTurns: number;
+  map: string[];
+  playerSpawns: Vec2[];
+  enemies: EnemySpec[];
+  variantSlots: VariantSlot[];
+  waves: WaveSpec[];
+  objectives: ObjectiveSpec[];
+  evacZone: Vec2[];
+  itemDrops: ItemDropSpec[];
+  /** 下雨概率，天气属于受约束随机 */
+  rainChance: number;
+  victory: VictoryRule;
+}
