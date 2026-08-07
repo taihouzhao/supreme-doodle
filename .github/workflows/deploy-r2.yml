@@ -1,0 +1,78 @@
+name: Deploy to R2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "只打印将要上传的文件，不真正写入 R2"
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-r2
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build and sync dist/ to R2
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # 需要仓库里先配好 secrets，否则 workflow_dispatch 也能看到失败原因
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+      DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Check required secrets
+        run: |
+          missing=0
+          for name in CLOUDFLARE_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_BUCKET_NAME; do
+            if [ -z "${!name}" ]; then
+              echo "::error::缺少 GitHub secret: $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "请按 docs/deploy-r2.md 配置 secrets 后重试。"
+            exit 1
+          fi
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck & test
+        run: |
+          npm run typecheck
+          npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Sync dist/ to R2
+        run: npm run deploy:r2
+
+      - name: Summary
+        if: success()
+        run: |
+          {
+            echo "## R2 部署完成"
+            echo ""
+            echo "- Bucket: \`${R2_BUCKET_NAME}\`"
+            echo "- Account: \`${CLOUDFLARE_ACCOUNT_ID}\`"
+            echo "- Dry run: \`${DRY_RUN:-0}\`"
+            echo ""
+            echo "公共访问需在 Cloudflare Dashboard 里开启："
+            echo "R2 → 桶 → Settings → Public Development URL 或 Custom Domains"
+          } >> "$GITHUB_STEP_SUMMARY"
