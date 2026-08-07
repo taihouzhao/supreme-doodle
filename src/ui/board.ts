@@ -9,6 +9,8 @@ import { FACTION_STYLE, HIGHLIGHT, TERRAIN_STYLE } from "./theme";
 /** 决战朝鲜式大格：整图通常大于视口，靠拖拽浏览 */
 const TARGET_CSS_TILE = 72;
 const PAN_THRESHOLD = 8;
+/** 镜头可越出地图边缘的缓冲（格），避免贴边单位被 UI/视口裁切且拖不动 */
+const EDGE_BUFFER_TILES = 1.25;
 
 export interface BoardOverlay {
   selectedUnitId: string | null;
@@ -214,10 +216,12 @@ export class Board {
   }
 
   private clampCamera(): void {
+    const pad = this.cssTile * EDGE_BUFFER_TILES;
     const maxX = Math.max(0, this.mapCssWidth() - this.viewCssW);
     const maxY = Math.max(0, this.mapCssHeight() - this.viewCssH);
-    this.cameraX = Math.min(maxX, Math.max(0, this.cameraX));
-    this.cameraY = Math.min(maxY, Math.max(0, this.cameraY));
+    // 允许越界缓冲：边缘单位可拖进视口中部
+    this.cameraX = Math.min(maxX + pad, Math.max(-pad, this.cameraX));
+    this.cameraY = Math.min(maxY + pad, Math.max(-pad, this.cameraY));
   }
 
   private syncOrigin(): void {
@@ -341,16 +345,16 @@ export class Board {
     this.drawMinimap(state, dpr);
   }
 
-  /** 右下角小地图，点击可跳转镜头（通过 tap 与拖拽分离，仅展示） */
+  /** 右上角小地图（地图视口内，不再被顶栏遮挡） */
   private drawMinimap(state: GameState, dpr: number): void {
     const { ctx } = this;
     const pad = 10 * dpr;
-    const maxW = Math.min(140 * dpr, this.canvas.width * 0.28);
+    const maxW = Math.min(132 * dpr, this.canvas.width * 0.26);
     const scale = maxW / (state.width * this.tile);
     const mw = state.width * this.tile * scale;
     const mh = state.height * this.tile * scale;
     const mx = this.canvas.width - mw - pad;
-    const my = this.canvas.height - mh - pad;
+    const my = pad;
 
     ctx.save();
     ctx.globalAlpha = 0.92;

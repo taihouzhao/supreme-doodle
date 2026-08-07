@@ -194,6 +194,16 @@ export class Session {
     });
   }
 
+  clearFocus(): void {
+    if (this.state.fxBusy) return;
+    this.update({
+      selectedUnitId: null,
+      pendingItem: null,
+      inspectedTile: null,
+      lastStrike: null,
+    });
+  }
+
   toggleItem(item: ItemId | null): void {
     if (this.state.fxBusy) return;
     this.update({ pendingItem: this.state.pendingItem === item ? null : item });
