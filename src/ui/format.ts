@@ -2,10 +2,14 @@ import { ITEMS } from "../content/items";
 import { UNIT_TYPES, veterancyName } from "../content/units";
 import type { DamageBreakdown, GameEvent, GameState, Unit } from "../core/types";
 
+export function factionLabel(faction: "player" | "enemy"): string {
+  return faction === "player" ? "志愿军" : "联合军";
+}
+
 export function unitLabel(state: GameState, unitId: string): string {
   const unit = state.units.find((u) => u.id === unitId);
   if (!unit) return unitId;
-  return `${unit.faction === "player" ? "我军" : "敌军"}·${unit.name}`;
+  return `${factionLabel(unit.faction)}·${unit.name}`;
 }
 
 export function unitTypeName(unit: Unit): string {
@@ -45,8 +49,11 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     }
     case "routed":
       return `${unitLabel(state, event.unitId)} 被击溃`;
-    case "captured":
-      return `${event.by === "player" ? "我军" : "敌军"} 控制了据点 ${event.objectiveId}`;
+    case "captured": {
+      const objective = state.objectives.find((o) => o.id === event.objectiveId);
+      const name = objective?.name ?? event.objectiveId;
+      return `${factionLabel(event.by)} 控制了${name}`;
+    }
     case "itemUsed": {
       const name = ITEMS[event.item].name;
       if (event.heal > 0) return `${unitLabel(state, event.unitId)} 使用${name}，回复 ${event.heal}`;
@@ -55,7 +62,7 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     case "itemPicked":
       return `${unitLabel(state, event.unitId)} 拾取了${ITEMS[event.item].name}`;
     case "reinforced":
-      return `敌方增援抵达（${event.unitIds.length} 个单位）`;
+      return `联合军增援抵达（${event.unitIds.length} 个单位）`;
     case "evacuated":
       return `${unitLabel(state, event.unitId)} 已撤离，完整保留`;
     case "missionEnded":

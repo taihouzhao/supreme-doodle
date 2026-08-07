@@ -1,15 +1,18 @@
 import { TERRAIN } from "../content/terrain";
 import { veterancyLevel } from "../content/units";
-import type { GameState, Unit, Vec2 } from "../core/types";
-import { FACTION_STYLE, HIGHLIGHT, TERRAIN_STYLE, UNIT_GLYPH } from "./theme";
+import type { GameState, Objective, TerrainId, Unit, UnitTypeId, Vec2 } from "../core/types";
+import type { VisualFrame } from "./presentation";
+import { FACTION_STYLE, HIGHLIGHT, TERRAIN_STYLE } from "./theme";
 
 export interface BoardOverlay {
   selectedUnitId: string | null;
   moveTiles: Set<number>;
   attackTiles: Set<number>;
   itemTiles: Set<number>;
-  /** 上一次战斗的落点，用于短暂高亮 */
-  impact: { x: number; y: number; text: string } | null;
+  inspected: Vec2 | null;
+  visual: VisualFrame | null;
+  /** 目标是否算「已完成控制」：己方持有 */
+  objectiveDone: (objective: Objective) => boolean;
 }
 
 export const EMPTY_OVERLAY: BoardOverlay = {
@@ -17,7 +20,9 @@ export const EMPTY_OVERLAY: BoardOverlay = {
   moveTiles: new Set(),
   attackTiles: new Set(),
   itemTiles: new Set(),
-  impact: null,
+  inspected: null,
+  visual: null,
+  objectiveDone: (o) => o.owner === "player",
 };
 
 export class Board {
@@ -110,10 +115,23 @@ export class Board {
     for (const zone of state.evacZone) {
       ctx.fillStyle = HIGHLIGHT.evac;
       ctx.fillRect(zone.x * tile, zone.y * tile, tile, tile);
+      ctx.fillStyle = "rgba(47, 111, 94, 0.85)";
+      ctx.font = `700 ${Math.round(tile * 0.28)}px "Noto Sans SC", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("撤", zone.x * tile + tile / 2, zone.y * tile + tile / 2);
+    }
+
+    const visual = this.overlay.visual;
+    if (visual) {
+      for (const trail of visual.trail) {
+        ctx.fillStyle = `rgba(58, 122, 196, ${trail.alpha})`;
+        ctx.fillRect(trail.x * tile + 2, trail.y * tile + 2, tile - 4, tile - 4);
+      }
     }
 
     for (const objective of state.objectives) {
-      this.drawObjective(objective.x, objective.y, objective.owner);
+      this.drawObjective(objective);
     }
 
     for (const item of state.fieldItems) {
@@ -121,6 +139,15 @@ export class Board {
     }
 
     this.drawOverlay(state);
+
+    if (this.overlay.inspected) {
+      const { x, y } = this.overlay.inspected;
+      ctx.fillStyle = HIGHLIGHT.inspect;
+      ctx.fillRect(x * tile, y * tile, tile, tile);
+      ctx.strokeStyle = HIGHLIGHT.selected;
+      ctx.lineWidth = Math.max(2, tile * 0.06);
+      ctx.strokeRect(x * tile + 1.5, y * tile + 1.5, tile - 3, tile - 3);
+    }
 
     for (const unit of state.units) {
       if (!unit.alive || unit.evacuated) continue;
@@ -130,8 +157,11 @@ export class Board {
     this.drawTargetMarks(state, this.overlay.attackTiles);
     this.drawTargetMarks(state, this.overlay.itemTiles);
 
-    if (this.overlay.impact) {
-      this.drawImpact(this.overlay.impact);
+    if (visual?.strikeLine) {
+      this.drawStrikeLine(state, visual);
+    }
+    if (visual?.impact && visual.impactUnitId) {
+      this.drawImpactForUnit(state, visual);
     }
 
     ctx.restore();
@@ -145,31 +175,129 @@ export class Board {
     ctx.fillStyle = style.fill;
     ctx.fillRect(x * tile, y * tile, tile, tile);
     ctx.strokeStyle = style.edge;
-    ctx.lineWidth = 1;
+    ctx.lineWidth = Math.max(1, tile * 0.035);
     ctx.strokeRect(x * tile + 0.5, y * tile + 0.5, tile - 1, tile - 1);
 
-    if (style.glyph) {
-      ctx.fillStyle = "rgba(38, 43, 34, 0.32)";
-      ctx.font = `${Math.round(tile * 0.42)}px "Noto Serif SC", serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText(style.glyph, x * tile + tile / 2, y * tile + tile / 2);
-    }
+    this.drawTerrainIcon(terrainId, x, y);
   }
 
-  private drawObjective(x: number, y: number, owner: string): void {
+  private drawTerrainIcon(terrainId: TerrainId, x: number, y: number): void {
     const { ctx, tile } = this;
+    const cx = x * tile + tile / 2;
+    const cy = y * tile + tile / 2;
+    ctx.save();
+    ctx.strokeStyle = "rgba(38, 43, 34, 0.38)";
+    ctx.fillStyle = "rgba(38, 43, 34, 0.28)";
+    ctx.lineWidth = Math.max(1.2, tile * 0.045);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    switch (terrainId) {
+      case "forest": {
+        for (const [ox, oy, s] of [
+          [-0.16, 0.08, 0.22],
+          [0.14, 0.02, 0.26],
+          [0, -0.1, 0.2],
+        ] as const) {
+          ctx.beginPath();
+          ctx.moveTo(cx + ox * tile, cy + (oy + s) * tile);
+          ctx.lineTo(cx + (ox - s * 0.7) * tile, cy + (oy + s) * tile);
+          ctx.lineTo(cx + ox * tile, cy + (oy - s) * tile);
+          ctx.lineTo(cx + (ox + s * 0.7) * tile, cy + (oy + s) * tile);
+          ctx.closePath();
+          ctx.fill();
+        }
+        break;
+      }
+      case "hill": {
+        ctx.beginPath();
+        ctx.moveTo(cx - tile * 0.34, cy + tile * 0.22);
+        ctx.lineTo(cx - tile * 0.08, cy - tile * 0.18);
+        ctx.lineTo(cx + tile * 0.06, cy + tile * 0.02);
+        ctx.lineTo(cx + tile * 0.34, cy - tile * 0.22);
+        ctx.stroke();
+        break;
+      }
+      case "village": {
+        const w = tile * 0.34;
+        const h = tile * 0.22;
+        ctx.fillRect(cx - w / 2, cy - h * 0.1, w, h);
+        ctx.beginPath();
+        ctx.moveTo(cx - w * 0.65, cy - h * 0.1);
+        ctx.lineTo(cx, cy - h * 0.85);
+        ctx.lineTo(cx + w * 0.65, cy - h * 0.1);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      }
+      case "road": {
+        ctx.beginPath();
+        ctx.moveTo(cx - tile * 0.28, cy - tile * 0.08);
+        ctx.lineTo(cx + tile * 0.28, cy - tile * 0.08);
+        ctx.moveTo(cx - tile * 0.28, cy + tile * 0.08);
+        ctx.lineTo(cx + tile * 0.28, cy + tile * 0.08);
+        ctx.stroke();
+        break;
+      }
+      case "river": {
+        ctx.beginPath();
+        ctx.moveTo(cx - tile * 0.3, cy - tile * 0.06);
+        ctx.quadraticCurveTo(cx - tile * 0.1, cy - tile * 0.18, cx + tile * 0.05, cy - tile * 0.04);
+        ctx.quadraticCurveTo(cx + tile * 0.18, cy + tile * 0.06, cx + tile * 0.3, cy - tile * 0.02);
+        ctx.moveTo(cx - tile * 0.28, cy + tile * 0.12);
+        ctx.quadraticCurveTo(cx, cy + tile * 0.02, cx + tile * 0.28, cy + tile * 0.14);
+        ctx.stroke();
+        break;
+      }
+      default:
+        break;
+    }
+    ctx.restore();
+  }
+
+  private drawObjective(objective: Objective): void {
+    const { ctx, tile } = this;
+    const done = this.overlay.objectiveDone(objective);
     const colour =
-      owner === "player"
+      objective.owner === "player"
         ? HIGHLIGHT.objectivePlayer
-        : owner === "enemy"
+        : objective.owner === "enemy"
           ? HIGHLIGHT.objectiveEnemy
           : HIGHLIGHT.objectiveNeutral;
     ctx.save();
     ctx.strokeStyle = colour;
-    ctx.lineWidth = Math.max(2, tile * 0.08);
-    ctx.setLineDash([tile * 0.18, tile * 0.12]);
-    ctx.strokeRect(x * tile + 3, y * tile + 3, tile - 6, tile - 6);
+    ctx.lineWidth = Math.max(2.5, tile * 0.1);
+    if (done) ctx.setLineDash([]);
+    else ctx.setLineDash([tile * 0.16, tile * 0.1]);
+    ctx.strokeRect(objective.x * tile + 3, objective.y * tile + 3, tile - 6, tile - 6);
+
+    const label = objective.name.slice(0, 2) || "标";
+    ctx.fillStyle = colour;
+    ctx.font = `700 ${Math.round(tile * 0.22)}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(label, objective.x * tile + tile * 0.12, objective.y * tile + tile * 0.1);
+
+    ctx.beginPath();
+    const bx = objective.x * tile + tile * 0.78;
+    const by = objective.y * tile + tile * 0.22;
+    const r = tile * 0.12;
+    ctx.arc(bx, by, r, 0, Math.PI * 2);
+    if (done) {
+      ctx.fillStyle = HIGHLIGHT.objectivePlayer;
+      ctx.fill();
+      ctx.strokeStyle = "#f4f7f2";
+      ctx.lineWidth = Math.max(1.5, tile * 0.04);
+      ctx.beginPath();
+      ctx.moveTo(bx - r * 0.45, by);
+      ctx.lineTo(bx - r * 0.1, by + r * 0.4);
+      ctx.lineTo(bx + r * 0.5, by - r * 0.35);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = Math.max(1.5, tile * 0.045);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -234,12 +362,22 @@ export class Board {
     }
   }
 
+  private unitDrawPos(unit: Unit): { cx: number; cy: number } {
+    const { tile } = this;
+    const visual = this.overlay.visual;
+    const pos = visual?.unitPositions[unit.id];
+    if (pos) {
+      return { cx: pos.x * tile + tile / 2, cy: pos.y * tile + tile / 2 };
+    }
+    return { cx: unit.x * tile + tile / 2, cy: unit.y * tile + tile / 2 };
+  }
+
   private drawUnit(unit: Unit): void {
     const { ctx, tile } = this;
     const style = FACTION_STYLE[unit.faction];
-    const cx = unit.x * tile + tile / 2;
-    const cy = unit.y * tile + tile / 2;
+    const { cx, cy } = this.unitDrawPos(unit);
     const radius = tile * 0.34;
+    const visual = this.overlay.visual;
 
     if (this.overlay.selectedUnitId === unit.id) {
       ctx.beginPath();
@@ -258,26 +396,31 @@ export class Board {
     ctx.strokeStyle = style.ring;
     ctx.stroke();
 
-    ctx.fillStyle = style.text;
-    ctx.font = `700 ${Math.round(tile * 0.36)}px "Noto Sans SC", sans-serif`;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(UNIT_GLYPH[unit.type], cx, cy + tile * 0.01);
+    if (visual?.flashUnitId === unit.id) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+      ctx.fill();
+    }
 
+    this.drawUnitSilhouette(unit.type, cx, cy, radius, style.text);
+
+    const hp =
+      visual?.hpDisplay[unit.id] !== undefined ? visual.hpDisplay[unit.id]! : unit.hp;
     const barWidth = tile * 0.72;
     const barHeight = Math.max(3, tile * 0.09);
     const barX = cx - barWidth / 2;
-    const barY = unit.y * tile + tile - barHeight - tile * 0.08;
+    const barY = cy + radius + tile * 0.04;
     ctx.fillStyle = "rgba(22, 26, 20, 0.45)";
     ctx.fillRect(barX, barY, barWidth, barHeight);
-    const ratio = Math.max(0, unit.hp / unit.maxHp);
+    const ratio = Math.max(0, Math.min(1, hp / unit.maxHp));
     ctx.fillStyle = ratio > 0.55 ? "#5aa469" : ratio > 0.28 ? "#d9a326" : "#c8503c";
     ctx.fillRect(barX, barY, barWidth * ratio, barHeight);
 
     const level = veterancyLevel(unit.exp);
     for (let i = 0; i < level; i += 1) {
       ctx.beginPath();
-      ctx.arc(unit.x * tile + tile * 0.16 + i * tile * 0.16, unit.y * tile + tile * 0.16, tile * 0.055, 0, Math.PI * 2);
+      ctx.arc(cx - tile * 0.22 + i * tile * 0.16, cy - radius * 0.85, tile * 0.055, 0, Math.PI * 2);
       ctx.fillStyle = "#f5d76e";
       ctx.fill();
       ctx.strokeStyle = "rgba(40, 32, 10, 0.7)";
@@ -287,22 +430,118 @@ export class Board {
 
     if (unit.keyUnit) {
       ctx.fillStyle = "#f5d76e";
-      ctx.font = `700 ${Math.round(tile * 0.22)}px "Noto Sans SC", sans-serif`;
-      ctx.fillText("主", unit.x * tile + tile * 0.84, unit.y * tile + tile * 0.18);
+      ctx.font = `700 ${Math.round(tile * 0.2)}px "Noto Sans SC", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("主", cx + radius * 0.75, cy - radius * 0.75);
     }
   }
 
-  private drawImpact(impact: { x: number; y: number; text: string }): void {
+  private drawUnitSilhouette(
+    type: UnitTypeId,
+    cx: number,
+    cy: number,
+    radius: number,
+    color: string,
+  ): void {
+    const { ctx } = this;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(1.4, radius * 0.14);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    switch (type) {
+      case "rifle": {
+        ctx.beginPath();
+        ctx.arc(cx, cy - radius * 0.35, radius * 0.22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - radius * 0.1);
+        ctx.lineTo(cx, cy + radius * 0.45);
+        ctx.moveTo(cx - radius * 0.32, cy + radius * 0.05);
+        ctx.lineTo(cx + radius * 0.32, cy + radius * 0.05);
+        ctx.stroke();
+        break;
+      }
+      case "mg": {
+        ctx.beginPath();
+        ctx.moveTo(cx - radius * 0.35, cy + radius * 0.15);
+        ctx.lineTo(cx + radius * 0.4, cy - radius * 0.25);
+        ctx.moveTo(cx - radius * 0.35, cy + radius * 0.32);
+        ctx.lineTo(cx + radius * 0.4, cy - radius * 0.08);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx - radius * 0.28, cy + radius * 0.24, radius * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "mortar": {
+        ctx.beginPath();
+        ctx.moveTo(cx - radius * 0.28, cy + radius * 0.35);
+        ctx.lineTo(cx, cy + radius * 0.35);
+        ctx.lineTo(cx + radius * 0.05, cy - radius * 0.35);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx + radius * 0.18, cy - radius * 0.42, radius * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "tank": {
+        const w = radius * 1.1;
+        const h = radius * 0.55;
+        ctx.fillRect(cx - w / 2, cy - h * 0.15, w, h);
+        ctx.fillRect(cx - w * 0.2, cy - h * 0.7, w * 0.4, h * 0.55);
+        ctx.beginPath();
+        ctx.moveTo(cx + w * 0.2, cy - h * 0.35);
+        ctx.lineTo(cx + w * 0.55, cy - h * 0.35);
+        ctx.stroke();
+        break;
+      }
+    }
+    ctx.restore();
+  }
+
+  private drawStrikeLine(state: GameState, visual: VisualFrame): void {
+    const line = visual.strikeLine;
+    if (!line) return;
+    const from = state.units.find((u) => u.id === line.fromId);
+    const to = state.units.find((u) => u.id === line.toId);
+    if (!from || !to) return;
+    const a = this.unitDrawPos(from);
+    const b = this.unitDrawPos(to);
     const { ctx, tile } = this;
     ctx.save();
+    ctx.globalAlpha = line.alpha;
+    ctx.strokeStyle = "#c8503c";
+    ctx.lineWidth = Math.max(2, tile * 0.06);
+    ctx.beginPath();
+    ctx.moveTo(a.cx, a.cy);
+    ctx.lineTo(b.cx, b.cy);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawImpactForUnit(state: GameState, visual: VisualFrame): void {
+    const impact = visual.impact;
+    const unitId = visual.impactUnitId;
+    if (!impact || !unitId) return;
+    const unit = state.units.find((u) => u.id === unitId);
+    if (!unit) return;
+    const { cx, cy } = this.unitDrawPos(unit);
+    const { ctx, tile } = this;
+    ctx.save();
+    ctx.globalAlpha = impact.alpha;
     ctx.font = `700 ${Math.round(tile * 0.42)}px "Noto Sans SC", sans-serif`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.lineWidth = 4;
     ctx.strokeStyle = "rgba(20, 20, 20, 0.75)";
-    ctx.strokeText(impact.text, impact.x * tile + tile / 2, impact.y * tile - tile * 0.1);
+    const y = cy - tile * 0.55;
+    ctx.strokeText(impact.text, cx, y);
     ctx.fillStyle = "#ffd9a0";
-    ctx.fillText(impact.text, impact.x * tile + tile / 2, impact.y * tile - tile * 0.1);
+    ctx.fillText(impact.text, cx, y);
     ctx.restore();
   }
 }

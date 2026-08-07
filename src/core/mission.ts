@@ -172,6 +172,7 @@ export function createMissionState(setup: MissionSetup): GameState {
 
   const objectives: Objective[] = mission.objectives.map((spec) => ({
     id: spec.id,
+    name: spec.name,
     kind: spec.kind,
     x: spec.x,
     y: spec.y,

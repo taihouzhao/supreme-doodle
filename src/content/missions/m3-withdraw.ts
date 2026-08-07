@@ -6,9 +6,10 @@ import type { MissionConfig } from "./schema";
  */
 export const M3_WITHDRAW: MissionConfig = {
   id: "m3-withdraw",
-  name: "主力后撤",
+  name: "北撤通道",
   kind: "withdraw",
-  brief: "沿北面公路撤出。撤离的部队完整保留，留在战场上的会付出代价。",
+  brief:
+    "沿北面公路撤出战场。抵达撤离带的部队完整保留；主力必须撤出。留在战场上的会付出代价。",
   maxTurns: 8,
   map: [
     "==============",
@@ -33,8 +34,8 @@ export const M3_WITHDRAW: MissionConfig = {
     { x: 8, y: 8 },
   ],
   enemies: [
-    { type: "mg", x: 4, y: 2, name: "路障火力点", exp: 70 },
-    { type: "mg", x: 9, y: 2, name: "路障火力点", exp: 70 },
+    { type: "mg", x: 4, y: 2, name: "麦克阿瑟路障", exp: 70 },
+    { type: "mg", x: 9, y: 2, name: "骑一师卡口", exp: 70 },
     { type: "rifle", x: 6, y: 3, name: "封锁步兵" },
   ],
   variantSlots: [

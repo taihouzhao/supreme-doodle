@@ -1,11 +1,13 @@
 import { ITEMS } from "../content/items";
 import { CHAPTER_ONE } from "../content/chapter";
+import { TERRAIN } from "../content/terrain";
 import { UNIT_TYPES, veterancyName } from "../content/units";
-import { livingUnits } from "../core/grid";
-import { requiredEvacuations } from "../core/mission";
+import { livingUnits, unitAt } from "../core/grid";
+import { isEvacTile } from "../core/mission";
 import type { GameState, ItemId, Unit } from "../core/types";
 import { Board, terrainName } from "./board";
-import { breakdownFactors, unitLabel } from "./format";
+import { breakdownFactors, factionLabel, unitLabel } from "./format";
+import { briefVictoryLines, objectiveLines } from "./objectives";
 import type { Session, SessionState } from "./session";
 import { downloadReplay, loadReplays } from "./storage";
 
@@ -31,21 +33,10 @@ function esc(value: string): string {
   );
 }
 
-function objectiveSummary(state: GameState): string {
-  if (state.missionKind === "withdraw") {
-    const required = requiredEvacuations(state, {
-      minEvacuated: 3,
-      evacuateRatio: 0.6,
-      requireKeyUnit: true,
-    });
-    return `已撤离 ${state.stats.playerEvacuated}/${required}，主力必须撤出`;
-  }
-  const posts = state.objectives;
-  if (posts.length === 0) return "";
-  const held = posts.filter((o) => o.owner === "player").length;
-  const label = state.missionKind === "hold" ? "据点" : "目标";
-  const streak = state.missionKind === "breakthrough" ? `，已守住 ${state.captureStreak} 回合` : "";
-  return `${label} ${held}/${posts.length}${streak}`;
+function defenseText(value: number): string {
+  if (value === 0) return "无";
+  const pct = Math.round(value * 100);
+  return pct > 0 ? `防御 +${pct}%` : `防御 ${pct}%`;
 }
 
 export class View {
@@ -53,6 +44,7 @@ export class View {
   private readonly session: Session;
   private readonly board: Board;
   private readonly regions: Record<string, HTMLElement>;
+  private logCollapsed = true;
 
   constructor(root: HTMLElement, session: Session) {
     this.root = root;
@@ -107,6 +99,10 @@ export class View {
         case "download-replay":
           this.downloadLatestReplay();
           break;
+        case "toggle-log":
+          this.logCollapsed = !this.logCollapsed;
+          this.render(this.session.current);
+          break;
         default:
           break;
       }
@@ -143,16 +139,31 @@ export class View {
       this.renderTopbar(state, state.battle);
       this.renderPanel(state, state.battle);
       this.renderNotice(state);
-      this.board.render(state.battle, {
-        selectedUnitId: state.selectedUnitId,
-        moveTiles: this.session.moveTiles(),
-        attackTiles: this.session.attackTiles(),
-        itemTiles: this.session.itemTiles(),
-        impact: null,
-      });
+      const endBtn = this.root.querySelector<HTMLButtonElement>('[data-action="end-turn"]');
+      if (endBtn) endBtn.disabled = state.fxBusy;
+      this.paintBoard(state, state.battle);
     }
 
     this.renderOverlay(state);
+  }
+
+  /** 动画帧只重绘棋盘 */
+  renderBoard(): void {
+    const state = this.session.current;
+    if (state.screen !== "battle" || !state.battle) return;
+    this.paintBoard(state, state.battle);
+  }
+
+  private paintBoard(state: SessionState, battle: GameState): void {
+    this.board.render(battle, {
+      selectedUnitId: state.selectedUnitId,
+      moveTiles: this.session.moveTiles(),
+      attackTiles: this.session.attackTiles(),
+      itemTiles: this.session.itemTiles(),
+      inspected: state.inspectedTile,
+      visual: this.session.presentation.visual,
+      objectiveDone: (o) => o.owner === "player",
+    });
   }
 
   private renderNotice(state: SessionState): void {
@@ -162,15 +173,19 @@ export class View {
   }
 
   private renderTopbar(state: SessionState, battle: GameState): void {
+    const lines = objectiveLines(battle, state.mission);
+    const summary = lines
+      .map((line) => `${line.done ? "✓" : "□"}${line.name}`)
+      .join(" · ");
     this.regions.mission!.innerHTML = `
       <span class="topbar__name">${esc(state.mission?.name ?? "")}</span>
-      <span class="topbar__goal">${esc(objectiveSummary(battle))}</span>
+      <span class="topbar__goal">${esc(summary)}</span>
     `;
     this.regions.status!.innerHTML = `
       <span>回合 <strong>${battle.turn}/${battle.maxTurns}</strong></span>
       <span>${battle.weather === "rain" ? "雨" : "晴"}</span>
-      <span>我军 ${livingUnits(battle, "player").length}</span>
-      <span>敌军 ${livingUnits(battle, "enemy").length}</span>
+      <span>志愿军 ${livingUnits(battle, "player").length}</span>
+      <span>联合军 ${livingUnits(battle, "enemy").length}</span>
     `;
   }
 
@@ -178,12 +193,43 @@ export class View {
     const unit = this.session.selectedUnit;
     const sections: string[] = [];
 
+    sections.push(this.objectivesCard(state, battle));
     sections.push(`<div class="roster">${this.rosterChips(state, battle)}</div>`);
-    sections.push(unit ? this.unitCard(state, battle, unit) : this.emptyCard(battle));
+
+    if (unit) {
+      sections.push(this.unitCard(state, battle, unit));
+    } else if (state.inspectedTile) {
+      sections.push(this.inspectCard(battle, state.inspectedTile.x, state.inspectedTile.y));
+    } else {
+      sections.push(`<section class="card card--quiet"><p class="card__dim">点击棋盘查看地形与单位。</p></section>`);
+    }
+
     if (state.lastStrike) sections.push(this.strikeCard(state, battle));
     sections.push(this.logCard(state));
 
     this.regions.panel!.innerHTML = sections.join("");
+  }
+
+  private objectivesCard(state: SessionState, battle: GameState): string {
+    const lines = objectiveLines(battle, state.mission);
+    if (lines.length === 0) return "";
+    return `<section class="card card--objectives">
+      <h3>任务目标</h3>
+      <ul class="objectives">
+        ${lines
+          .map(
+            (line) =>
+              `<li class="objectives__item${line.done ? " is-done" : ""}">
+                <span class="objectives__mark" aria-hidden="true">${line.done ? "✓" : "□"}</span>
+                <span class="objectives__body">
+                  <strong>${esc(line.name)}</strong>
+                  <span>${esc(line.detail)}</span>
+                </span>
+              </li>`,
+          )
+          .join("")}
+      </ul>
+    </section>`;
   }
 
   private rosterChips(state: SessionState, battle: GameState): string {
@@ -200,11 +246,36 @@ export class View {
       .join("");
   }
 
-  private emptyCard(battle: GameState): string {
-    return `<section class="card card--hint">
-      <h2>点击自己的单位</h2>
-      <p>选中后会高亮可走的格子（蓝）与可打的目标（红），再点一下就行。手机和电脑操作完全一样。</p>
-      <p class="card__dim">${esc(battle.weather === "rain" ? "雨天：远程伤害与移动力下降。" : "晴天：无额外影响。")}</p>
+  private inspectCard(battle: GameState, x: number, y: number): string {
+    const terrainId = battle.tiles[y * battle.width + x]!;
+    const terrain = TERRAIN[terrainId];
+    const occupant = unitAt(battle, x, y);
+    const objective = battle.objectives.find((o) => o.x === x && o.y === y);
+    const fieldItem = battle.fieldItems.find((i) => i.x === x && i.y === y);
+    const evac = isEvacTile(battle, x, y);
+
+    const bits: string[] = [];
+    bits.push(`<p class="card__sub">${esc(terrain.name)} · 移动消耗 ${terrain.moveCost} · ${esc(defenseText(terrain.defense))}</p>`);
+    if (terrain.regen) bits.push(`<p class="card__dim">驻留回复 ${terrain.regen}</p>`);
+    if (terrain.rangeBonus) bits.push(`<p class="card__dim">射程 +${terrain.rangeBonus}</p>`);
+    if (objective) {
+      bits.push(
+        `<p><span class="tag ${objective.owner === "player" ? "tag--player" : "tag--enemy"}">${esc(objective.name)}</span> ${objective.owner === "player" ? "志愿军控制" : objective.owner === "enemy" ? "联合军控制" : "中立"}</p>`,
+      );
+    }
+    if (evac) bits.push(`<p><span class="tag tag--player">撤离带</span></p>`);
+    if (fieldItem) bits.push(`<p class="card__dim">地面补给：${esc(ITEMS[fieldItem.item].name)}</p>`);
+    if (occupant) {
+      bits.push(
+        `<p><strong>${esc(occupant.name)}</strong> · ${esc(factionLabel(occupant.faction))} · ${esc(UNIT_TYPES[occupant.type].name)} · ${occupant.hp}/${occupant.maxHp}</p>`,
+      );
+    } else {
+      bits.push(`<p class="card__dim">空地</p>`);
+    }
+
+    return `<section class="card">
+      <header class="card__head"><h2>格子 ${x},${y}</h2></header>
+      ${bits.join("")}
     </section>`;
   }
 
@@ -218,27 +289,28 @@ export class View {
       );
     const isMine = unit.faction === "player";
     const items = this.session.availableItems();
+    const locked = state.fxBusy;
 
     const actions = !isMine
-      ? `<p class="card__dim">敌方单位。选中自己的单位后，红色准星标出可以打到的目标。</p>`
+      ? `<p class="card__dim">${esc(factionLabel("enemy"))}单位。</p>`
       : unit.hasActed
         ? `<p class="card__dim">本回合已行动。</p>`
         : `<div class="actions">
-          ${canCapture ? `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}">占领</button>` : ""}
-          <button class="btn" data-action="unit-wait" data-value="${unit.id}">待命（回复疲劳）</button>
+          ${canCapture ? `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}" ${locked ? "disabled" : ""}>占领</button>` : ""}
+          <button class="btn" data-action="unit-wait" data-value="${unit.id}" ${locked ? "disabled" : ""}>待命</button>
           ${items
             .map(
               ({ id, count }) =>
-                `<button class="btn btn--item${state.pendingItem === id ? " is-active" : ""}" data-action="use-item" data-value="${id}">${esc(ITEMS[id].name)} ×${count}</button>`,
+                `<button class="btn btn--item${state.pendingItem === id ? " is-active" : ""}" data-action="use-item" data-value="${id}" ${locked ? "disabled" : ""}>${esc(ITEMS[id].name)} ×${count}</button>`,
             )
             .join("")}
         </div>
-        ${state.pendingItem ? `<p class="card__dim">${esc(ITEMS[state.pendingItem].description)}——点击目标使用</p>` : ""}`;
+        ${state.pendingItem ? `<p class="card__dim">${esc(ITEMS[state.pendingItem].description)}</p>` : ""}`;
 
     return `<section class="card">
       <header class="card__head">
         <h2>${esc(unit.name)}${unit.keyUnit ? " <span class=\"tag tag--key\">主力</span>" : ""}</h2>
-        <span class="tag ${isMine ? "tag--player" : "tag--enemy"}">${isMine ? "我军" : "敌军"}</span>
+        <span class="tag ${isMine ? "tag--player" : "tag--enemy"}">${esc(factionLabel(unit.faction))}</span>
       </header>
       <p class="card__sub">${esc(def.name)} · ${esc(veterancyName(unit.exp))} · ${esc(terrain)}</p>
       <div class="stats">
@@ -274,14 +346,19 @@ export class View {
 
   private logCard(state: SessionState): string {
     const entries = state.log
-      .slice(-14)
+      .slice(-8)
       .reverse()
       .map(
         (entry) =>
           `<li class="log__item log__item--${entry.tone}"><span class="log__turn">T${entry.turn}</span>${esc(entry.text)}</li>`,
       )
       .join("");
-    return `<section class="card card--log"><h3>战斗记录</h3><ul class="log">${entries}</ul></section>`;
+    return `<section class="card card--log">
+      <button class="log__toggle" data-action="toggle-log" type="button">
+        战斗记录 ${this.logCollapsed ? "▸" : "▾"}
+      </button>
+      ${this.logCollapsed ? "" : `<ul class="log">${entries}</ul>`}
+    </section>`;
   }
 
   private renderOverlay(state: SessionState): void {
@@ -296,8 +373,8 @@ export class View {
       case "title":
         return `<div class="sheet sheet--title">
           <p class="sheet__eyebrow">战棋纵向切片</p>
-          <h1>隘口</h1>
-          <p class="sheet__lead">三场连续任务。部队会带着伤势、经验和疲劳走进下一场——撤下来的人才是你的。</p>
+          <h1>云山</h1>
+          <p class="sheet__lead">三场连续任务。志愿军会带着伤势、经验和疲劳走进下一场——撤下来的人才是你的。</p>
           <div class="sheet__actions">
             <button class="btn btn--primary" data-action="new-campaign">新的战役</button>
             ${state.hasSave ? `<button class="btn" data-action="continue">继续（第 ${state.campaign.missionIndex + 1} 关）</button>` : ""}
@@ -307,10 +384,15 @@ export class View {
       case "brief": {
         const mission = CHAPTER_ONE.missions[state.campaign.missionIndex];
         if (!mission) return null;
+        const goals = briefVictoryLines(mission);
         return `<div class="sheet">
           <p class="sheet__eyebrow">第 ${state.campaign.missionIndex + 1} / ${CHAPTER_ONE.missions.length} 关</p>
           <h1>${esc(mission.name)}</h1>
           <p class="sheet__lead">${esc(mission.brief)}</p>
+          <h3>任务目标</h3>
+          <ul class="sheet__goals">
+            ${goals.map((goal) => `<li>${esc(goal)}</li>`).join("")}
+          </ul>
           <h3>可用部队</h3>
           <ul class="sheet__roster">
             ${state.campaign.roster
@@ -332,8 +414,8 @@ export class View {
           <p class="sheet__eyebrow">${won ? "任务完成" : "任务失败"}</p>
           <h1>${esc(outcome.reason)}</h1>
           <ul class="sheet__stats">
-            <li><span>我方溃散</span><strong>${outcome.playerRouted}</strong></li>
-            <li><span>敌方溃散</span><strong>${outcome.enemyRouted}</strong></li>
+            <li><span>志愿军溃散</span><strong>${outcome.playerRouted}</strong></li>
+            <li><span>联合军溃散</span><strong>${outcome.enemyRouted}</strong></li>
             <li><span>撤离</span><strong>${outcome.evacuated}</strong></li>
             <li><span>永久损失</span><strong>${outcome.permanentLosses.length}</strong></li>
             <li><span>归队</span><strong>${outcome.returningUnits.length}</strong></li>

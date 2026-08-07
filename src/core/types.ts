@@ -91,6 +91,7 @@ export interface Unit {
 
 export interface Objective {
   id: string;
+  name: string;
   kind: "capture" | "hold";
   x: number;
   y: number;

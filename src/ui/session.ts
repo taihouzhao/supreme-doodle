@@ -13,6 +13,7 @@ import { applyAction, IllegalActionError } from "../core/engine";
 import { attackableTargets, livingUnits, manhattan, reachableTiles, unitAt } from "../core/grid";
 import type { Action, DamageBreakdown, GameState, ItemId, Unit, Vec2 } from "../core/types";
 import { describeEvent } from "./format";
+import { clipsFromEvents, Presentation } from "./presentation";
 import { appendReplay, clearSave, loadSave, writeSave } from "./storage";
 
 export type Screen = "title" | "brief" | "battle" | "result" | "chapterEnd";
@@ -38,6 +39,7 @@ export interface SessionState {
   mission: MissionConfig | null;
   battle: GameState | null;
   selectedUnitId: string | null;
+  inspectedTile: Vec2 | null;
   pendingItem: ItemId | null;
   log: LogEntry[];
   lastStrike: LastStrike | null;
@@ -46,14 +48,19 @@ export interface SessionState {
   actions: Action[];
   hasSave: boolean;
   notice: string | null;
+  fxBusy: boolean;
 }
 
 type Listener = (state: SessionState) => void;
+type VisualListener = () => void;
 
 export class Session {
   private state: SessionState;
   private listeners: Listener[] = [];
+  private visualListeners: VisualListener[] = [];
   private logSerial = 0;
+  private pendingConclude: GameState | null = null;
+  readonly presentation: Presentation;
 
   constructor() {
     const save = loadSave();
@@ -63,6 +70,7 @@ export class Session {
       mission: null,
       battle: null,
       selectedUnitId: null,
+      inspectedTile: null,
       pendingItem: null,
       log: [],
       lastStrike: null,
@@ -71,12 +79,24 @@ export class Session {
       actions: [],
       hasSave: save !== null,
       notice: null,
+      fxBusy: false,
     };
+    this.presentation = new Presentation(
+      () => {
+        for (const listener of this.visualListeners) listener();
+      },
+      () => this.onPresentationIdle(),
+    );
   }
 
   subscribe(listener: Listener): void {
     this.listeners.push(listener);
     listener(this.state);
+  }
+
+  /** 仅刷新棋盘动画帧，不重绘整页 DOM */
+  onVisual(listener: VisualListener): void {
+    this.visualListeners.push(listener);
   }
 
   get current(): SessionState {
@@ -97,9 +117,23 @@ export class Session {
     return next.slice(-60);
   }
 
+  private onPresentationIdle(): void {
+    if (this.state.fxBusy) this.update({ fxBusy: false });
+    else {
+      for (const listener of this.listeners) listener(this.state);
+    }
+    if (this.pendingConclude) {
+      const finalState = this.pendingConclude;
+      this.pendingConclude = null;
+      this.concludeMission(finalState);
+    }
+  }
+
   newCampaign(): void {
     clearSave();
     this.logSerial = 0;
+    this.presentation.reset();
+    this.pendingConclude = null;
     this.update({
       screen: "brief",
       campaign: createCampaign(CHAPTER_ONE.id, freshSeed()),
@@ -110,6 +144,8 @@ export class Session {
       actions: [],
       hasSave: false,
       notice: null,
+      inspectedTile: null,
+      fxBusy: false,
     });
   }
 
@@ -121,6 +157,8 @@ export class Session {
     const started = startMission(this.state.campaign);
     writeSave(started.campaign);
     this.logSerial = 0;
+    this.presentation.reset();
+    this.pendingConclude = null;
     this.update({
       screen: "battle",
       campaign: started.campaign,
@@ -128,10 +166,12 @@ export class Session {
       battle: started.state,
       replacements: started.replacements,
       selectedUnitId: null,
+      inspectedTile: null,
       pendingItem: null,
       lastStrike: null,
       outcome: null,
       actions: [],
+      fxBusy: false,
       log: [
         {
           id: ++this.logSerial,
@@ -145,10 +185,17 @@ export class Session {
   }
 
   selectUnit(unitId: string | null): void {
-    this.update({ selectedUnitId: unitId, pendingItem: null });
+    if (this.state.fxBusy) return;
+    const unit = this.state.battle?.units.find((u) => u.id === unitId);
+    this.update({
+      selectedUnitId: unitId,
+      pendingItem: null,
+      inspectedTile: unit ? { x: unit.x, y: unit.y } : this.state.inspectedTile,
+    });
   }
 
   toggleItem(item: ItemId | null): void {
+    if (this.state.fxBusy) return;
     this.update({ pendingItem: this.state.pendingItem === item ? null : item });
   }
 
@@ -163,7 +210,14 @@ export class Session {
     const battle = this.state.battle;
     const unit = this.selectedUnit;
     const tiles = new Set<number>();
-    if (!battle || !unit || unit.faction !== "player" || unit.hasActed || this.state.pendingItem) {
+    if (
+      !battle ||
+      !unit ||
+      unit.faction !== "player" ||
+      unit.hasActed ||
+      this.state.pendingItem ||
+      this.state.fxBusy
+    ) {
       return tiles;
     }
     for (const tile of reachableTiles(battle, unit)) {
@@ -179,7 +233,14 @@ export class Session {
     const battle = this.state.battle;
     const unit = this.selectedUnit;
     const tiles = new Set<number>();
-    if (!battle || !unit || unit.faction !== "player" || unit.hasActed || this.state.pendingItem) {
+    if (
+      !battle ||
+      !unit ||
+      unit.faction !== "player" ||
+      unit.hasActed ||
+      this.state.pendingItem ||
+      this.state.fxBusy
+    ) {
       return tiles;
     }
     for (const target of attackableTargets(battle, unit)) {
@@ -193,7 +254,7 @@ export class Session {
     const unit = this.selectedUnit;
     const item = this.state.pendingItem;
     const tiles = new Set<number>();
-    if (!battle || !unit || !item || unit.hasActed) return tiles;
+    if (!battle || !unit || !item || unit.hasActed || this.state.fxBusy) return tiles;
     const def = ITEMS[item];
     if (def.targeting === "self") return tiles;
     for (const enemy of livingUnits(battle, "enemy")) {
@@ -206,7 +267,7 @@ export class Session {
 
   clickTile(pos: Vec2): void {
     const battle = this.state.battle;
-    if (!battle || battle.status !== "playing") return;
+    if (!battle || battle.status !== "playing" || this.state.fxBusy) return;
 
     const occupant = unitAt(battle, pos.x, pos.y);
     const unit = this.selectedUnit;
@@ -222,7 +283,7 @@ export class Session {
         this.dispatch({ kind: "useItem", unitId: unit.id, item, to: { x: pos.x, y: pos.y } });
         return;
       }
-      this.update({ pendingItem: null });
+      this.update({ pendingItem: null, inspectedTile: { ...pos } });
       return;
     }
 
@@ -238,15 +299,24 @@ export class Session {
     }
 
     if (occupant) {
-      this.update({ selectedUnitId: occupant.id, pendingItem: null });
+      this.update({
+        selectedUnitId: occupant.id,
+        pendingItem: null,
+        inspectedTile: { x: pos.x, y: pos.y },
+      });
       return;
     }
-    this.update({ selectedUnitId: null, pendingItem: null });
+
+    this.update({
+      selectedUnitId: null,
+      pendingItem: null,
+      inspectedTile: { x: pos.x, y: pos.y },
+    });
   }
 
   dispatch(action: Action): void {
     const battle = this.state.battle;
-    if (!battle || battle.status !== "playing") return;
+    if (!battle || battle.status !== "playing" || this.state.fxBusy) return;
 
     let result;
     try {
@@ -285,6 +355,8 @@ export class Session {
     }
 
     const selected = next.units.find((u) => u.id === this.state.selectedUnitId);
+    const clips = clipsFromEvents(next, result.events);
+
     this.update({
       battle: next,
       actions: [...this.state.actions, action],
@@ -293,9 +365,20 @@ export class Session {
       pendingItem: null,
       notice: null,
       selectedUnitId: selected && selected.alive && !selected.hasActed ? selected.id : null,
+      fxBusy: clips.length > 0,
     });
 
-    if (next.status !== "playing") this.concludeMission(next);
+    if (next.status !== "playing") {
+      this.pendingConclude = next;
+    }
+
+    if (clips.length > 0) {
+      this.presentation.enqueue(clips);
+    } else if (this.pendingConclude) {
+      const finalState = this.pendingConclude;
+      this.pendingConclude = null;
+      this.concludeMission(finalState);
+    }
   }
 
   endTurn(): void {
@@ -313,12 +396,15 @@ export class Session {
       actions: this.state.actions,
       recordedAt: Date.now(),
     });
+    this.presentation.reset();
     this.update({
       screen: "result",
       campaign: finished.campaign,
       outcome: finished.outcome,
       hasSave: true,
       selectedUnitId: null,
+      inspectedTile: null,
+      fxBusy: false,
     });
   }
 

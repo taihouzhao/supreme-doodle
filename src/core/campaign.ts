@@ -80,7 +80,7 @@ function replenish(campaign: CampaignState, chapter: ChapterConfig): string[] {
     budget -= 1;
     campaign.roster.push({
       id,
-      name: `补充${campaign.roster.length + 1}连`,
+      name: `增援${campaign.roster.length + 1}连`,
       type: "rifle",
       hp: effectiveMaxHp("rifle", 0),
       maxHp: effectiveMaxHp("rifle", 0),

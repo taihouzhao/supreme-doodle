@@ -1,12 +1,12 @@
 import type { TerrainId, UnitTypeId } from "../core/types";
 
-export const TERRAIN_STYLE: Record<TerrainId, { fill: string; edge: string; glyph: string }> = {
-  road: { fill: "#d8cdb6", edge: "#c3b79c", glyph: "" },
-  plain: { fill: "#cfd8b9", edge: "#bfc9a6", glyph: "" },
-  forest: { fill: "#8fae87", edge: "#7d9c76", glyph: "森" },
-  hill: { fill: "#c2a97f", edge: "#ab9268", glyph: "高" },
-  village: { fill: "#dcbf9a", edge: "#c7a67c", glyph: "村" },
-  river: { fill: "#8fb4c9", edge: "#7aa1b8", glyph: "" },
+export const TERRAIN_STYLE: Record<TerrainId, { fill: string; edge: string }> = {
+  road: { fill: "#d8cdb6", edge: "#b9a98a" },
+  plain: { fill: "#cfd8b9", edge: "#aeb897" },
+  forest: { fill: "#8fae87", edge: "#6f8f68" },
+  hill: { fill: "#c2a97f", edge: "#9d855c" },
+  village: { fill: "#dcbf9a", edge: "#b9966e" },
+  river: { fill: "#8fb4c9", edge: "#6a93aa" },
 };
 
 export const FACTION_STYLE = {
@@ -14,11 +14,12 @@ export const FACTION_STYLE = {
   enemy: { body: "#a8443a", ring: "#4a1712", text: "#fdf3f1" },
 };
 
+/** 兵种剪影标识（Canvas 几何绘制，不再用汉字） */
 export const UNIT_GLYPH: Record<UnitTypeId, string> = {
-  rifle: "步",
-  mg: "枪",
-  mortar: "炮",
-  tank: "甲",
+  rifle: "步枪",
+  mg: "机枪",
+  mortar: "迫击炮",
+  tank: "坦克",
 };
 
 export const HIGHLIGHT = {
@@ -32,4 +33,6 @@ export const HIGHLIGHT = {
   objectiveEnemy: "#a8443a",
   objectiveNeutral: "#6b6355",
   evac: "rgba(47, 111, 94, 0.3)",
+  trail: "rgba(58, 122, 196, 0.45)",
+  inspect: "rgba(245, 215, 110, 0.35)",
 };
