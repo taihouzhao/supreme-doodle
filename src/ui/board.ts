@@ -1,6 +1,8 @@
 import { TERRAIN } from "../content/terrain";
 import { veterancyLevel } from "../content/units";
-import type { GameState, Objective, TerrainId, Unit, UnitTypeId, Vec2 } from "../core/types";
+import type { Faction, GameState, Objective, TerrainId, Unit, UnitTypeId, Vec2 } from "../core/types";
+import { ITEM_ICON, TERRAIN_ICON, UI_ICON, UNIT_ICON } from "./assets";
+import { imageCache } from "./imageCache";
 import type { VisualFrame } from "./presentation";
 import { FACTION_STYLE, HIGHLIGHT, TERRAIN_STYLE } from "./theme";
 
@@ -33,12 +35,18 @@ export class Board {
   private originY = 0;
   private state: GameState | null = null;
   private overlay: BoardOverlay = EMPTY_OVERLAY;
+  private onAssetsReady: (() => void) | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, onAssetsReady?: () => void) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d");
     if (!ctx) throw new Error("画布不可用");
     this.ctx = ctx;
+    this.onAssetsReady = onAssetsReady ?? null;
+    imageCache.onReady(() => {
+      if (this.state) this.draw();
+      this.onAssetsReady?.();
+    });
   }
 
   render(state: GameState, overlay: BoardOverlay): void {
@@ -97,6 +105,24 @@ export class Board {
     this.originY = 0;
   }
 
+  private drawImage(
+    src: string,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+    alpha = 1,
+  ): boolean {
+    const img = imageCache.get(src);
+    if (!img) return false;
+    const { ctx } = this;
+    const prev = ctx.globalAlpha;
+    ctx.globalAlpha = prev * alpha;
+    ctx.drawImage(img, dx, dy, dw, dh);
+    ctx.globalAlpha = prev;
+    return true;
+  }
+
   private draw(): void {
     const state = this.state;
     if (!state) return;
@@ -115,11 +141,23 @@ export class Board {
     for (const zone of state.evacZone) {
       ctx.fillStyle = HIGHLIGHT.evac;
       ctx.fillRect(zone.x * tile, zone.y * tile, tile, tile);
-      ctx.fillStyle = "rgba(47, 111, 94, 0.85)";
-      ctx.font = `700 ${Math.round(tile * 0.28)}px "Noto Sans SC", sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("撤", zone.x * tile + tile / 2, zone.y * tile + tile / 2);
+      const pad = tile * 0.18;
+      if (
+        !this.drawImage(
+          UI_ICON.evac,
+          zone.x * tile + pad,
+          zone.y * tile + pad,
+          tile - pad * 2,
+          tile - pad * 2,
+          0.92,
+        )
+      ) {
+        ctx.fillStyle = "rgba(47, 111, 94, 0.85)";
+        ctx.font = `700 ${Math.round(tile * 0.28)}px "Noto Sans SC", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("撤", zone.x * tile + tile / 2, zone.y * tile + tile / 2);
+      }
     }
 
     const visual = this.overlay.visual;
@@ -174,15 +212,25 @@ export class Board {
 
     ctx.fillStyle = style.fill;
     ctx.fillRect(x * tile, y * tile, tile, tile);
+
+    const inset = Math.max(0.5, tile * 0.02);
+    const drawn = this.drawImage(
+      TERRAIN_ICON[terrainId],
+      x * tile + inset,
+      y * tile + inset,
+      tile - inset * 2,
+      tile - inset * 2,
+      terrainId === "plain" ? 0.72 : 0.92,
+    );
+    if (!drawn) this.drawTerrainIconFallback(terrainId, x, y);
+
     // 默认网格极轻；移动/攻击范围另用高亮描边
     ctx.strokeStyle = "rgba(38, 43, 34, 0.07)";
     ctx.lineWidth = 1;
     ctx.strokeRect(x * tile + 0.5, y * tile + 0.5, tile - 1, tile - 1);
-
-    this.drawTerrainIcon(terrainId, x, y);
   }
 
-  private drawTerrainIcon(terrainId: TerrainId, x: number, y: number): void {
+  private drawTerrainIconFallback(terrainId: TerrainId, x: number, y: number): void {
     const { ctx, tile } = this;
     const cx = x * tile + tile / 2;
     const cy = y * tile + tile / 2;
@@ -279,38 +327,49 @@ export class Board {
     ctx.textBaseline = "top";
     ctx.fillText(label, objective.x * tile + tile * 0.12, objective.y * tile + tile * 0.1);
 
-    ctx.beginPath();
-    const bx = objective.x * tile + tile * 0.78;
-    const by = objective.y * tile + tile * 0.22;
-    const r = tile * 0.12;
-    ctx.arc(bx, by, r, 0, Math.PI * 2);
-    if (done) {
-      ctx.fillStyle = HIGHLIGHT.objectivePlayer;
-      ctx.fill();
-      ctx.strokeStyle = "#f4f7f2";
-      ctx.lineWidth = Math.max(1.5, tile * 0.04);
+    const markSize = tile * 0.28;
+    const bx = objective.x * tile + tile * 0.68;
+    const by = objective.y * tile + tile * 0.08;
+    const markSrc = done ? UI_ICON.objDone : UI_ICON.objPending;
+    if (!this.drawImage(markSrc, bx, by, markSize, markSize)) {
       ctx.beginPath();
-      ctx.moveTo(bx - r * 0.45, by);
-      ctx.lineTo(bx - r * 0.1, by + r * 0.4);
-      ctx.lineTo(bx + r * 0.5, by - r * 0.35);
-      ctx.stroke();
-    } else {
-      ctx.strokeStyle = colour;
-      ctx.lineWidth = Math.max(1.5, tile * 0.045);
-      ctx.stroke();
+      const cx = bx + markSize / 2;
+      const cy = by + markSize / 2;
+      const r = markSize * 0.42;
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      if (done) {
+        ctx.fillStyle = HIGHLIGHT.objectivePlayer;
+        ctx.fill();
+        ctx.strokeStyle = "#f4f7f2";
+        ctx.lineWidth = Math.max(1.5, tile * 0.04);
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.45, cy);
+        ctx.lineTo(cx - r * 0.1, cy + r * 0.4);
+        ctx.lineTo(cx + r * 0.5, cy - r * 0.35);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = colour;
+        ctx.lineWidth = Math.max(1.5, tile * 0.045);
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
 
   private drawFieldItem(x: number, y: number): void {
     const { ctx, tile } = this;
+    const size = tile * 0.42;
+    const dx = x * tile + tile / 2 - size / 2;
+    const dy = y * tile + tile * 0.08;
+    if (this.drawImage(UI_ICON.fieldItem, dx, dy, size, size)) return;
+
     ctx.save();
     ctx.fillStyle = "#d69e2e";
     ctx.strokeStyle = "#7a5a14";
     ctx.lineWidth = 1.5;
-    const size = tile * 0.24;
+    const fallback = tile * 0.24;
     ctx.beginPath();
-    ctx.rect(x * tile + tile / 2 - size / 2, y * tile + tile * 0.16, size, size);
+    ctx.rect(x * tile + tile / 2 - fallback / 2, y * tile + tile * 0.16, fallback, fallback);
     ctx.fill();
     ctx.stroke();
     ctx.restore();
@@ -373,12 +432,17 @@ export class Board {
     return { cx: unit.x * tile + tile / 2, cy: unit.y * tile + tile / 2 };
   }
 
+  private tokenFace(faction: Faction): string {
+    return faction === "player" ? "#e7efe9" : "#f6e9e6";
+  }
+
   private drawUnit(unit: Unit): void {
     const { ctx, tile } = this;
     const style = FACTION_STYLE[unit.faction];
     const { cx, cy } = this.unitDrawPos(unit);
-    const radius = tile * 0.34;
+    const radius = tile * 0.36;
     const visual = this.overlay.visual;
+    const acted = unit.hasActed && unit.faction === "player";
 
     if (this.overlay.selectedUnitId === unit.id) {
       ctx.beginPath();
@@ -387,15 +451,35 @@ export class Board {
       ctx.fill();
     }
 
+    ctx.save();
+    ctx.globalAlpha = acted ? 0.55 : 1;
+
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.fillStyle = style.body;
-    ctx.globalAlpha = unit.hasActed && unit.faction === "player" ? 0.55 : 1;
+    ctx.fillStyle = this.tokenFace(unit.faction);
     ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.lineWidth = Math.max(1.5, tile * 0.05);
-    ctx.strokeStyle = style.ring;
+    ctx.lineWidth = Math.max(2, tile * 0.07);
+    ctx.strokeStyle = style.body;
     ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius - tile * 0.025, 0, Math.PI * 2);
+    ctx.strokeStyle = style.ring;
+    ctx.lineWidth = Math.max(1.2, tile * 0.035);
+    ctx.stroke();
+
+    const iconSize = radius * 1.7;
+    const iconDrawn = this.drawImage(
+      UNIT_ICON[unit.type][unit.faction],
+      cx - iconSize / 2,
+      cy - iconSize / 2,
+      iconSize,
+      iconSize,
+    );
+    if (!iconDrawn) {
+      this.drawUnitSilhouette(unit.type, cx, cy, radius, style.body);
+    }
+
+    ctx.restore();
 
     if (visual?.flashUnitId === unit.id) {
       ctx.beginPath();
@@ -403,8 +487,6 @@ export class Board {
       ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
       ctx.fill();
     }
-
-    this.drawUnitSilhouette(unit.type, cx, cy, radius, style.text);
 
     const hp =
       visual?.hpDisplay[unit.id] !== undefined ? visual.hpDisplay[unit.id]! : unit.hp;
@@ -430,11 +512,22 @@ export class Board {
     }
 
     if (unit.keyUnit) {
-      ctx.fillStyle = "#f5d76e";
-      ctx.font = `700 ${Math.round(tile * 0.2)}px "Noto Sans SC", sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("主", cx + radius * 0.75, cy - radius * 0.75);
+      const star = tile * 0.3;
+      if (
+        !this.drawImage(
+          UI_ICON.keyUnit,
+          cx + radius * 0.35,
+          cy - radius * 1.05,
+          star,
+          star,
+        )
+      ) {
+        ctx.fillStyle = "#f5d76e";
+        ctx.font = `700 ${Math.round(tile * 0.2)}px "Noto Sans SC", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("主", cx + radius * 0.75, cy - radius * 0.75);
+      }
     }
   }
 
@@ -550,3 +643,6 @@ export class Board {
 export function terrainName(state: GameState, x: number, y: number): string {
   return TERRAIN[state.tiles[y * state.width + x]!].name;
 }
+
+/** Expose item icon path for panel buttons (canvas uses UI field-item). */
+export { ITEM_ICON };
