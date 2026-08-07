@@ -349,8 +349,9 @@ export class Board {
     const scale = maxW / (state.width * this.tile);
     const mw = state.width * this.tile * scale;
     const mh = state.height * this.tile * scale;
+    // 右上角，避开顶部 HUD 与底部部队条
     const mx = this.canvas.width - mw - pad;
-    const my = this.canvas.height - mh - pad;
+    const my = 56 * dpr;
 
     ctx.save();
     ctx.globalAlpha = 0.92;

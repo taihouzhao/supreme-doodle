@@ -14,19 +14,13 @@ import { downloadReplay, loadReplays } from "./storage";
 
 const SKELETON = `
   <div class="battle" data-region="battle">
-    <header class="topbar">
-      <div class="topbar__mission" data-region="mission"></div>
-      <div class="topbar__status" data-region="status"></div>
-      <button class="btn btn--primary topbar__end" data-action="end-turn">
-        <img class="ico ico--btn" src="${UI_ICON.actEndTurn}" alt="" />
-        结束回合
-      </button>
-    </header>
     <div class="stage" data-region="stage">
       <canvas data-region="canvas" aria-label="战场棋盘"></canvas>
+      <header class="hud-top" data-region="hud-top"></header>
+      <nav class="hud-roster" data-region="roster" aria-label="志愿军部队"></nav>
+      <aside class="hud-sheet" data-region="panel" hidden></aside>
       <div class="notice" data-region="notice" hidden></div>
     </div>
-    <aside class="panel" data-region="panel"></aside>
   </div>
   <div class="overlay" data-region="overlay" hidden></div>
 `;
@@ -95,10 +89,12 @@ export class View {
           break;
         case "select-unit":
           this.session.selectUnit(value ?? null);
-          {
+          queueMicrotask(() => {
             const unit = this.session.selectedUnit;
-            if (unit) this.board.focusTile(unit.x, unit.y);
-          }
+            if (!unit) return;
+            this.board.focusTile(unit.x, unit.y);
+            this.renderBoard();
+          });
           break;
         case "unit-wait":
           if (value) this.session.dispatch({ kind: "wait", unitId: value });
@@ -142,8 +138,9 @@ export class View {
     this.regions.battle!.hidden = !battleVisible;
 
     if (battleVisible && state.battle) {
-      this.renderTopbar(state, state.battle);
-      this.renderPanel(state, state.battle);
+      this.renderHudTop(state, state.battle);
+      this.renderRoster(state, state.battle);
+      this.renderSheet(state, state.battle);
       this.renderNotice(state);
       const endBtn = this.root.querySelector<HTMLButtonElement>('[data-action="end-turn"]');
       if (endBtn) endBtn.disabled = state.fxBusy;
@@ -183,86 +180,71 @@ export class View {
     notice.textContent = state.notice ?? "";
   }
 
-  private renderTopbar(state: SessionState, battle: GameState): void {
+  private renderHudTop(state: SessionState, battle: GameState): void {
     const lines = objectiveLines(battle, state.mission);
-    const summary = lines
+    const goals = lines
       .map(
         (line) =>
-          `<span class="topbar__obj">${ico(line.done ? UI_ICON.objDone : UI_ICON.objPending, "ico ico--xs")}${esc(line.name)}</span>`,
+          `<span class="hud-top__obj${line.done ? " is-done" : ""}" title="${esc(line.detail)}">${ico(line.done ? UI_ICON.objDone : UI_ICON.objPending, "ico ico--xs")}<span>${esc(line.name)}</span></span>`,
       )
       .join("");
-    this.regions.mission!.innerHTML = `
-      <span class="topbar__name">${esc(state.mission?.name ?? "")}</span>
-      <span class="topbar__goal">${summary}</span>
-    `;
     const weatherSrc =
       battle.weather === "rain" ? UI_ICON.weatherRain : UI_ICON.weatherClear;
-    this.regions.status!.innerHTML = `
-      <span>回合 <strong>${battle.turn}/${battle.maxTurns}</strong></span>
-      <span class="topbar__weather">${ico(weatherSrc, "ico ico--sm ico--badge")}${battle.weather === "rain" ? "雨" : "晴"}</span>
-      <span class="topbar__faction">${ico(UI_ICON.factionPva, "ico ico--sm ico--badge")}${livingUnits(battle, "player").length}</span>
-      <span class="topbar__faction">${ico(UI_ICON.factionUn, "ico ico--sm ico--badge")}${livingUnits(battle, "enemy").length}</span>
+    this.regions["hud-top"]!.innerHTML = `
+      <div class="hud-top__left">
+        <strong class="hud-top__name">${esc(state.mission?.name ?? "")}</strong>
+        <div class="hud-top__goals">${goals}</div>
+      </div>
+      <div class="hud-top__meta">
+        <span>T<strong>${battle.turn}</strong>/${battle.maxTurns}</span>
+        <span class="hud-top__pill">${ico(weatherSrc, "ico ico--xs ico--badge")}${battle.weather === "rain" ? "雨" : "晴"}</span>
+        <span class="hud-top__pill">${ico(UI_ICON.factionPva, "ico ico--xs ico--badge")}${livingUnits(battle, "player").length}</span>
+        <span class="hud-top__pill">${ico(UI_ICON.factionUn, "ico ico--xs ico--badge")}${livingUnits(battle, "enemy").length}</span>
+      </div>
+      <button class="btn btn--primary hud-top__end" data-action="end-turn">
+        ${ico(UI_ICON.actEndTurn, "ico ico--btn")}结束回合
+      </button>
     `;
   }
 
-  private renderPanel(state: SessionState, battle: GameState): void {
-    const unit = this.session.selectedUnit;
-    const sections: string[] = [];
-
-    sections.push(this.objectivesCard(state, battle));
-    sections.push(`<div class="roster">${this.rosterChips(state, battle)}</div>`);
-
-    if (unit) {
-      sections.push(this.unitCard(state, battle, unit));
-    } else if (state.inspectedTile) {
-      sections.push(this.inspectCard(battle, state.inspectedTile.x, state.inspectedTile.y));
-    } else {
-      sections.push(`<section class="card card--quiet"><p class="card__dim">点击棋盘查看地形与单位。</p></section>`);
-    }
-
-    if (state.lastStrike) sections.push(this.strikeCard(state, battle));
-    sections.push(this.logCard(state));
-
-    this.regions.panel!.innerHTML = sections.join("");
-  }
-
-  private objectivesCard(state: SessionState, battle: GameState): string {
-    const lines = objectiveLines(battle, state.mission);
-    if (lines.length === 0) return "";
-    return `<section class="card card--objectives">
-      <h3>任务目标</h3>
-      <ul class="objectives">
-        ${lines
-          .map(
-            (line) =>
-              `<li class="objectives__item${line.done ? " is-done" : ""}">
-                <span class="objectives__mark" aria-hidden="true">${ico(line.done ? UI_ICON.objDone : UI_ICON.objPending, "ico ico--sm")}</span>
-                <span class="objectives__body">
-                  <strong>${esc(line.name)}</strong>
-                  <span>${esc(line.detail)}</span>
-                </span>
-              </li>`,
-          )
-          .join("")}
-      </ul>
-    </section>`;
-  }
-
-  private rosterChips(state: SessionState, battle: GameState): string {
-    return livingUnits(battle, "player")
+  private renderRoster(state: SessionState, battle: GameState): void {
+    const units = livingUnits(battle, "player");
+    this.regions.roster!.innerHTML = units
       .map((unit) => {
         const active = unit.id === state.selectedUnitId ? " is-active" : "";
         const done = unit.hasActed ? " is-done" : "";
-        const ratio = Math.round((unit.hp / unit.maxHp) * 100);
-        const key = unit.keyUnit
-          ? ico(UI_ICON.keyUnit, "ico ico--xs")
-          : "";
-        return `<button class="chip${active}${done}" data-action="select-unit" data-value="${unit.id}">
-          <span class="chip__head">${ico(UNIT_ICON[unit.type].player, "ico ico--chip")}<span class="chip__name">${esc(unit.name)}${key}</span></span>
-          <span class="chip__meta">${esc(UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} ${ratio}%</span>
+        const ratio = Math.max(0, Math.min(100, Math.round((unit.hp / unit.maxHp) * 100)));
+        const title = `${unit.name} · ${UNIT_TYPES[unit.type].name} · ${veterancyName(unit.exp)} · ${ratio}%`;
+        return `<button class="token${active}${done}" data-action="select-unit" data-value="${unit.id}" title="${esc(title)}" aria-label="${esc(title)}">
+          ${ico(UNIT_ICON[unit.type].player, "ico ico--token")}
+          ${unit.keyUnit ? ico(UI_ICON.keyUnit, "ico ico--token-key") : ""}
+          <span class="token__hp"><i style="width:${ratio}%"></i></span>
         </button>`;
       })
       .join("");
+  }
+
+  private renderSheet(state: SessionState, battle: GameState): void {
+    const unit = this.session.selectedUnit;
+    const hasFocus = Boolean(unit || state.inspectedTile || state.lastStrike);
+    const panel = this.regions.panel!;
+
+    if (!hasFocus) {
+      panel.hidden = true;
+      panel.innerHTML = "";
+      return;
+    }
+
+    const bits: string[] = [];
+    if (unit) bits.push(this.unitCard(state, battle, unit));
+    else if (state.inspectedTile) {
+      bits.push(this.inspectCard(battle, state.inspectedTile.x, state.inspectedTile.y));
+    }
+    if (state.lastStrike) bits.push(this.strikeCard(state, battle));
+    bits.push(this.logCard(state));
+
+    panel.hidden = false;
+    panel.innerHTML = bits.join("");
   }
 
   private inspectCard(battle: GameState, x: number, y: number): string {
@@ -358,21 +340,12 @@ export class View {
         </div>
         ${state.pendingItem ? `<p class="card__dim">${esc(ITEMS[state.pendingItem].description)}</p>` : ""}`;
 
-    return `<section class="card">
+    return `<section class="card card--compact">
       <header class="card__head">
         <h2 class="card__title">${ico(UNIT_ICON[unit.type][unit.faction], "ico ico--title")}${esc(unit.name)}${unit.keyUnit ? ` ${ico(UI_ICON.keyUnit, "ico ico--sm")}<span class="tag tag--key">主力</span>` : ""}</h2>
-        <span class="tag ${isMine ? "tag--player" : "tag--enemy"}">${ico(isMine ? UI_ICON.factionPva : UI_ICON.factionUn, "ico ico--xs")}${esc(factionLabel(unit.faction))}</span>
+        <span class="tag ${isMine ? "tag--player" : "tag--enemy"}">${esc(factionLabel(unit.faction))}</span>
       </header>
-      <p class="card__sub">${esc(def.name)} · 级别 ${esc(veterancyName(unit.exp))} · ${esc(terrain)}</p>
-      <div class="stats">
-        <div><span>生命</span><strong>${unit.hp}/${unit.maxHp}</strong></div>
-        <div><span>攻击</span><strong>${def.attack}</strong></div>
-        <div><span>射程</span><strong>${def.minRange}-${def.maxRange}</strong></div>
-        <div><span>移动</span><strong>${unit.mpLeft}/${def.move}</strong></div>
-        <div><span>疲劳</span><strong>${Math.round(unit.fatigue)}</strong></div>
-        <div><span>经验</span><strong>${Math.round(unit.exp)}</strong></div>
-      </div>
-      <p class="card__role">${esc(def.role)}</p>
+      <p class="card__sub">${esc(def.name)} · ${esc(veterancyName(unit.exp))} · ${esc(terrain)} · ${unit.hp}/${unit.maxHp} · 移 ${unit.mpLeft}/${def.move}</p>
       ${actions}
     </section>`;
   }
