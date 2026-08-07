@@ -1,44 +1,56 @@
-# Supreme Doodle
+# 决战朝鲜式战棋纵向切片
 
-可在浏览器直接游玩的**静态网页小游戏**：控制涂鸦角色收集星星、躲避墨迹。
+一个**可验证的战棋纵向切片**：一个小章节、三场连续任务，同一套确定性规则核心同时驱动网页游戏、AI Agent 与蒙特卡洛模拟器。
 
-需求文档见 [`PRD/`](./PRD/)。
+需求见 [`PRD/`](./PRD/)，其中 [`PRD/00-original-brief.md`](./PRD/00-original-brief.md) 是原始需求原文。
 
-## 目录结构
+## 目录
 
 ```text
-/
-├── PRD/                 # 原始需求（Markdown）
-├── public/              # 静态站点根目录（后续可整夹部署到 R2）
-│   ├── index.html
-│   ├── css/
-│   ├── js/
-│   │   ├── main.js
-│   │   └── game/        # 游戏模块
-│   └── assets/          # 图片 / 音频占位
-├── README.md
-└── .gitignore
+PRD/                  原始需求与派生规格
+src/
+├── core/             规则核心（纯 TS，不依赖 DOM）
+├── content/          兵种 / 地形 / 道具 / 关卡 / 平衡数值
+├── ai/               随机、基础、战术三档 Agent 与退化打法
+├── sim/              批量模拟、门槛判定、平衡报告
+└── ui/               网页表现
+tests/                规则、确定性、战役与平衡测试
+reports/balance.md    自动生成的平衡报告
 ```
 
-## 本地试玩
-
-推荐用静态服务器打开 `public/`（ES modules 在 `file://` 下可能受限）：
+## 命令
 
 ```bash
-python3 -m http.server 8080 --directory public
+npm install
+npm run dev      # 本地开发
+npm run build    # 构建静态产物到 dist/
+npm run test     # 规则、确定性、战役与平衡测试
+npm run sim      # 批量模拟并重新生成 reports/balance.md
 ```
 
-浏览器访问 `http://localhost:8080`。
+模拟器参数：
 
-## 操作
+```bash
+npm run sim -- --seeds=300 --campaign-seeds=80 --out=reports/balance.md --json
+npx tsx src/sim/trace.ts m3-withdraw tactical 7   # 单局复盘
+```
 
-| 平台 | 操作 |
-|------|------|
-| 桌面 | `WASD` / 方向键移动，`P` 或 `Esc` 暂停 |
-| 触屏 | 左下虚拟摇杆移动，右上暂停 |
+`npm run sim` 在任一平衡门槛未通过时以非零码退出。
 
-## 当前范围
+## 玩法要点
 
-- 可玩闭环：开始 → 游玩 → 结束 → 重开
-- 无构建、无后端
-- **R2 部署尚未接入**（见 `PRD/04-roadmap.md` 阶段 C）
+- 方格棋盘，回合制，「点击单位 → 点击目标」，鼠标与触屏一致。
+- 四个兵种各有不可替代的用途：步兵占点、机枪架设压制、迫击炮曲射破掩体、坦克突破。
+- 六种地形，高地与森林是躲避的强解，迫击炮是它们的反制。
+- 生命、经验、疲劳、物资跨关继承；撤离的部队 100% 保留，被击溃的可能永久损失。
+- 随机只作用于敌军编成、援军时间窗、天气与道具；核心目标、地形与我方初始兵力固定。
+
+## 确定性
+
+`applyAction(state, action)` 是纯函数，所有随机来自随状态流转的 mulberry32。
+一局只需 `{ 初始状态, 种子, 动作序列 }` 即可完整重放，测试对状态哈希做断言。
+
+## 当前状态
+
+平衡门槛全部通过，详见 [`reports/balance.md`](./reports/balance.md)。
+对象存储部署尚未接入，见 [`PRD/05-roadmap.md`](./PRD/05-roadmap.md)。
