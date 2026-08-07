@@ -219,8 +219,11 @@ export class View {
     const isMine = unit.faction === "player";
     const items = this.session.availableItems();
 
-    const actions = isMine && !unit.hasActed
-      ? `<div class="actions">
+    const actions = !isMine
+      ? `<p class="card__dim">敌方单位。选中自己的单位后，红色准星标出可以打到的目标。</p>`
+      : unit.hasActed
+        ? `<p class="card__dim">本回合已行动。</p>`
+        : `<div class="actions">
           ${canCapture ? `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}">占领</button>` : ""}
           <button class="btn" data-action="unit-wait" data-value="${unit.id}">待命（回复疲劳）</button>
           ${items
@@ -230,8 +233,7 @@ export class View {
             )
             .join("")}
         </div>
-        ${state.pendingItem ? `<p class="card__dim">${esc(ITEMS[state.pendingItem].description)}——点击目标使用</p>` : ""}`
-      : "";
+        ${state.pendingItem ? `<p class="card__dim">${esc(ITEMS[state.pendingItem].description)}——点击目标使用</p>` : ""}`;
 
     return `<section class="card">
       <header class="card__head">

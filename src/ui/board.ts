@@ -47,25 +47,49 @@ export class Board {
   toTile(clientX: number, clientY: number): Vec2 | null {
     if (!this.state) return null;
     const rect = this.canvas.getBoundingClientRect();
-    const x = Math.floor((clientX - rect.left - this.originX / devicePixelRatio) / (this.tile / devicePixelRatio));
-    const y = Math.floor((clientY - rect.top - this.originY / devicePixelRatio) / (this.tile / devicePixelRatio));
+    const cssTile = rect.width / this.state.width;
+    const x = Math.floor((clientX - rect.left) / cssTile);
+    const y = Math.floor((clientY - rect.top) / cssTile);
     if (x < 0 || y < 0 || x >= this.state.width || y >= this.state.height) return null;
     return { x, y };
   }
 
+  /**
+   * 画布按棋盘比例精确取尺寸，而不是拉满容器，
+   * 否则窄屏上棋盘四周会留出大片空白。
+   */
   private resize(): void {
-    if (!this.state) return;
+    const state = this.state;
+    const parent = this.canvas.parentElement;
+    if (!state || !parent) return;
+
+    const style = getComputedStyle(parent);
+    const availableWidth =
+      parent.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const availableHeight =
+      parent.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    if (availableWidth <= 0 || availableHeight <= 0) return;
+
+    const cssTile = Math.max(
+      12,
+      Math.floor(Math.min(availableWidth / state.width, availableHeight / state.height)),
+    );
+    const cssWidth = cssTile * state.width;
+    const cssHeight = cssTile * state.height;
+    this.canvas.style.width = `${cssWidth}px`;
+    this.canvas.style.height = `${cssHeight}px`;
+
     const dpr = window.devicePixelRatio || 1;
-    const rect = this.canvas.getBoundingClientRect();
-    const width = Math.max(1, Math.round(rect.width * dpr));
-    const height = Math.max(1, Math.round(rect.height * dpr));
+    const width = Math.round(cssWidth * dpr);
+    const height = Math.round(cssHeight * dpr);
     if (this.canvas.width !== width || this.canvas.height !== height) {
       this.canvas.width = width;
       this.canvas.height = height;
     }
-    this.tile = Math.floor(Math.min(width / this.state.width, height / this.state.height));
-    this.originX = Math.floor((width - this.tile * this.state.width) / 2);
-    this.originY = Math.floor((height - this.tile * this.state.height) / 2);
+
+    this.tile = cssTile * dpr;
+    this.originX = 0;
+    this.originY = 0;
   }
 
   private draw(): void {
@@ -102,6 +126,9 @@ export class Board {
       if (!unit.alive || unit.evacuated) continue;
       this.drawUnit(unit);
     }
+
+    this.drawTargetMarks(state, this.overlay.attackTiles);
+    this.drawTargetMarks(state, this.overlay.itemTiles);
 
     if (this.overlay.impact) {
       this.drawImpact(this.overlay.impact);
@@ -177,6 +204,34 @@ export class Board {
     paint(this.overlay.moveTiles, HIGHLIGHT.move, HIGHLIGHT.moveEdge);
     paint(this.overlay.itemTiles, HIGHLIGHT.item, HIGHLIGHT.attackEdge);
     paint(this.overlay.attackTiles, HIGHLIGHT.attack, HIGHLIGHT.attackEdge);
+  }
+
+  /** 目标标记画在单位之上，否则会被单位圆形盖住 */
+  private drawTargetMarks(state: GameState, indices: Set<number>): void {
+    const { ctx, tile } = this;
+    for (const index of indices) {
+      const cx = (index % state.width) * tile + tile / 2;
+      const cy = Math.floor(index / state.width) * tile + tile / 2;
+      const radius = tile * 0.46;
+      ctx.save();
+      ctx.strokeStyle = HIGHLIGHT.attackEdge;
+      ctx.lineWidth = Math.max(2, tile * 0.07);
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      for (const [dx, dy] of [
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+      ] as const) {
+        ctx.moveTo(cx + dx * radius, cy + dy * radius);
+        ctx.lineTo(cx + dx * radius * 0.62, cy + dy * radius * 0.62);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
   }
 
   private drawUnit(unit: Unit): void {
