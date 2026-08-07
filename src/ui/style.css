@@ -47,6 +47,7 @@ body {
 .battle {
   height: 100%;
   position: relative;
+  background: var(--paper);
 }
 
 .battle[hidden] {
@@ -58,42 +59,52 @@ body {
   inset: 0;
   min-height: 0;
   min-width: 0;
-  padding: 0;
-  display: block;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  padding: 0.45rem;
   overflow: hidden;
-  background: #1c221a;
+  background:
+    radial-gradient(ellipse 70% 50% at 15% 0%, #f6f1e4 0%, transparent 60%),
+    var(--paper);
 }
 
-.stage canvas {
+.stage__map {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  background: #2a3228;
+}
+
+.stage__map canvas {
   display: block;
   width: 100%;
   height: 100%;
   touch-action: none;
   cursor: grab;
-  border-radius: 0;
-  box-shadow: none;
+  border-radius: 12px;
   background: #2a3228;
 }
 
-.stage canvas:active {
+.stage__map canvas:active {
   cursor: grabbing;
 }
 
 .hud-top {
-  position: absolute;
-  top: 0.55rem;
-  left: 0.55rem;
-  right: 0.55rem;
+  position: relative;
   z-index: 3;
   display: flex;
   align-items: center;
   gap: 0.55rem;
   padding: 0.35rem 0.45rem 0.35rem 0.65rem;
-  background: rgba(247, 243, 234, 0.9);
+  background: rgba(247, 243, 234, 0.96);
   border: 1px solid var(--line);
   border-radius: 12px;
   backdrop-filter: blur(8px);
-  box-shadow: 0 6px 18px rgba(20, 24, 16, 0.18);
+  box-shadow: 0 4px 14px rgba(20, 24, 16, 0.1);
   pointer-events: auto;
 }
 
@@ -156,20 +167,17 @@ body {
 }
 
 .hud-roster {
-  position: absolute;
-  left: 0.55rem;
-  right: 0.55rem;
-  bottom: 0.55rem;
+  position: relative;
   z-index: 3;
   display: flex;
   gap: 0.35rem;
   overflow-x: auto;
   padding: 0.35rem;
-  background: rgba(247, 243, 234, 0.88);
+  background: rgba(247, 243, 234, 0.96);
   border: 1px solid var(--line);
   border-radius: 14px;
   backdrop-filter: blur(8px);
-  box-shadow: 0 8px 22px rgba(20, 24, 16, 0.2);
+  box-shadow: 0 4px 14px rgba(20, 24, 16, 0.1);
   scrollbar-width: none;
 }
 
@@ -233,19 +241,19 @@ body {
 
 .hud-sheet {
   position: absolute;
-  top: 3.6rem;
+  top: 0.55rem;
   left: 0.55rem;
   bottom: auto;
   z-index: 4;
-  width: min(260px, 42vw);
-  max-width: calc(100% - 5.5rem); /* 给右上角小地图留空 */
-  max-height: min(36dvh, 280px);
+  width: min(260px, 42%);
+  max-width: calc(100% - 9.5rem); /* 给右上小地图留空，避免遮挡 */
+  max-height: min(40%, 280px);
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   padding: 0.45rem 0.5rem;
-  background: rgba(247, 243, 234, 0.92);
+  background: rgba(247, 243, 234, 0.94);
   border: 1px solid var(--line);
   border-radius: 10px;
   backdrop-filter: blur(8px);
@@ -413,7 +421,7 @@ body {
 .notice {
   position: absolute;
   left: 50%;
-  bottom: 4.4rem;
+  bottom: 0.7rem;
   transform: translateX(-50%);
   z-index: 5;
   background: rgba(34, 31, 26, 0.88);
@@ -938,10 +946,11 @@ body {
   }
 
   .hud-sheet {
-    width: min(240px, 58vw);
-    max-width: calc(100% - 4.8rem);
-    max-height: min(32dvh, 240px);
-    top: 3.35rem;
+    width: min(220px, 52%);
+    max-width: calc(100% - 8.5rem);
+    max-height: min(36%, 220px);
+    top: 0.45rem;
+    left: 0.45rem;
   }
 
   .log {

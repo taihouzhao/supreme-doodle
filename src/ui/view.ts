@@ -15,11 +15,13 @@ import { downloadReplay, loadReplays } from "./storage";
 const SKELETON = `
   <div class="battle" data-region="battle">
     <div class="stage" data-region="stage">
-      <canvas data-region="canvas" aria-label="战场棋盘"></canvas>
       <header class="hud-top" data-region="hud-top"></header>
+      <div class="stage__map" data-region="map">
+        <canvas data-region="canvas" aria-label="战场棋盘"></canvas>
+        <aside class="hud-sheet" data-region="panel" hidden></aside>
+        <div class="notice" data-region="notice" hidden></div>
+      </div>
       <nav class="hud-roster" data-region="roster" aria-label="志愿军部队"></nav>
-      <aside class="hud-sheet" data-region="panel" hidden></aside>
-      <div class="notice" data-region="notice" hidden></div>
     </div>
   </div>
   <div class="overlay" data-region="overlay" hidden></div>
