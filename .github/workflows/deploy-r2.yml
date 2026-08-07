@@ -2,7 +2,10 @@ name: Deploy to R2
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      # 在特性分支合入 main 前，允许用本分支直接验证 R2 部署
+      - cursor/r2-cicd-eb04
   workflow_dispatch:
     inputs:
       dry_run:
