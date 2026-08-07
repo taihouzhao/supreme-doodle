@@ -5,6 +5,7 @@ import { UNIT_TYPES, veterancyName } from "../content/units";
 import { livingUnits, unitAt } from "../core/grid";
 import { isEvacTile } from "../core/mission";
 import type { GameState, ItemId, Unit } from "../core/types";
+import { ITEM_ICON, TERRAIN_ICON, UI_ICON, UNIT_ICON } from "./assets";
 import { Board, terrainName } from "./board";
 import { breakdownFactors, factionLabel, unitLabel } from "./format";
 import { briefVictoryLines, objectiveLines } from "./objectives";
@@ -16,7 +17,10 @@ const SKELETON = `
     <header class="topbar">
       <div class="topbar__mission" data-region="mission"></div>
       <div class="topbar__status" data-region="status"></div>
-      <button class="btn btn--primary topbar__end" data-action="end-turn">结束回合</button>
+      <button class="btn btn--primary topbar__end" data-action="end-turn">
+        <img class="ico ico--btn" src="${UI_ICON.actEndTurn}" alt="" />
+        结束回合
+      </button>
     </header>
     <div class="stage" data-region="stage">
       <canvas data-region="canvas" aria-label="战场棋盘"></canvas>
@@ -26,6 +30,10 @@ const SKELETON = `
   </div>
   <div class="overlay" data-region="overlay" hidden></div>
 `;
+
+function ico(src: string, cls = "ico"): string {
+  return `<img class="${cls}" src="${src}" alt="" draggable="false" />`;
+}
 
 function esc(value: string): string {
   return value.replace(/[&<>"]/g, (ch) =>
@@ -175,17 +183,22 @@ export class View {
   private renderTopbar(state: SessionState, battle: GameState): void {
     const lines = objectiveLines(battle, state.mission);
     const summary = lines
-      .map((line) => `${line.done ? "✓" : "□"}${line.name}`)
-      .join(" · ");
+      .map(
+        (line) =>
+          `<span class="topbar__obj">${ico(line.done ? UI_ICON.objDone : UI_ICON.objPending, "ico ico--xs")}${esc(line.name)}</span>`,
+      )
+      .join("");
     this.regions.mission!.innerHTML = `
       <span class="topbar__name">${esc(state.mission?.name ?? "")}</span>
-      <span class="topbar__goal">${esc(summary)}</span>
+      <span class="topbar__goal">${summary}</span>
     `;
+    const weatherSrc =
+      battle.weather === "rain" ? UI_ICON.weatherRain : UI_ICON.weatherClear;
     this.regions.status!.innerHTML = `
       <span>回合 <strong>${battle.turn}/${battle.maxTurns}</strong></span>
-      <span>${battle.weather === "rain" ? "雨" : "晴"}</span>
-      <span>志愿军 ${livingUnits(battle, "player").length}</span>
-      <span>联合军 ${livingUnits(battle, "enemy").length}</span>
+      <span class="topbar__weather">${ico(weatherSrc, "ico ico--sm ico--badge")}${battle.weather === "rain" ? "雨" : "晴"}</span>
+      <span class="topbar__faction">${ico(UI_ICON.factionPva, "ico ico--sm ico--badge")}${livingUnits(battle, "player").length}</span>
+      <span class="topbar__faction">${ico(UI_ICON.factionUn, "ico ico--sm ico--badge")}${livingUnits(battle, "enemy").length}</span>
     `;
   }
 
@@ -220,7 +233,7 @@ export class View {
           .map(
             (line) =>
               `<li class="objectives__item${line.done ? " is-done" : ""}">
-                <span class="objectives__mark" aria-hidden="true">${line.done ? "✓" : "□"}</span>
+                <span class="objectives__mark" aria-hidden="true">${ico(line.done ? UI_ICON.objDone : UI_ICON.objPending, "ico ico--sm")}</span>
                 <span class="objectives__body">
                   <strong>${esc(line.name)}</strong>
                   <span>${esc(line.detail)}</span>
@@ -238,8 +251,11 @@ export class View {
         const active = unit.id === state.selectedUnitId ? " is-active" : "";
         const done = unit.hasActed ? " is-done" : "";
         const ratio = Math.round((unit.hp / unit.maxHp) * 100);
+        const key = unit.keyUnit
+          ? ico(UI_ICON.keyUnit, "ico ico--xs")
+          : "";
         return `<button class="chip${active}${done}" data-action="select-unit" data-value="${unit.id}">
-          <span class="chip__name">${esc(unit.name)}${unit.keyUnit ? " ★" : ""}</span>
+          <span class="chip__head">${ico(UNIT_ICON[unit.type].player, "ico ico--chip")}<span class="chip__name">${esc(unit.name)}${key}</span></span>
           <span class="chip__meta">${esc(UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} ${ratio}%</span>
         </button>`;
       })
@@ -262,9 +278,19 @@ export class View {
           ? "撤离带"
           : terrain.name;
 
+    const titleIcon = occupant
+      ? UNIT_ICON[occupant.type][occupant.faction]
+      : objective
+        ? objective.owner === "player"
+          ? UI_ICON.objDone
+          : UI_ICON.objPending
+        : evac
+          ? UI_ICON.evac
+          : TERRAIN_ICON[terrainId];
+
     const bits: string[] = [];
     bits.push(
-      `<p class="card__sub">${esc(terrain.name)} · 移动 ${terrain.moveCost} · ${esc(defenseText(terrain.defense))}</p>`,
+      `<p class="card__sub">${ico(TERRAIN_ICON[terrainId], "ico ico--sm")}${esc(terrain.name)} · 移动 ${terrain.moveCost} · ${esc(defenseText(terrain.defense))}</p>`,
     );
     if (terrain.regen) bits.push(`<p class="card__dim">驻留回复 ${terrain.regen}</p>`);
     if (terrain.rangeBonus) bits.push(`<p class="card__dim">射程 +${terrain.rangeBonus}</p>`);
@@ -279,18 +305,24 @@ export class View {
         `<p><span class="tag ${objective.owner === "player" ? "tag--player" : "tag--enemy"}">${esc(objective.name)}</span> ${owner}</p>`,
       );
     }
-    if (evac) bits.push(`<p><span class="tag tag--player">撤离带</span> 进入即撤离</p>`);
-    if (fieldItem) bits.push(`<p class="card__dim">地面补给：${esc(ITEMS[fieldItem.item].name)}</p>`);
+    if (evac)
+      bits.push(
+        `<p>${ico(UI_ICON.evac, "ico ico--sm")}<span class="tag tag--player">撤离带</span> 进入即撤离</p>`,
+      );
+    if (fieldItem)
+      bits.push(
+        `<p class="card__dim">${ico(ITEM_ICON[fieldItem.item], "ico ico--sm")}地面补给：${esc(ITEMS[fieldItem.item].name)}</p>`,
+      );
     if (occupant) {
       bits.push(
-        `<p>${esc(factionLabel(occupant.faction))} · ${esc(UNIT_TYPES[occupant.type].name)} · ${esc(veterancyName(occupant.exp))} · ${occupant.hp}/${occupant.maxHp}${occupant.keyUnit ? " · 主力" : ""}</p>`,
+        `<p>${ico(UNIT_ICON[occupant.type][occupant.faction], "ico ico--sm")}${esc(factionLabel(occupant.faction))} · ${esc(UNIT_TYPES[occupant.type].name)} · ${esc(veterancyName(occupant.exp))} · ${occupant.hp}/${occupant.maxHp}${occupant.keyUnit ? ` · ${ico(UI_ICON.keyUnit, "ico ico--xs")}主力` : ""}</p>`,
       );
     } else {
       bits.push(`<p class="card__dim">无人驻守</p>`);
     }
 
     return `<section class="card">
-      <header class="card__head"><h2>${esc(title)}</h2></header>
+      <header class="card__head"><h2 class="card__title">${ico(titleIcon, "ico ico--title")}${esc(title)}</h2></header>
       ${bits.join("")}
     </section>`;
   }
@@ -312,12 +344,12 @@ export class View {
       : unit.hasActed
         ? `<p class="card__dim">本回合已行动。</p>`
         : `<div class="actions">
-          ${canCapture ? `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}" ${locked ? "disabled" : ""}>占领</button>` : ""}
+          ${canCapture ? `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}" ${locked ? "disabled" : ""}>${ico(UI_ICON.actCapture, "ico ico--btn")}占领</button>` : ""}
           <button class="btn" data-action="unit-wait" data-value="${unit.id}" ${locked ? "disabled" : ""}>待命</button>
           ${items
             .map(
               ({ id, count }) =>
-                `<button class="btn btn--item${state.pendingItem === id ? " is-active" : ""}" data-action="use-item" data-value="${id}" ${locked ? "disabled" : ""}>${esc(ITEMS[id].name)} ×${count}</button>`,
+                `<button class="btn btn--item${state.pendingItem === id ? " is-active" : ""}" data-action="use-item" data-value="${id}" ${locked ? "disabled" : ""}>${ico(ITEM_ICON[id], "ico ico--btn")}${esc(ITEMS[id].name)} ×${count}</button>`,
             )
             .join("")}
         </div>
@@ -325,8 +357,8 @@ export class View {
 
     return `<section class="card">
       <header class="card__head">
-        <h2>${esc(unit.name)}${unit.keyUnit ? " <span class=\"tag tag--key\">主力</span>" : ""}</h2>
-        <span class="tag ${isMine ? "tag--player" : "tag--enemy"}">${esc(factionLabel(unit.faction))}</span>
+        <h2 class="card__title">${ico(UNIT_ICON[unit.type][unit.faction], "ico ico--title")}${esc(unit.name)}${unit.keyUnit ? ` ${ico(UI_ICON.keyUnit, "ico ico--sm")}<span class="tag tag--key">主力</span>` : ""}</h2>
+        <span class="tag ${isMine ? "tag--player" : "tag--enemy"}">${ico(isMine ? UI_ICON.factionPva : UI_ICON.factionUn, "ico ico--xs")}${esc(factionLabel(unit.faction))}</span>
       </header>
       <p class="card__sub">${esc(def.name)} · 级别 ${esc(veterancyName(unit.exp))} · ${esc(terrain)}</p>
       <div class="stats">
@@ -388,6 +420,7 @@ export class View {
     switch (state.screen) {
       case "title":
         return `<div class="sheet sheet--title">
+          <div class="sheet__brands">${ico(UI_ICON.factionPva, "ico ico--hero")}${ico(UI_ICON.factionUn, "ico ico--hero")}</div>
           <p class="sheet__eyebrow">战棋纵向切片</p>
           <h1>入朝</h1>
           <p class="sheet__lead">三场连续任务：云山伏击、长津阻击、北撤掩护。部队带着伤势与经验走进下一场——主力若阵亡，战役即告失败。</p>
@@ -407,14 +440,14 @@ export class View {
           <p class="sheet__lead">${esc(mission.brief)}</p>
           <h3>任务目标</h3>
           <ul class="sheet__goals">
-            ${goals.map((goal) => `<li>${esc(goal)}</li>`).join("")}
+            ${goals.map((goal) => `<li>${ico(UI_ICON.objPending, "ico ico--sm")}${esc(goal)}</li>`).join("")}
           </ul>
           <h3>可用部队</h3>
           <ul class="sheet__roster">
             ${state.campaign.roster
               .map(
                 (unit) =>
-                  `<li><span>${esc(unit.name)}</span><span>${esc(UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} · ${unit.hp}/${unit.maxHp}</span></li>`,
+                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}</span><span>${esc(UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} · ${unit.hp}/${unit.maxHp}</span></li>`,
               )
               .join("")}
           </ul>
@@ -427,6 +460,7 @@ export class View {
         if (!outcome) return null;
         const won = outcome.status === "won";
         return `<div class="sheet">
+          <div class="sheet__result">${ico(won ? UI_ICON.resultWin : UI_ICON.resultLose, "ico ico--result")}</div>
           <p class="sheet__eyebrow">${won ? "任务完成" : "任务失败"}</p>
           <h1>${esc(outcome.reason)}</h1>
           <ul class="sheet__stats">
@@ -461,7 +495,7 @@ export class View {
             ${state.campaign.roster
               .map(
                 (unit) =>
-                  `<li><span>${esc(unit.name)}</span><span>${esc(UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} · 参战 ${unit.missionsSurvived} 次</span></li>`,
+                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}</span><span>${esc(UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} · 参战 ${unit.missionsSurvived} 次</span></li>`,
               )
               .join("")}
           </ul>

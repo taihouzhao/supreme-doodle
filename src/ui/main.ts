@@ -1,3 +1,4 @@
+import { imageCache } from "./imageCache";
 import { Session } from "./session";
 import { View } from "./view";
 
@@ -8,3 +9,5 @@ const session = new Session();
 const view = new View(root, session);
 session.subscribe((state) => view.render(state));
 session.onVisual(() => view.renderBoard());
+
+void imageCache.preload().then(() => view.renderBoard());
