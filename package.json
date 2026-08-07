@@ -12,6 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "sim": "tsx src/sim/cli.ts",
+    "balance:tune": "tsx src/sim/tune.ts",
+    "ship": "bash scripts/ship.sh",
     "deploy:r2": "node scripts/deploy-r2.mjs"
   },
   "devDependencies": {

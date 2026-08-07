@@ -4,9 +4,7 @@ on:
   push:
     branches:
       - main
-      - cursor/r2-cicd-eb04
-      - cursor/korea-tactics-ux-eb04
-      - cursor/game-icons-assets-eb04
+      - "cursor/**"
   workflow_dispatch:
     inputs:
       dry_run:
