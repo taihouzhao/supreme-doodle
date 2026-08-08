@@ -7,6 +7,7 @@ import { COUNTER_RATIO, canCounter, computeDamage, itemDamage, refreshMaxHp } fr
 import {
   canAttack,
   canEnter,
+  findPath,
   livingUnits,
   manhattan,
   orthogonalNeighbours,
@@ -109,6 +110,7 @@ export function performMove(state: GameState, unit: Unit, to: Vec2, events: Game
   if (occupant && occupant.id !== unit.id) return false;
 
   const from = { x: unit.x, y: unit.y };
+  const path = findPath(state, unit, to, from) ?? [from, { ...to }];
   unit.x = to.x;
   unit.y = to.y;
   unit.mpLeft -= cost;
@@ -116,7 +118,7 @@ export function performMove(state: GameState, unit: Unit, to: Vec2, events: Game
     unit.movedThisTurn = true;
     addFatigue(unit, cost * FATIGUE.perMoveCost);
   }
-  events.push({ type: "moved", unitId: unit.id, from, to: { ...to }, cost });
+  events.push({ type: "moved", unitId: unit.id, from, to: { ...to }, cost, path });
   settleTileEntry(state, unit, events);
 
   return true;
@@ -135,15 +137,17 @@ function advanceAfterRout(
   if (unitAt(state, target.x, target.y)) return;
 
   const from = { x: attacker.x, y: attacker.y };
-  attacker.x = target.x;
-  attacker.y = target.y;
+  const to = { x: target.x, y: target.y };
+  attacker.x = to.x;
+  attacker.y = to.y;
   attacker.movedThisTurn = true;
   events.push({
     type: "moved",
     unitId: attacker.id,
     from,
-    to: { x: attacker.x, y: attacker.y },
+    to,
     cost: 0,
+    path: [from, to],
   });
   settleTileEntry(state, attacker, events);
 }

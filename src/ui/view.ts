@@ -205,6 +205,9 @@ export class View {
         case "unit-wait":
           if (value) this.session.dispatch({ kind: "wait", unitId: value });
           break;
+        case "unit-undo-move":
+          this.session.undoMove();
+          break;
         case "unit-capture":
           if (value) this.session.dispatch({ kind: "capture", unitId: value });
           break;
@@ -448,13 +451,15 @@ export class View {
           ${itemSlots(items, state.pendingItem, locked || unit.hasActed)}
         </div>`;
 
+    const canUndo = isMine && !unit.hasActed && this.session.canUndoMove();
     const actions = !isMine
       ? ""
       : unit.hasActed
         ? `<p class="card__dim">本回合已行动</p>`
         : `<div class="actions">
           ${canCapture ? `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}" ${locked ? "disabled" : ""}>${ico(UI_ICON.actCapture, "ico ico--btn")}占领</button>` : ""}
-          <button class="btn" data-action="unit-wait" data-value="${unit.id}" ${locked ? "disabled" : ""}>待命</button>
+          ${canUndo ? `<button class="btn" data-action="unit-undo-move" ${locked ? "disabled" : ""} title="退回本次移动前的位置">撤销</button>` : ""}
+          <button class="btn" data-action="unit-wait" data-value="${unit.id}" ${locked ? "disabled" : ""} title="结束本单位行动并降低疲劳">休整</button>
         </div>`;
 
     const detail = state.detailExpanded
