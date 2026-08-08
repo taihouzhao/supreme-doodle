@@ -41,7 +41,9 @@ export const GROWTH_WEIGHTS: Record<UnitTypeId, Record<StatKey, number>> = {
   rifle: { might: 0.28, stamina: 0.24, leadership: 0.2, agility: 0.16, intellect: 0.12 },
   mg: { leadership: 0.26, might: 0.24, stamina: 0.2, intellect: 0.16, agility: 0.14 },
   mortar: { intellect: 0.34, might: 0.2, leadership: 0.16, stamina: 0.16, agility: 0.14 },
+  artillery: { intellect: 0.36, leadership: 0.2, stamina: 0.18, might: 0.14, agility: 0.12 },
   tank: { might: 0.3, stamina: 0.28, leadership: 0.16, intellect: 0.14, agility: 0.12 },
+  logistics: { stamina: 0.3, leadership: 0.24, intellect: 0.18, agility: 0.16, might: 0.12 },
 };
 
 export const BASE_STATS: CommanderStats = {

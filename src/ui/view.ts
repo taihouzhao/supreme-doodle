@@ -352,6 +352,7 @@ export class View {
         moveTiles: this.session.moveTiles(),
         attackTiles: this.session.attackTiles(),
         attackTargets: this.session.attackTargets(),
+        resupplyTiles: this.session.resupplyTargets(),
         itemTiles: this.session.itemTiles(),
         inspected: state.inspectedTile,
         highlightObjectiveId: state.highlightObjectiveId,
@@ -548,6 +549,7 @@ export class View {
         : `<div class="actions">
           ${canCapture ? `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}" ${locked ? "disabled" : ""}>${ico(UI_ICON.actCapture, "ico ico--btn")}占领</button>` : ""}
           ${canUndo ? `<button class="btn" data-action="unit-undo-move" ${locked ? "disabled" : ""} title="退回本次移动前的位置">撤销</button>` : ""}
+          ${unit.type === "logistics" ? `<p class="card__state">点击相邻友军可补充兵员（回复生命、降低疲劳）</p>` : ""}
           <button class="btn" data-action="unit-wait" data-value="${unit.id}" ${locked ? "disabled" : ""} title="结束本单位行动并降低疲劳">休整</button>
         </div>`;
 

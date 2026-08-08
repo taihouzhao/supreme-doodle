@@ -93,7 +93,7 @@ describe("战役继承", () => {
 
   it("开局伴随将领精简，战场另有剧情将领", () => {
     const campaign = createCampaign("chapter-one", 1);
-    expect(campaign.roster).toHaveLength(4);
+    expect(campaign.roster).toHaveLength(5);
     expect(campaign.roster.every((u) => u.commanderKind === "companion")).toBe(true);
     const started = startMission(campaign);
     const story = started.state.units.filter((u) => u.commanderKind === "story");
@@ -125,11 +125,11 @@ describe("战役继承", () => {
 
   it("部队番号为唯一主将+兵种，不带序号", () => {
     const campaign = createCampaign("chapter-one", 1);
-    expect(campaign.roster.every((u) => /^[\u4e00-\u9fa5]+(步兵|机枪|迫击炮|坦克)$/.test(u.name))).toBe(
+    expect(campaign.roster.every((u) => /^[\u4e00-\u9fa5]+(步兵|机枪|迫击炮|炮兵|坦克|后勤)$/.test(u.name))).toBe(
       true,
     );
     expect(campaign.roster.every((u) => !/\d/.test(u.name))).toBe(true);
-    const commanders = campaign.roster.map((u) => u.name.replace(/(步兵|机枪|迫击炮|坦克)$/, ""));
+    const commanders = campaign.roster.map((u) => u.name.replace(/(步兵|机枪|迫击炮|炮兵|坦克|后勤)$/, ""));
     expect(new Set(commanders).size).toBe(commanders.length);
   });
 });

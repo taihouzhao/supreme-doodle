@@ -17,6 +17,7 @@ import {
   livingUnits,
   manhattan,
   reachableTiles,
+  resupplyTargets as gridResupplyTargets,
   unitAt,
 } from "../core/grid";
 import type {
@@ -471,7 +472,8 @@ export class Session {
       unit.faction !== "player" ||
       unit.hasActed ||
       this.state.pendingItem ||
-      this.state.fxBusy
+      this.state.fxBusy ||
+      UNIT_TYPES[unit.type].attack <= 0
     ) {
       return tiles;
     }
@@ -498,6 +500,27 @@ export class Session {
     }
     for (const target of attackableTargets(battle, unit)) {
       tiles.add(target.y * battle.width + target.x);
+    }
+    return tiles;
+  }
+
+  /** 后勤可补充的友军格子 */
+  resupplyTargets(): Set<number> {
+    const battle = this.state.battle;
+    const unit = this.selectedUnit;
+    const tiles = new Set<number>();
+    if (
+      !battle ||
+      !unit ||
+      unit.faction !== "player" ||
+      unit.hasActed ||
+      unit.type !== "logistics" ||
+      this.state.fxBusy
+    ) {
+      return tiles;
+    }
+    for (const ally of gridResupplyTargets(battle, unit)) {
+      tiles.add(ally.y * battle.width + ally.x);
     }
     return tiles;
   }
@@ -548,6 +571,15 @@ export class Session {
           endTurnArmed: false,
           notice: null,
         });
+        return;
+      }
+      if (
+        unit.type === "logistics" &&
+        occupant?.faction === "player" &&
+        occupant.id !== unit.id &&
+        this.resupplyTargets().has(pos.y * battle.width + pos.x)
+      ) {
+        this.dispatch({ kind: "resupply", unitId: unit.id, targetId: occupant.id });
         return;
       }
       if (!occupant && this.moveTiles().has(pos.y * battle.width + pos.x)) {

@@ -124,6 +124,42 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     score: 30,
     era: "late",
   },
+  type75: {
+    id: "type75",
+    name: "75毫米山炮",
+    forTypes: ["artillery"],
+    stats: { intellect: 14, leadership: 2 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 24,
+    era: "early",
+  },
+  m2a1_howitzer: {
+    id: "m2a1_howitzer",
+    name: "M2A1 105毫米榴弹炮",
+    forTypes: ["artillery"],
+    stats: { intellect: 21, leadership: 2, stamina: 1 },
+    attackBonus: 0,
+    defenseBonus: 0.01,
+    rangeBonus: 1,
+    minRangeBonus: 0,
+    score: 34,
+    era: "enemy",
+  },
+  supply_cart: {
+    id: "supply_cart",
+    name: "辎重车",
+    forTypes: ["logistics"],
+    stats: { stamina: 5, leadership: 2, agility: 1 },
+    attackBonus: 0,
+    defenseBonus: 0.02,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 12,
+    era: "early",
+  },
   bazooka: {
     id: "bazooka",
     name: "缴获M9A1火箭筒",
@@ -286,6 +322,9 @@ export const WEAPON_HISTORY: Record<WeaponId, WeaponHistory> = {
   dp28: { origin: "苏联", caliber: "7.62×54毫米R", note: "盘形弹匣供弹的DP-28轻机枪，后续换装班组火力。" },
   mortar60: { origin: "中国", caliber: "60毫米", note: "31式60毫米迫击炮，源自美制M2体系，便于步兵分队携行。" },
   mortar82: { origin: "苏联", caliber: "82毫米", note: "82-PM-37系列迫击炮，用作营级曲射火力的游戏化代表。" },
+  type75: { origin: "中国／多源", caliber: "75毫米", note: "山炮作为师属轻型炮兵的游戏化代表，便于山地展开。" },
+  m2a1_howitzer: { origin: "美国", caliber: "105毫米", note: "M2A1榴弹炮是美军师属直协炮兵的常见口径。" },
+  supply_cart: { origin: "中朝战场通用", caliber: "—", note: "驮载/马车与轻型汽车混编的辎重分队抽象。" },
   bazooka: { origin: "美国（缴获）", caliber: "2.36英寸火箭弹", note: "M9A1火箭筒作为缴获反装甲支援，不视为志愿军制式普遍装备。" },
   t34_85: { origin: "苏联", caliber: "85毫米主炮", note: "T-34-85曾装备中朝装甲部队；关卡中只代表有限配属装甲支援。" },
   m1_garand: { origin: "美国", caliber: ".30-06", note: "M1半自动步枪，美军步兵主要制式步枪。" },
@@ -311,6 +350,8 @@ export function defaultWeaponFor(type: UnitTypeId, era: "early" | "late" | "enem
     if (type === "rifle") return era === "enemy" ? "m1_garand" : "type38";
     if (type === "mg") return era === "enemy" ? "m1919" : "zb26";
     if (type === "mortar") return era === "enemy" ? "m1_mortar" : "mortar60";
+    if (type === "artillery") return era === "enemy" ? "m2a1_howitzer" : "type75";
+    if (type === "logistics") return "supply_cart";
     return era === "enemy" ? "sherman" : "t34_85";
   }
   return pool.sort((a, b) => WEAPONS[a].score - WEAPONS[b].score)[0]!;
@@ -337,6 +378,9 @@ export function weaponForEquipment(
     [/M1\s*卡宾|卡宾枪/i, "m1_carbine"],
     [/M2(?:型)?\s*60|M1(?:型)?\s*60|60毫米迫击炮/i, "m2_mortar"],
     [/M1(?:型)?\s*81|81毫米迫击炮/i, "m1_mortar"],
+    [/105|榴弹炮|M2A1/i, "m2a1_howitzer"],
+    [/75毫米|山炮/i, "type75"],
+    [/辎重|后勤|补给/i, "supply_cart"],
   ];
   for (const [pattern, weapon] of matches) {
     if (pattern.test(text) && weaponFits(weapon, type)) return weapon;

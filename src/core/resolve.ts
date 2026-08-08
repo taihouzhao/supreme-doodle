@@ -1,6 +1,6 @@
 import { BALANCE } from "../content/balance";
 import { ITEMS } from "../content/items";
-import { UNIT_TYPES, VETERANCY } from "../content/units";
+import { LOGISTICS, UNIT_TYPES, VETERANCY } from "../content/units";
 import { WEAPONS } from "../content/weapons";
 import { effectiveStats, syncLevelFromExp } from "./commander";
 import { COUNTER_RATIO, canCounter, computeDamage, itemDamage, refreshMaxHp } from "./combat";
@@ -12,6 +12,7 @@ import {
   manhattan,
   orthogonalNeighbours,
   pathCost,
+  resupplyTargets,
   unitAt,
 } from "./grid";
 import { isEvacTile } from "./mission";
@@ -246,6 +247,34 @@ export function performWait(_state: GameState, unit: Unit): boolean {
   addFatigue(unit, FATIGUE.perWait);
   unit.hasActed = true;
   unit.mpLeft = 0;
+  return true;
+}
+
+/** 后勤邻接补充：回复生命并降低疲劳 */
+export function performResupply(
+  state: GameState,
+  unit: Unit,
+  target: Unit,
+  events: GameEvent[],
+): boolean {
+  if (unit.type !== "logistics") return false;
+  if (!resupplyTargets(state, unit).some((ally) => ally.id === target.id)) return false;
+  const missing = target.maxHp - target.hp;
+  const heal = Math.min(LOGISTICS.heal, Math.max(0, missing));
+  const fatigueRelief = Math.min(LOGISTICS.fatigueRelief, target.fatigue);
+  if (heal <= 0 && fatigueRelief <= 0) return false;
+  target.hp += heal;
+  addFatigue(target, -fatigueRelief);
+  unit.hasActed = true;
+  unit.mpLeft = 0;
+  events.push({
+    type: "resupplied",
+    unitId: unit.id,
+    targetId: target.id,
+    heal,
+    fatigueRelief,
+  });
+  if (heal > 0) events.push({ type: "healed", unitId: target.id, amount: heal });
   return true;
 }
 
