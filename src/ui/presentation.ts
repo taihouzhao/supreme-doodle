@@ -46,6 +46,9 @@ type AttackClip = {
   attackerHpTo: number;
   defenderDies: boolean;
   attackerDies: boolean;
+  /** 开火瞬间双方格子；击溃推进留到后续 moved 片段 */
+  attackerFrom: Vec2;
+  defenderFrom: Vec2;
   duration: number;
 };
 
@@ -92,13 +95,10 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-function hpBeforeDamage(currentHp: number, damage: number): number {
-  if (damage <= 0) return currentHp;
-  return Math.max(damage, currentHp + damage);
-}
-
 /**
- * 把规则事件编成表现片段。`state` 为结算后的状态；路径在其上按 from→to 重建。
+ * 把规则事件编成表现片段。
+ * 交战血量与溃散只读 `attacked` 事件自身字段，绝不读结算后的终局 alive/hp，
+ * 否则敌方集火同一目标时，第一击就会提前播溃散。
  */
 export function clipsFromEvents(state: GameState, events: GameEvent[]): FxClip[] {
   const clips: FxClip[] = [];
@@ -123,12 +123,8 @@ export function clipsFromEvents(state: GameState, events: GameEvent[]): FxClip[]
       const attacker = state.units.find((u) => u.id === event.attackerId);
       const defender = state.units.find((u) => u.id === event.defenderId);
       if (!attacker || !defender) continue;
-      const defenderDies = !defender.alive;
-      const attackerDies = !attacker.alive;
-      const defenderHpTo = defenderDies ? 0 : defender.hp;
-      const attackerHpTo = attackerDies ? 0 : attacker.hp;
-      const defenderHpFrom = hpBeforeDamage(defenderHpTo, event.damage);
-      const attackerHpFrom = hpBeforeDamage(attackerHpTo, event.counterDamage);
+      const defenderDies = event.defenderRouted;
+      const attackerDies = event.attackerRouted;
       const hasCounter = event.counterDamage > 0;
       // 有击溃时多留溃散展示阶段
       const deathPad = defenderDies || attackerDies ? FX_TIMING.attackDeathPadMs : 0;
@@ -140,12 +136,14 @@ export function clipsFromEvents(state: GameState, events: GameEvent[]): FxClip[]
         defenderId: event.defenderId,
         damage: event.damage,
         counterDamage: event.counterDamage,
-        defenderHpFrom,
-        defenderHpTo,
-        attackerHpFrom,
-        attackerHpTo,
+        defenderHpFrom: event.defenderHpFrom,
+        defenderHpTo: event.defenderHpTo,
+        attackerHpFrom: event.attackerHpFrom,
+        attackerHpTo: event.attackerHpTo,
         defenderDies,
         attackerDies,
+        attackerFrom: event.attackerFrom,
+        defenderFrom: event.defenderFrom,
         duration,
       });
       index += 1;
@@ -286,6 +284,11 @@ export class Presentation {
     const beats = attackBeats(hasCounter, hasDeath);
 
     this.frame.busy = true;
+    // 整段交战钉在开火瞬间的格子上；击溃推进由后续 moved 片段播放
+    this.frame.unitPositions = {
+      [clip.attackerId]: { x: clip.attackerFrom.x, y: clip.attackerFrom.y },
+      [clip.defenderId]: { x: clip.defenderFrom.x, y: clip.defenderFrom.y },
+    };
     this.frame.flashUnitId = t >= beats.aimEnd && t < beats.flashEnd ? clip.attackerId : null;
     this.frame.hpDisplay = {};
     this.frame.lingerUnits = {};

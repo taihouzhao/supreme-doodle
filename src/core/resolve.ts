@@ -42,6 +42,21 @@ function grantExp(
   }
 }
 
+/** 只改经验/等级，不立刻发事件；交战动画需要先播攻击再播晋升 */
+function grantExpSilent(unit: Unit, amount: number, state?: GameState): GameEvent | null {
+  unit.exp += amount;
+  const promotion = syncLevelFromExp(unit);
+  refreshMaxHp(unit, state);
+  if (!promotion) return null;
+  return {
+    type: "levelUp",
+    unitId: unit.id,
+    from: promotion.from,
+    to: promotion.to,
+    rank: unit.rank,
+  };
+}
+
 export function routUnit(state: GameState, unit: Unit, events: GameEvent[]): void {
   if (!unit.alive) return;
   unit.alive = false;
@@ -141,10 +156,19 @@ export function performAttack(
 ): boolean {
   if (!canAttack(state, attacker, defender)) return false;
 
+  const defenderHpFrom = defender.hp;
+  const attackerHpFrom = attacker.hp;
+  const attackerFrom = { x: attacker.x, y: attacker.y };
+  const defenderFrom = { x: defender.x, y: defender.y };
+  const pendingPromotes: GameEvent[] = [];
+
   const main = computeDamage(state, attacker, defender, state.rng);
   state.rng = main.rng;
   defender.hp -= main.damage;
-  grantExp(attacker, main.damage * VETERANCY.expPerDamage, state, events);
+  {
+    const promote = grantExpSilent(attacker, main.damage * VETERANCY.expPerDamage, state);
+    if (promote) pendingPromotes.push(promote);
+  }
   if (attacker.faction === "player") state.stats.damageDealt += main.damage;
   else state.stats.damageTaken += main.damage;
 
@@ -154,11 +178,18 @@ export function performAttack(
     state.rng = counter.rng;
     counterDamage = Math.max(1, Math.round(counter.damage * COUNTER_RATIO));
     attacker.hp -= counterDamage;
-    grantExp(defender, counterDamage * VETERANCY.expPerDamage, state, events);
+    {
+      const promote = grantExpSilent(defender, counterDamage * VETERANCY.expPerDamage, state);
+      if (promote) pendingPromotes.push(promote);
+    }
     if (defender.faction === "player") state.stats.damageDealt += counterDamage;
     else state.stats.damageTaken += counterDamage;
   }
 
+  const defenderRouted = defender.hp <= 0;
+  const attackerRouted = attacker.hp <= 0;
+
+  // 先发 attacked（带本击血量/溃散），再发晋升与 routed，保证 FX 时间线：命中→掉血→溃散→推进
   events.push({
     type: "attacked",
     attackerId: attacker.id,
@@ -166,13 +197,22 @@ export function performAttack(
     damage: main.damage,
     breakdown: main.breakdown,
     counterDamage,
+    defenderHpFrom,
+    defenderHpTo: Math.max(0, defender.hp),
+    attackerHpFrom,
+    attackerHpTo: Math.max(0, attacker.hp),
+    defenderRouted,
+    attackerRouted,
+    attackerFrom,
+    defenderFrom,
   });
+  for (const promote of pendingPromotes) events.push(promote);
 
-  if (defender.hp <= 0) {
+  if (defenderRouted) {
     routUnit(state, defender, events);
     grantExp(attacker, VETERANCY.expPerRout, state, events);
   }
-  if (attacker.hp <= 0) {
+  if (attackerRouted) {
     routUnit(state, attacker, events);
     grantExp(defender, VETERANCY.expPerRout, state, events);
   }

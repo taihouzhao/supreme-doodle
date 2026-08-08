@@ -268,6 +268,17 @@ export type GameEvent =
       damage: number;
       breakdown: DamageBreakdown;
       counterDamage: number;
+      /** 本击前守方生命；集火时每击各自记录，避免 FX 用终局状态回推 */
+      defenderHpFrom: number;
+      defenderHpTo: number;
+      attackerHpFrom: number;
+      attackerHpTo: number;
+      /** 本击是否造成守方/攻方溃散（不是整场结束后的 alive） */
+      defenderRouted: boolean;
+      attackerRouted: boolean;
+      /** 开火瞬间攻方格子；击溃推进发生在本事件之后 */
+      attackerFrom: Vec2;
+      defenderFrom: Vec2;
     }
   | { type: "routed"; unitId: string; faction: Faction }
   | { type: "levelUp"; unitId: string; from: number; to: number; rank: string }
