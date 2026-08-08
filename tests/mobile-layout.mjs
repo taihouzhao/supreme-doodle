@@ -148,9 +148,13 @@ const address = server.address();
 assert.ok(address && typeof address !== "string");
 const baseUrl = `http://127.0.0.1:${address.port}/`;
 
+const executablePath = process.env.GITHUB_ACTIONS === "true"
+  ? await chromium.executablePath()
+  : await chromiumExecutable();
+
 const browser = await puppeteer.launch({
   args: chromium.args,
-  executablePath: await chromiumExecutable(),
+  executablePath,
   headless: "shell",
 });
 
