@@ -11,7 +11,13 @@ const PVA_LATE = {
   rifle: "莫辛-纳甘步枪、50式冲锋枪",
   mg: "DP-28轻机枪／24式重机枪",
   mortar: "82毫米迫击炮",
-  tank: "T-34-85装甲支援",
+  /** 默认不宣称局部坦克；仅 m11 等有直接史料处改用 PVA_LATE_ARMOR */
+  tank: "反坦克火力与炮火支援",
+} as const;
+
+const PVA_LATE_ARMOR = {
+  ...PVA_LATE,
+  tank: "T-34-85装甲支援（独立坦克第4团局部配属）",
 } as const;
 
 const pva = (id: string, name: string, role: string, formation: string, portrait?: string) => ({
@@ -89,7 +95,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { type: "rifle", x: 6, y: 2, name: "韩6师2团3营前卫连", equipment: "M1加兰德步枪", exp: 50 },
       { type: "rifle", x: 7, y: 5, name: "韩6师2团3营先遣连", equipment: "M1卡宾枪", exp: 42 },
       { type: "mg", x: 6, y: 4, name: "韩6师2团3营机枪排", equipment: "勃朗宁M1919机枪", exp: 55 },
-      { type: "mortar", x: 8, y: 8, name: "韩6师2团3营迫击炮组", equipment: "M2 60毫米迫击炮", exp: 40 },
+      { type: "mortar", x: 8, y: 8, name: "韩6师2团配属炮兵中队", equipment: "M2 60毫米迫击炮", exp: 40 },
     ],
     variantSlots: [],
     waves: [
@@ -185,9 +191,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     date: "1950年11月25日—12月2日",
     location: "朝鲜德川—三所里—龙源里",
     historicalOutcome: "志愿军第二次战役西线突破韩军防线并向三所里穿插，迫使美第8集团军全面后撤。",
-    historicalNote: "关卡聚焦第38军向敌后公路穿插的战术片段，不表现整条清川江战线。",
+    historicalNote: "关卡聚焦第38军第113师向敌后公路穿插的战术片段（约14小时/145华里为战史叙事）；不表现整条清川江渡河战线。",
     commanders: [
-      pva("liang-xingchu", "梁兴初", "第38军军长", "中国人民志愿军第38军"),
+      pva("liang-xingchu", "梁兴初", "第38军军长", "中国人民志愿军第38军（含第113师穿插）"),
       un("walton-walker", "沃尔顿·沃克", "第8集团军司令", "美国陆军第8集团军", undefined, "中将", "us-lieutenant-general"),
     ],
     brief: "沿山脊绕开正面火力，抢占三所里与龙源里两个公路节点，截断南撤车队。时间比歼敌更重要，过度恋战会错过窗口。",
@@ -685,13 +691,13 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     historicalOutcome: "志愿军攻击猪排山，美军第7师在反复争夺后奉命放弃该前哨阵地。",
     historicalNote: "本关限定为第23军第67师（含第200团）夺取两个前沿支撑点的战术切片；不把前哨得失夸大为战略决战。215号T-34-85以临时配属剧情单位表现有直接史料支持的装甲协同。",
     commanders: [
-      pva("zhong-guochu", "钟国楚", "第23军军长", "中国人民志愿军第23军"),
+      pva("zhong-guochu", "钟国楚", "第23军军长", "中国人民志愿军第23军第67师（首攻第200团）"),
       un("arthur-trudeau", "阿瑟·特鲁多", "师长", "美国陆军第7步兵师", undefined, "少将", "us-major-general"),
     ],
     brief: "借雨雾接近猪排山，夺取东、西两个前沿支撑点并顶住反击。壕沟和高地减伤明显，迫击炮与炮火支援是打开缺口的关键。",
     mapNote: "北在上；东西支撑点位于同一条连续猪排山前哨山脊，由壕沟与地堡相连。玩家从志愿军北侧阵地接近，美军由南侧主抵抗线增援。",
     weather: { options: ["rain", "fog"], label: "季风雨雾", detail: "持续降雨与山雾削弱远程火力，谷地泥泞。" },
-    playerEquipment: PVA_LATE,
+    playerEquipment: PVA_LATE_ARMOR,
     maxTurns: 14,
     map: [
       "^^F...==...F^^",
@@ -750,7 +756,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     kind: "breakthrough",
     date: "1953年7月13日21时—14日10时",
     location: "朝鲜金城以南轿岩山地区",
-    historicalOutcome: "志愿军在25公里正面发起停战前最后一次大规模进攻，突破韩军防线；随后双方稳定战线并停战。",
+    historicalOutcome: "第67军第199师经一夜激战于14日午前攻占轿岩山主峰；金城战役其余正面与停战收束仅作背景。",
     historicalNote: "游戏只聚焦第67军第199师攻击韩军第6师轿岩山阵地的第一夜；东翼北汉江方向不压入同一战术棋盘。战役级装甲资料不下放为本切片的确定性坦克单位。",
     commanders: [
       pva("yang-yong", "杨勇", "第20兵团司令员", "中国人民志愿军第20兵团"),

@@ -84,6 +84,9 @@ jobs:
       - name: Mobile browser layout
         run: npm run test:mobile
 
+      - name: Viewport visual regression
+        run: npm run test:viewport
+
       - name: Sync dist/ to R2
         run: npm run deploy:r2
 
