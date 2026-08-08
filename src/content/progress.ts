@@ -132,23 +132,37 @@ export function statsAtLevel(
   return stats;
 }
 
-/** 敌军用经验合成等级与属性，保持旧关卡 `exp` 字段可用。 */
-export function enemyProfileFromExp(
-  type: UnitTypeId,
-  exp: number,
-  salt = 0,
-): { level: number; stats: CommanderStats; rank: string } {
-  const level = Math.max(1, Math.min(PROGRESS.maxLevel, levelFromExp(exp)));
-  // 敌军略弱于同级伴随将领，避免属性膨胀压过玩家成长
-  const base = addStats(BASE_STATS, {
+/** 敌军底板：略弱于同级伴随将领，避免属性膨胀压过玩家成长。 */
+export function enemyBaseStats(): CommanderStats {
+  return addStats(BASE_STATS, {
     leadership: -4,
     intellect: -4,
     might: -2,
     stamina: -2,
     agility: -2,
   });
+}
+
+/**
+ * 关卡波段敌军经验缩放。
+ * M1–9 保持作者原值；阵地战 M10–12 温和抬升，使后期更常见 L2–L3。
+ */
+export function scaleEnemyExp(missionId: string, rawExp: number): number {
+  const n = Number((missionId.match(/m(\d+)/i) ?? [])[1] ?? "1");
+  if (n <= 9) return Math.max(0, rawExp);
+  return Math.round(rawExp * 1.25 + 15);
+}
+
+/** 敌军用经验合成等级与属性，保持旧关卡 `exp` 字段可用。 */
+export function enemyProfileFromExp(
+  type: UnitTypeId,
+  exp: number,
+  salt = 0,
+): { level: number; stats: CommanderStats; rank: string; baseStats: CommanderStats } {
+  const level = Math.max(1, Math.min(PROGRESS.maxLevel, levelFromExp(exp)));
+  const base = enemyBaseStats();
   const stats = statsAtLevel(base, type, Math.max(1, level), salt);
-  return { level, stats, rank: rankName(level) };
+  return { level, stats, rank: rankName(level), baseStats: base };
 }
 
 export function levelLabel(level: number): string {
