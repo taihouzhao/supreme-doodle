@@ -648,9 +648,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     variantSlots: [{ index: 1, options: ["rifle", "mg"] }],
     waves: [
-      { window: [3, 4], units: [{ type: "rifle", x: 6, y: 0, name: "轮番突击", equipment: "M1加兰德步枪", exp: 95 }] },
-      { window: [6, 7], units: [{ type: "rifle", x: 7, y: 0, name: "二梯队", equipment: "M1加兰德步枪", exp: 85 }, { type: "mortar", x: 5, y: 0, name: "支援迫击炮", equipment: "M1型81毫米迫击炮", exp: 75 }] },
-      { window: [8, 9], units: [{ type: "mg", x: 6, y: 0, name: "三梯队火力", equipment: "勃朗宁M1919机枪", exp: 80 }] },
+      { window: [3, 4], units: [{ type: "rifle", x: 6, y: 0, name: "轮番突击", equipment: "M1加兰德步枪", exp: 90 }] },
+      { window: [6, 7], units: [{ type: "rifle", x: 7, y: 0, name: "二梯队", equipment: "M1加兰德步枪", exp: 80 }] },
+      { window: [9, 10], units: [{ type: "mg", x: 6, y: 0, name: "三梯队火力", equipment: "勃朗宁M1919机枪", exp: 70 }] },
     ],
     objectives: [
       { id: "hill-5979", name: "597.9高地", kind: "hold", x: 3, y: 4, owner: "player" },
@@ -665,9 +665,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 9, y: 5, name: "坑道口" },
     ],
     scripted: [
-      { kind: "barrage", turns: [2, 5, 8], damage: 5, note: "上甘岭炮火准备" },
+      { kind: "barrage", turns: [3, 7], damage: 4, note: "上甘岭炮火准备" },
     ],
-    victory: { holdUntilEnd: true, minPostsHeld: 2, minSurvivors: 2 },
+    victory: { holdUntilEnd: true, minPostsHeld: 2, minSurvivors: 3 },
   },
   {
     id: "m11-pork-chop",
