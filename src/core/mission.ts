@@ -1,13 +1,24 @@
 import { BALANCE } from "../content/balance";
 import { ITEM_IDS } from "../content/items";
+import { designation } from "../content/naming";
 import { TERRAIN_CHARS } from "../content/terrain";
 import { UNIT_TYPES } from "../content/units";
+import { WEAPONS, defaultWeaponFor } from "../content/weapons";
 import type { MissionConfig } from "../content/missions/schema";
-import { effectiveMaxHp } from "./combat";
+import {
+  agilityMoveBonus,
+  effectiveMaxHp,
+  effectiveStats,
+  makeEnemyCommander,
+  makeStoryCommander,
+} from "./commander";
 import { livingUnits, tileAt, unitAt } from "./grid";
 import { Rng, deriveSeed } from "./rng";
 import type {
+  CommanderKind,
+  CommanderStats,
   FieldItem,
+  FieldWeapon,
   GameEvent,
   GameState,
   ItemId,
@@ -15,6 +26,7 @@ import type {
   TerrainId,
   Unit,
   Vec2,
+  WeaponId,
 } from "./types";
 
 export interface RosterUnit {
@@ -28,6 +40,14 @@ export interface RosterUnit {
   missionsSurvived: number;
   /** 跨关稳定的主角标记；不会因为兵种或经验排序漂移。 */
   keyUnit: boolean;
+  commanderKind: Extract<CommanderKind, "companion">;
+  commanderName: string;
+  level: number;
+  rank: string;
+  stats: CommanderStats;
+  weapon: WeaponId;
+  /** 玩家在军械库里手动指定过武器；自动换装不再覆盖 */
+  manualWeapon?: boolean;
 }
 
 export interface MissionSetup {
@@ -61,6 +81,12 @@ function makeUnit(params: {
   type: Unit["type"];
   name: string;
   equipment?: string;
+  weapon: WeaponId;
+  commanderKind: CommanderKind;
+  commanderName: string;
+  level: number;
+  rank: string;
+  stats: CommanderStats;
   x: number;
   y: number;
   exp: number;
@@ -68,21 +94,23 @@ function makeUnit(params: {
   fatigue?: number;
   keyUnit?: boolean;
 }): Unit {
-  const keyBonus = params.keyUnit ? 60 : 0;
-  const baseMax = effectiveMaxHp(params.type, params.exp);
-  const maxHp = baseMax + keyBonus;
-  const rawHp = params.hp ?? baseMax;
-  return {
+  const draft: Unit = {
     id: params.id,
     rosterId: params.rosterId,
     faction: params.faction,
     type: params.type,
     name: params.name,
-    equipment: params.equipment ?? UNIT_TYPES[params.type].name,
+    equipment: params.equipment ?? WEAPONS[params.weapon]?.name ?? UNIT_TYPES[params.type].name,
+    weapon: params.weapon,
+    commanderKind: params.commanderKind,
+    commanderName: params.commanderName,
+    level: params.level,
+    rank: params.rank,
+    stats: params.stats,
     x: params.x,
     y: params.y,
-    hp: Math.min(rawHp + keyBonus, maxHp),
-    maxHp,
+    hp: 1,
+    maxHp: 1,
     exp: params.exp,
     fatigue: params.fatigue ?? 0,
     mpLeft: 0,
@@ -92,6 +120,10 @@ function makeUnit(params: {
     evacuated: false,
     keyUnit: params.keyUnit ?? false,
   };
+  const maxHp = effectiveMaxHp(draft);
+  draft.maxHp = maxHp;
+  draft.hp = Math.min(params.hp ?? maxHp, maxHp);
+  return draft;
 }
 
 export function createMissionState(setup: MissionSetup): GameState {
@@ -111,20 +143,28 @@ export function createMissionState(setup: MissionSetup): GameState {
   }
 
   const units: Unit[] = [];
-
+  const era = mission.equipmentEra ?? "early";
   const keyRosterId = roster.find((unit) => unit.keyUnit)?.id;
+  let spawnIndex = 0;
 
-  roster.forEach((rosterUnit, index) => {
-    const spawn = mission.playerSpawns[index];
+  roster.forEach((rosterUnit) => {
+    const spawn = mission.playerSpawns[spawnIndex];
     if (!spawn) return;
+    spawnIndex += 1;
     units.push(
       makeUnit({
-        id: `p${index}`,
+        id: `p${units.length}`,
         rosterId: rosterUnit.id,
         faction: "player",
         type: rosterUnit.type,
         name: rosterUnit.name,
-        equipment: mission.playerEquipment?.[rosterUnit.type],
+        equipment: mission.playerEquipment?.[rosterUnit.type] ?? WEAPONS[rosterUnit.weapon].name,
+        weapon: rosterUnit.weapon,
+        commanderKind: rosterUnit.commanderKind,
+        commanderName: rosterUnit.commanderName,
+        level: rosterUnit.level,
+        rank: rosterUnit.rank,
+        stats: rosterUnit.stats,
         x: spawn.x,
         y: spawn.y,
         exp: rosterUnit.exp,
@@ -135,18 +175,43 @@ export function createMissionState(setup: MissionSetup): GameState {
     );
   });
 
+  for (const ally of mission.storyAllies ?? []) {
+    const spawn = mission.playerSpawns[spawnIndex];
+    if (!spawn) break;
+    spawnIndex += 1;
+    const weapon = ally.weapon ?? defaultWeaponFor(ally.type, era);
+    const profile = makeStoryCommander(ally.commander, ally.type, ally.level, weapon, ally.stats);
+    units.push(
+      makeUnit({
+        id: `s${units.length}`,
+        rosterId: null,
+        faction: "player",
+        type: ally.type,
+        name: designation(ally.commander, ally.type),
+        equipment: ally.equipment ?? WEAPONS[weapon].name,
+        ...profile,
+        x: spawn.x,
+        y: spawn.y,
+        keyUnit: false,
+      }),
+    );
+  }
+
   enemySpecs.forEach((spec, index) => {
+    const name = spec.name ?? UNIT_TYPES[spec.type].name;
+    const weapon = spec.weapon ?? defaultWeaponFor(spec.type, "enemy");
+    const profile = makeEnemyCommander(spec.type, spec.exp ?? 0, weapon, name);
     units.push(
       makeUnit({
         id: `e${index}`,
         rosterId: null,
         faction: "enemy",
         type: spec.type,
-        name: spec.name ?? UNIT_TYPES[spec.type].name,
-        equipment: spec.equipment,
+        name,
+        equipment: spec.equipment ?? WEAPONS[weapon].name,
+        ...profile,
         x: spec.x,
         y: spec.y,
-        exp: spec.exp ?? 0,
         hp: spec.hp,
       }),
     );
@@ -154,26 +219,37 @@ export function createMissionState(setup: MissionSetup): GameState {
 
   const pending = mission.waves.map((wave, waveIndex) => {
     const turn = waveRng.int(wave.window[0], wave.window[1]);
-    const waveUnits = wave.units.map((spec, unitIndex) =>
-      makeUnit({
+    const waveUnits = wave.units.map((spec, unitIndex) => {
+      const name = spec.name ?? UNIT_TYPES[spec.type].name;
+      const weapon = spec.weapon ?? defaultWeaponFor(spec.type, "enemy");
+      const profile = makeEnemyCommander(spec.type, spec.exp ?? 0, weapon, name);
+      return makeUnit({
         id: `w${waveIndex}_${unitIndex}`,
         rosterId: null,
         faction: "enemy",
         type: spec.type,
-        name: spec.name ?? UNIT_TYPES[spec.type].name,
-        equipment: spec.equipment,
+        name,
+        equipment: spec.equipment ?? WEAPONS[weapon].name,
+        ...profile,
         x: spec.x,
         y: spec.y,
-        exp: spec.exp ?? 0,
         hp: spec.hp,
-      }),
-    );
+      });
+    });
     return { turn, units: waveUnits };
   });
 
   const fieldItems: FieldItem[] = mission.itemDrops.map((drop, index) => ({
     id: `item${index}`,
     item: itemRng.pick(drop.options),
+    x: drop.x,
+    y: drop.y,
+  }));
+
+  const weaponRng = new Rng(deriveSeed(seed, "weapons"));
+  const fieldWeapons: FieldWeapon[] = (mission.weaponDrops ?? []).map((drop, index) => ({
+    id: `wpn${index}`,
+    weapon: weaponRng.pick(drop.options),
     x: drop.x,
     y: drop.y,
   }));
@@ -201,6 +277,8 @@ export function createMissionState(setup: MissionSetup): GameState {
     units,
     objectives,
     fieldItems,
+    fieldWeapons,
+    pendingWeapons: [],
     evacZone: mission.evacZone.map((v) => ({ ...v })),
     inventory: { ...emptyInventory(), ...inventory },
     weather: mission.weather
@@ -211,6 +289,8 @@ export function createMissionState(setup: MissionSetup): GameState {
     pending,
     captureStreak: 0,
     deployedCount: units.filter((u) => u.faction === "player").length,
+    places: (mission.places ?? []).map((place) => ({ ...place })),
+    scripted: (mission.scripted ?? []).map((rule) => ({ ...rule })),
     status: "playing",
     stats: {
       playerRouted: 0,
@@ -232,8 +312,12 @@ export function emptyInventory(): Record<ItemId, number> {
   return inventory;
 }
 
-export function movementBudget(unit: Unit, weather: GameState["weather"]): number {
-  const base = UNIT_TYPES[unit.type].move;
+export function movementBudget(
+  unit: Unit,
+  weather: GameState["weather"],
+  inventory?: GameState["inventory"],
+): number {
+  const base = UNIT_TYPES[unit.type].move + agilityMoveBonus(effectiveStats(unit, inventory));
   const fatiguePenalty =
     1 - BALANCE.fatigue.movePenalty * (unit.fatigue / BALANCE.fatigue.max);
   const weatherPenalty = weather === "rain" || weather === "snow" ? 1 : 0;
@@ -244,7 +328,7 @@ export function beginPhase(state: GameState, faction: Unit["faction"]): void {
   state.phase = faction;
   for (const unit of state.units) {
     if (unit.faction !== faction || !unit.alive || unit.evacuated) continue;
-    unit.mpLeft = movementBudget(unit, state.weather);
+    unit.mpLeft = movementBudget(unit, state.weather, state.inventory);
     unit.movedThisTurn = false;
     unit.hasActed = false;
   }
@@ -262,7 +346,7 @@ export function arriveWaves(state: GameState, events: GameEvent[]): void {
       if (!spot) continue;
       unit.x = spot.x;
       unit.y = spot.y;
-      unit.mpLeft = movementBudget(unit, state.weather);
+      unit.mpLeft = movementBudget(unit, state.weather, state.inventory);
       state.units.push(unit);
       arrived.push(unit.id);
     }
@@ -306,6 +390,88 @@ export function runUpkeep(state: GameState, faction: Unit["faction"], events: Ga
       events.push({ type: "captured", objectiveId: objective.id, by: occupant.faction });
     }
   }
+}
+
+/**
+ * 回合开始时结算史实脚本：炮火准备与严寒消耗。
+ * 夜袭与补给窗口是伤害修正，由 combat 直接读取。
+ */
+export function runScripted(state: GameState, events: GameEvent[]): void {
+  for (const rule of state.scripted) {
+    if (rule.kind === "barrage") {
+      if (!rule.turns.includes(state.turn)) continue;
+      const hit: string[] = [];
+      for (const unit of livingUnits(state, "player")) {
+        const cover = tileAt(state, unit.x, unit.y).defense;
+        const damage = Math.max(1, Math.round(rule.damage * (1 - Math.max(0, cover))));
+        unit.hp -= damage;
+        hit.push(unit.id);
+        if (unit.hp <= 0) routByScript(state, unit, events);
+      }
+      if (hit.length > 0) {
+        events.push({
+          type: "scripted",
+          kind: rule.kind,
+          note: rule.note,
+          unitIds: hit,
+          damage: rule.damage,
+        });
+      }
+    } else if (rule.kind === "coldAttrition") {
+      if (state.turn < rule.fromTurn) continue;
+      const hit: string[] = [];
+      // 严寒不分敌我，双方都在冻伤减员
+      for (const unit of livingUnits(state)) {
+        const shelter = tileAt(state, unit.x, unit.y).regen > 0 ? 0.5 : 1;
+        const damage = Math.max(1, Math.round(rule.damage * shelter));
+        if (unit.hp <= damage) {
+          // 冻伤不直接打死单位，只压到残血，避免无操作败北
+          unit.hp = Math.max(1, unit.hp);
+          continue;
+        }
+        unit.hp -= damage;
+        hit.push(unit.id);
+      }
+      if (hit.length > 0) {
+        events.push({
+          type: "scripted",
+          kind: rule.kind,
+          note: rule.note,
+          unitIds: hit,
+          damage: rule.damage,
+        });
+      }
+    }
+  }
+}
+
+function routByScript(state: GameState, unit: Unit, events: GameEvent[]): void {
+  unit.alive = false;
+  unit.hp = 0;
+  if (unit.faction === "player") state.stats.playerRouted += 1;
+  else state.stats.enemyRouted += 1;
+  events.push({ type: "routed", unitId: unit.id, faction: unit.faction });
+}
+
+/** 夜袭加成：早期志愿军的夜间近战优势 */
+export function nightAssaultBonus(state: GameState, unit: Unit, distance: number): number {
+  if (unit.faction !== "player" || distance > 1) return 1;
+  for (const rule of state.scripted) {
+    if (rule.kind !== "nightAssault") continue;
+    const [from, to] = rule.turns;
+    if (state.turn >= from && state.turn <= to) return 1 + rule.attackBonus;
+  }
+  return 1;
+}
+
+/** 补给窗口：携行弹药打完之后攻击衰减 */
+export function supplyPenalty(state: GameState, unit: Unit): number {
+  if (unit.faction !== "player") return 1;
+  for (const rule of state.scripted) {
+    if (rule.kind !== "supplyWindow") continue;
+    if (state.turn > rule.untilTurn) return 1 - rule.penalty;
+  }
+  return 1;
 }
 
 /** 回合结束时统计「全部目标是否仍在手里」的连续回合数 */
@@ -356,9 +522,96 @@ export function coreObjectiveMet(state: GameState, rule: MissionConfig["victory"
   return held >= (rule.minPostsHeld ?? 1);
 }
 
+export interface VictoryProgress {
+  /** 核心目标（占领数 / 据点数）是否已达成 */
+  coreMet: boolean;
+  /** 距离胜利还缺什么；已经满足时为 null */
+  blocking: string | null;
+  captured: number;
+  required: number;
+  holdTurns: number;
+  streak: number;
+  survivors: number;
+  minSurvivors: number;
+}
+
 /**
- * @param atTurnEnd 是否处于回合结束结算点。占领类胜利必须守住敌方的反扑，
- *                  因此只在回合结束判定；撤离与全灭为即时判定。
+ * 供界面展示「为什么还没结束」。与 `evaluateVictory` 读同一批计数，
+ * 避免 HUD 说「已占领」而规则仍判定未完成。
+ */
+export function victoryProgress(state: GameState, rule: MissionConfig["victory"]): VictoryProgress {
+  const survivors = livingUnits(state, "player").length;
+  const minSurvivors = rule.minSurvivors ?? 0;
+  const holdTurns = rule.holdTurns ?? 1;
+
+  if (state.missionKind === "breakthrough") {
+    const captured = state.objectives.filter(
+      (o) => o.kind === "capture" && o.owner === "player",
+    ).length;
+    const required = rule.requiredCaptures ?? 0;
+    const coreMet = captured >= required;
+    let blocking: string | null = null;
+    if (!coreMet) blocking = `还需占领 ${required - captured} 处目标`;
+    else if (holdTurns > 1 && state.captureStreak < holdTurns)
+      blocking = `还需坚守 ${holdTurns - state.captureStreak} 回合`;
+    else if (survivors < minSurvivors) blocking = `存活不足 ${survivors}/${minSurvivors}`;
+    return {
+      coreMet,
+      blocking,
+      captured,
+      required,
+      holdTurns,
+      streak: state.captureStreak,
+      survivors,
+      minSurvivors,
+    };
+  }
+
+  if (state.missionKind === "hold") {
+    const posts = state.objectives.filter((o) => o.kind === "hold");
+    const held = posts.filter((o) => o.owner === "player").length;
+    const required = rule.minPostsHeld ?? 1;
+    const coreMet = held >= required;
+    const turnsLeft = Math.max(0, state.maxTurns - state.turn + 1);
+    let blocking: string | null = null;
+    if (!coreMet) blocking = `据点失守，需夺回 ${required - held} 处`;
+    else if (turnsLeft > 0) blocking = `还需坚守 ${turnsLeft} 回合`;
+    else if (survivors < Math.max(1, minSurvivors))
+      blocking = `存活不足 ${survivors}/${Math.max(1, minSurvivors)}`;
+    return {
+      coreMet,
+      blocking,
+      captured: held,
+      required,
+      holdTurns: state.maxTurns,
+      streak: Math.min(state.turn, state.maxTurns),
+      survivors,
+      minSurvivors,
+    };
+  }
+
+  const evacuated = state.stats.playerEvacuated;
+  const required = requiredEvacuations(state, rule);
+  const keyEvacuated = state.units.some((u) => u.keyUnit && u.evacuated);
+  const coreMet = evacuated >= required && (!rule.requireKeyUnit || keyEvacuated);
+  let blocking: string | null = null;
+  if (evacuated < required) blocking = `还需撤离 ${required - evacuated} 个单位`;
+  else if (rule.requireKeyUnit && !keyEvacuated) blocking = "主力尚未撤离";
+  return {
+    coreMet,
+    blocking,
+    captured: evacuated,
+    required,
+    holdTurns: 0,
+    streak: 0,
+    survivors,
+    minSurvivors,
+  };
+}
+
+/**
+ * @param atTurnEnd 是否处于回合结束结算点。需要连续坚守多回合的关卡只在回合结束判定，
+ *                  这样敌方还有一次反扑机会；单回合要求与撤离、全灭为即时判定。
  */
 export function evaluateVictory(
   state: GameState,
@@ -411,10 +664,13 @@ export function evaluateVictory(
     ).length;
     const required = rule.requiredCaptures ?? 0;
     const holdTurns = rule.holdTurns ?? 1;
+    // 只要求「占领当回合」时立即结算，避免占下目标后还要空转一整回合
+    const needsStreak = holdTurns > 1;
+    const streakMet = !needsStreak || state.captureStreak >= holdTurns;
     if (
-      atTurnEnd &&
+      (atTurnEnd || !needsStreak) &&
       captured >= required &&
-      state.captureStreak >= holdTurns &&
+      streakMet &&
       playerAlive.length >= (rule.minSurvivors ?? 0)
     ) {
       return { status: "won", reason: `守住全部目标，${playerAlive.length} 个单位可继续作战` };
@@ -435,20 +691,26 @@ export function evaluateVictory(
   }
 
   // hold
+  const posts = state.objectives.filter((o) => o.kind === "hold");
+  const held = posts.filter((o) => o.owner === "player").length;
+  const requiredPosts = rule.minPostsHeld ?? 1;
+  const minSurvivors = Math.max(1, rule.minSurvivors ?? 1);
   if (timeUp) {
-    const posts = state.objectives.filter((o) => o.kind === "hold");
-    const held = posts.filter((o) => o.owner === "player").length;
-    const required = rule.minPostsHeld ?? 1;
-    if (held >= required && playerAlive.length >= (rule.minSurvivors ?? 1)) {
+    if (held >= requiredPosts && playerAlive.length >= minSurvivors) {
       return { status: "won", reason: `坚守到最后，保住 ${held}/${posts.length} 个据点` };
     }
-    if (held < required) {
+    if (held < requiredPosts) {
       return { status: "lost", reason: `据点失守，仅剩 ${held}/${posts.length}` };
     }
     return { status: "lost", reason: `伤亡过大，仅剩 ${playerAlive.length} 个单位` };
   }
   if (enemyAlive.length === 0 && state.pending.length === 0) {
-    return { status: "won", reason: "击退了全部进攻" };
+    if (held >= requiredPosts && playerAlive.length >= minSurvivors) {
+      return { status: "won", reason: "击退了全部进攻" };
+    }
+    // holdUntilEnd 关卡允许在剩余回合里夺回阵地，而不是当场判负
+    if (rule.holdUntilEnd) return { status: "playing", reason: "" };
+    return { status: "lost", reason: `据点失守，仅剩 ${held}/${posts.length}` };
   }
   return { status: "playing", reason: "" };
 }

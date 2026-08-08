@@ -6,7 +6,9 @@ export const TERRAIN_STYLE: Record<TerrainId, { fill: string; edge: string }> = 
   forest: { fill: "#8fae87", edge: "#6f8f68" },
   hill: { fill: "#c2a97f", edge: "#9d855c" },
   village: { fill: "#dcbf9a", edge: "#b9966e" },
+  fort: { fill: "#c9a88a", edge: "#8a6a4e" },
   river: { fill: "#8fb4c9", edge: "#6a93aa" },
+  cliff: { fill: "#7a7468", edge: "#4e4940" },
 };
 
 export const FACTION_STYLE = {
@@ -23,11 +25,13 @@ export const UNIT_GLYPH: Record<UnitTypeId, string> = {
 };
 
 export const HIGHLIGHT = {
-  move: "rgba(58, 122, 196, 0.38)",
+  move: "rgba(58, 122, 196, 0.34)",
   moveEdge: "rgba(28, 74, 128, 0.75)",
-  attack: "rgba(200, 62, 48, 0.34)",
-  attackEdge: "rgba(140, 32, 22, 0.85)",
-  item: "rgba(214, 158, 46, 0.38)",
+  /** 攻击半径只用斜线阴影，不铺底色，避免和蓝色移动格糊成一片 */
+  attackHatch: "rgba(226, 74, 58, 0.85)",
+  attackEdge: "rgba(150, 30, 20, 0.95)",
+  item: "rgba(214, 158, 46, 0.32)",
+  itemHatch: "rgba(224, 176, 62, 0.9)",
   selected: "#f5d76e",
   objectivePlayer: "#2f6f5e",
   objectiveEnemy: "#a8443a",
@@ -35,4 +39,5 @@ export const HIGHLIGHT = {
   evac: "rgba(47, 111, 94, 0.3)",
   trail: "rgba(58, 122, 196, 0.45)",
   inspect: "rgba(245, 215, 110, 0.35)",
+  objectiveFocus: "rgba(245, 215, 110, 0.42)",
 };

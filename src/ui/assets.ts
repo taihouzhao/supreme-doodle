@@ -1,7 +1,7 @@
-import type { Faction, ItemId, TerrainId, UnitTypeId } from "../core/types";
+import type { Faction, ItemId, TerrainId, UnitTypeId, Weather } from "../core/types";
 
 /** Cache-bust when swapping generated art without renaming. */
-const V = "?v=4";
+const V = "?v=5";
 
 /** Static art under /assets (served from public/). */
 
@@ -11,8 +11,26 @@ export const TERRAIN_ICON: Record<TerrainId, string> = {
   forest: `/assets/terrain/forest.png${V}`,
   hill: `/assets/terrain/hill.png${V}`,
   village: `/assets/terrain/village.png${V}`,
+  fort: `/assets/terrain/fort.png${V}`,
   river: `/assets/terrain/river.png${V}`,
+  cliff: `/assets/terrain/cliff.png${V}`,
 };
+
+/** 雪天换整套贴图，而不是给整张地图糊一层白 */
+export const TERRAIN_ICON_SNOW: Record<TerrainId, string> = {
+  road: `/assets/terrain/road-snow.png${V}`,
+  plain: `/assets/terrain/plain-snow.png${V}`,
+  forest: `/assets/terrain/forest-snow.png${V}`,
+  hill: `/assets/terrain/hill-snow.png${V}`,
+  village: `/assets/terrain/village-snow.png${V}`,
+  fort: `/assets/terrain/fort-snow.png${V}`,
+  river: `/assets/terrain/river-snow.png${V}`,
+  cliff: `/assets/terrain/cliff-snow.png${V}`,
+};
+
+export function terrainIcon(terrain: TerrainId, weather: Weather): string {
+  return weather === "snow" ? TERRAIN_ICON_SNOW[terrain] : TERRAIN_ICON[terrain];
+}
 
 export const UNIT_ICON: Record<UnitTypeId, Record<Faction, string>> = {
   rifle: {
@@ -35,8 +53,12 @@ export const UNIT_ICON: Record<UnitTypeId, Record<Faction, string>> = {
 
 export const ITEM_ICON: Record<ItemId, string> = {
   medkit: `/assets/items/medkit.png${V}`,
+  bandage: `/assets/items/medkit.png${V}`,
+  ration: `/assets/items/medkit.png${V}`,
   at_charge: `/assets/items/at-charge.png${V}`,
+  satchel: `/assets/items/at-charge.png${V}`,
   arty_support: `/assets/items/arty-support.png${V}`,
+  field_manual: `/assets/items/arty-support.png${V}`,
 };
 
 export const UI_ICON = {
@@ -72,6 +94,7 @@ export const COMMANDER_PORTRAIT: Record<string, string> = {
 export function allAssetUrls(): string[] {
   return [
     ...Object.values(TERRAIN_ICON),
+    ...Object.values(TERRAIN_ICON_SNOW),
     ...Object.values(UNIT_ICON).flatMap((pair) => Object.values(pair)),
     ...Object.values(ITEM_ICON),
     ...Object.values(UI_ICON),

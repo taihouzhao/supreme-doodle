@@ -4,17 +4,42 @@ import type { MissionConfig } from "../content/missions/schema";
 import { UNIT_TYPES } from "../content/units";
 import {
   createCampaign,
+  equipWeapon,
   finishMission,
   startMission,
   type CampaignState,
   type MissionOutcome,
 } from "../core/campaign";
 import { applyAction, IllegalActionError } from "../core/engine";
-import { attackableTargets, livingUnits, manhattan, reachableTiles, unitAt } from "../core/grid";
-import type { Action, DamageBreakdown, GameState, ItemId, Unit, Vec2 } from "../core/types";
+import {
+  attackRangeTiles,
+  attackableTargets,
+  livingUnits,
+  manhattan,
+  reachableTiles,
+  unitAt,
+} from "../core/grid";
+import type {
+  Action,
+  DamageBreakdown,
+  GameEvent,
+  GameState,
+  ItemId,
+  Unit,
+  Vec2,
+  WeaponId,
+  Weather,
+} from "../core/types";
 import { describeEvent } from "./format";
 import { clipsFromEvents, Presentation } from "./presentation";
-import { appendReplay, clearSave, loadSave, writeSave } from "./storage";
+import {
+  appendReplay,
+  clearSave,
+  loadFxSpeed,
+  loadSave,
+  writeFxSpeed,
+  writeSave,
+} from "./storage";
 
 export type Screen = "title" | "brief" | "battle" | "result" | "chapterEnd";
 
@@ -40,6 +65,8 @@ export interface SessionState {
   battle: GameState | null;
   selectedUnitId: string | null;
   inspectedTile: Vec2 | null;
+  highlightObjectiveId: string | null;
+  detailExpanded: boolean;
   pendingItem: ItemId | null;
   log: LogEntry[];
   lastStrike: LastStrike | null;
@@ -49,6 +76,8 @@ export interface SessionState {
   hasSave: boolean;
   notice: string | null;
   fxBusy: boolean;
+  /** 交战动画倍速：1 / 2 / 3 */
+  fxSpeed: number;
 }
 
 type Listener = (state: SessionState) => void;
@@ -71,6 +100,8 @@ export class Session {
       battle: null,
       selectedUnitId: null,
       inspectedTile: null,
+      highlightObjectiveId: null,
+      detailExpanded: false,
       pendingItem: null,
       log: [],
       lastStrike: null,
@@ -80,6 +111,7 @@ export class Session {
       hasSave: save !== null,
       notice: null,
       fxBusy: false,
+      fxSpeed: loadFxSpeed(),
     };
     this.presentation = new Presentation(
       () => {
@@ -87,6 +119,20 @@ export class Session {
       },
       () => this.onPresentationIdle(),
     );
+    this.presentation.setSpeed(this.state.fxSpeed);
+  }
+
+  /** 在 1x / 2x / 3x 之间循环，选择记在本地 */
+  cycleFxSpeed(): void {
+    const next = this.state.fxSpeed >= 3 ? 1 : this.state.fxSpeed + 1;
+    this.presentation.setSpeed(next);
+    writeFxSpeed(next);
+    this.update({ fxSpeed: next });
+  }
+
+  /** 跳过正在播放的交战动画 */
+  skipFx(): void {
+    this.presentation.skip();
   }
 
   subscribe(listener: Listener): void {
@@ -117,9 +163,14 @@ export class Session {
     return next.slice(-60);
   }
 
+  private pendingRoutNotice: string | null = null;
+
   private onPresentationIdle(): void {
-    if (this.state.fxBusy) this.update({ fxBusy: false });
-    else {
+    const notice = this.pendingRoutNotice;
+    this.pendingRoutNotice = null;
+    if (this.state.fxBusy || notice) {
+      this.update({ fxBusy: false, notice: notice ?? this.state.notice });
+    } else {
       for (const listener of this.listeners) listener(this.state);
     }
     if (this.pendingConclude) {
@@ -147,6 +198,14 @@ export class Session {
       inspectedTile: null,
       fxBusy: false,
     });
+  }
+
+  /** 出击前手动换装，立即存档 */
+  equipWeapon(unitId: string, weapon: WeaponId): void {
+    const campaign = equipWeapon(this.state.campaign, unitId, weapon);
+    if (campaign === this.state.campaign) return;
+    writeSave(campaign);
+    this.update({ campaign });
   }
 
   continueCampaign(): void {
@@ -180,10 +239,7 @@ export class Session {
           text: `${started.mission.name}：${started.mission.brief}`,
         },
       ],
-      notice:
-        started.state.weather === "clear"
-          ? null
-          : `${started.mission.weather?.label ?? "复杂天气"}：${started.mission.weather?.detail ?? "移动与远程火力受到影响"}`,
+      notice: missionStartNotice(started.mission, started.state.weather),
     });
   }
 
@@ -203,7 +259,40 @@ export class Session {
       selectedUnitId: null,
       pendingItem: null,
       inspectedTile: null,
+      highlightObjectiveId: null,
+      detailExpanded: false,
       lastStrike: null,
+    });
+  }
+
+  toggleDetail(): void {
+    this.update({ detailExpanded: !this.state.detailExpanded });
+  }
+
+  focusObjective(objectiveId: string): void {
+    const battle = this.state.battle;
+    if (!battle) return;
+    const objective = battle.objectives.find((o) => o.id === objectiveId);
+    if (!objective) {
+      // 撤离类目标：跳到撤离带中心
+      if (objectiveId === "evac-quota" && battle.evacZone.length > 0) {
+        const cx =
+          battle.evacZone.reduce((s, z) => s + z.x, 0) / battle.evacZone.length;
+        const cy =
+          battle.evacZone.reduce((s, z) => s + z.y, 0) / battle.evacZone.length;
+        this.update({
+          highlightObjectiveId: objectiveId,
+          inspectedTile: { x: Math.round(cx), y: Math.round(cy) },
+          selectedUnitId: null,
+        });
+      }
+      return;
+    }
+    this.update({
+      highlightObjectiveId: objectiveId,
+      inspectedTile: { x: objective.x, y: objective.y },
+      selectedUnitId: null,
+      detailExpanded: false,
     });
   }
 
@@ -242,7 +331,29 @@ export class Session {
     return tiles;
   }
 
+  /** 攻击半径（含空地），叠加在移动蓝格上 */
   attackTiles(): Set<number> {
+    const battle = this.state.battle;
+    const unit = this.selectedUnit;
+    const tiles = new Set<number>();
+    if (
+      !battle ||
+      !unit ||
+      unit.faction !== "player" ||
+      unit.hasActed ||
+      this.state.pendingItem ||
+      this.state.fxBusy
+    ) {
+      return tiles;
+    }
+    for (const tile of attackRangeTiles(battle, unit)) {
+      tiles.add(tile.y * battle.width + tile.x);
+    }
+    return tiles;
+  }
+
+  /** 当前可点选攻击的敌方格子 */
+  attackTargets(): Set<number> {
     const battle = this.state.battle;
     const unit = this.selectedUnit;
     const tiles = new Set<number>();
@@ -369,6 +480,7 @@ export class Session {
 
     const selected = next.units.find((u) => u.id === this.state.selectedUnitId);
     const clips = clipsFromEvents(next, result.events);
+    this.pendingRoutNotice = combatNotice(next, result.events);
 
     this.update({
       battle: next,
@@ -376,10 +488,11 @@ export class Session {
       log: this.pushLog(entries, next.turn),
       lastStrike: strike,
       pendingItem: null,
-      notice: null,
+      notice: clips.length > 0 ? null : this.pendingRoutNotice,
       selectedUnitId: selected && selected.alive && !selected.hasActed ? selected.id : null,
       fxBusy: clips.length > 0,
     });
+    if (clips.length === 0) this.pendingRoutNotice = null;
 
     if (next.status !== "playing") {
       this.pendingConclude = next;
@@ -444,4 +557,41 @@ export class Session {
 
 function freshSeed(): number {
   return Math.floor(Math.random() * 2 ** 31);
+}
+
+/** 进场横幅：天气与战史脚本一并提示，避免规则只藏在简报里 */
+function missionStartNotice(mission: MissionConfig, weather: Weather): string | null {
+  const parts: string[] = [];
+  if (weather !== "clear") {
+    parts.push(
+      `${mission.weather?.label ?? "复杂天气"}：${mission.weather?.detail ?? "移动与远程火力受到影响"}`,
+    );
+  }
+  const scripted = (mission.scripted ?? []).map((rule) => rule.note);
+  if (scripted.length > 0) parts.push(`战史规则：${scripted.join("；")}`);
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+/** 一次结算里的溃散与晋升摘要，动画播完后作为横幅提示 */
+function combatNotice(state: GameState, events: GameEvent[]): string | null {
+  const parts: string[] = [];
+  const routed = events
+    .filter((e): e is Extract<GameEvent, { type: "routed" }> => e.type === "routed")
+    .map((e) => state.units.find((u) => u.id === e.unitId))
+    .filter((u): u is Unit => Boolean(u));
+  const lost = routed.filter((u) => u.faction === "player").map((u) => u.name);
+  const killed = routed.filter((u) => u.faction === "enemy").map((u) => u.name);
+  if (killed.length > 0) parts.push(`击溃 ${killed.join("、")}`);
+  if (lost.length > 0) parts.push(`我方 ${lost.join("、")} 溃散撤离`);
+
+  const promotions = events
+    .filter((e): e is Extract<GameEvent, { type: "levelUp" }> => e.type === "levelUp")
+    .map((e) => {
+      const unit = state.units.find((u) => u.id === e.unitId);
+      return unit && unit.faction === "player" ? `${unit.name} 晋升${e.rank}` : null;
+    })
+    .filter((text): text is string => Boolean(text));
+  if (promotions.length > 0) parts.push(promotions.join("、"));
+
+  return parts.length > 0 ? parts.join(" · ") : null;
 }

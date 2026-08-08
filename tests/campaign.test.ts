@@ -49,14 +49,14 @@ describe("战役继承", () => {
     expect(outcome.permanentLosses).not.toContain(saved.rosterId);
   });
 
-  it("编制被打残后会补充新兵，但补的是没有经验的部队", () => {
+  it("编制被打残后会补充新兵，但补的是低经验伴随部队", () => {
     let campaign = createCampaign("chapter-one", 4);
     campaign.roster = campaign.roster.slice(0, 2);
     const started = startMission(campaign);
     campaign = started.campaign;
     expect(campaign.roster.length).toBeGreaterThan(2);
     const fresh = campaign.roster.slice(2);
-    expect(fresh.every((u) => u.exp === 0)).toBe(true);
+    expect(fresh.every((u) => u.level <= 1 && u.commanderKind === "companion")).toBe(true);
   });
 
   it("即使第一关被打残，第三关早期恢复检查仍然存在可行解", () => {
@@ -69,7 +69,7 @@ describe("战役继承", () => {
         seed,
       );
       // 补充新兵在开战时结算，因此以第三关作为早期恢复检查点
-      expect(run.missions[2]!.finalState.deployedCount).toBeGreaterThanOrEqual(4);
+      expect(run.missions[2]!.finalState.deployedCount).toBeGreaterThanOrEqual(3);
       if (run.missions[2]!.status === "won") recovered += 1;
     }
     expect(recovered / trials).toBeGreaterThanOrEqual(1 / 3);
@@ -88,7 +88,17 @@ describe("战役继承", () => {
 
   it("经验等级会随战役推进出现", () => {
     const run = playCampaign("chapter-one", getAgent("tactical"), 2);
-    expect(run.finalCampaign.roster.some((u) => veterancyLevel(u.exp) >= 1)).toBe(true);
+    expect(run.finalCampaign.roster.some((u) => veterancyLevel(u.exp) >= 3)).toBe(true);
+  });
+
+  it("开局伴随将领精简，战场另有剧情将领", () => {
+    const campaign = createCampaign("chapter-one", 1);
+    expect(campaign.roster).toHaveLength(4);
+    expect(campaign.roster.every((u) => u.commanderKind === "companion")).toBe(true);
+    const started = startMission(campaign);
+    const story = started.state.units.filter((u) => u.commanderKind === "story");
+    expect(story.length).toBeGreaterThan(0);
+    expect(started.state.units.some((u) => u.stats.might > 0)).toBe(true);
   });
 
   it("主力阵亡则立即失败", () => {

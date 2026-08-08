@@ -20,7 +20,31 @@ describe("历史战役内容", () => {
       expect(mission.commanders?.length).toBeGreaterThanOrEqual(2);
       expect(mission.weather?.options.length).toBeGreaterThan(0);
       expect(Object.keys(mission.playerEquipment ?? {}).length).toBe(4);
+      expect(mission.places?.length ?? 0).toBeGreaterThan(0);
+      expect(mission.scripted?.length ?? 0).toBeGreaterThan(0);
     }
+  });
+
+  it("地名与脚本事件坐标落在地图内且不在峭壁上", () => {
+    for (const mission of MISSION_LIST) {
+      const width = mission.map[0]!.length;
+      for (const place of mission.places ?? []) {
+        expect(place.x).toBeGreaterThanOrEqual(0);
+        expect(place.y).toBeGreaterThanOrEqual(0);
+        expect(place.x).toBeLessThan(width);
+        expect(place.y).toBeLessThan(mission.map.length);
+        expect(mission.map[place.y]![place.x]).not.toBe("#");
+      }
+      for (const rule of mission.scripted ?? []) {
+        expect(rule.note.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("地图含不可通行峭壁或要塞等复杂地形", () => {
+    const joined = MISSION_LIST.map((m) => m.map.join("")).join("");
+    expect(joined.includes("#") || joined.includes("B")).toBe(true);
+    expect(joined.includes("F")).toBe(true);
   });
 
   it("地图、出生点、目标和撤离区全部在边界内", () => {
@@ -50,6 +74,13 @@ describe("历史战役内容", () => {
     const keyUnits = CHAPTER_ONE.startingRoster.filter((unit) => unit.keyUnit);
     expect(keyUnits).toHaveLength(1);
     expect(keyUnits[0]?.commander).toBe("高大全");
+    expect(CHAPTER_ONE.startingRoster).toHaveLength(4);
+  });
+
+  it("每关都有剧情将领客串", () => {
+    for (const mission of MISSION_LIST) {
+      expect(mission.storyAllies?.length ?? 0).toBeGreaterThan(0);
+    }
   });
 
   it("标志性气候与历史结局不被改写", () => {

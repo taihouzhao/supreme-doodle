@@ -1,5 +1,6 @@
 import { TERRAIN } from "../content/terrain";
 import { UNIT_TYPES } from "../content/units";
+import { WEAPONS } from "../content/weapons";
 import type { GameState, TerrainDef, Unit, Vec2 } from "./types";
 
 export function inBounds(state: GameState, x: number, y: number): boolean {
@@ -29,6 +30,7 @@ export function livingUnits(state: GameState, faction?: Unit["faction"]): Unit[]
 export function canEnter(state: GameState, unit: Unit, x: number, y: number): boolean {
   if (!inBounds(state, x, y)) return false;
   const terrain = tileAt(state, x, y);
+  if (!terrain.passable) return false;
   if (UNIT_TYPES[unit.type].vehicle && !terrain.vehiclePassable) return false;
   return true;
 }
@@ -47,7 +49,20 @@ export interface ReachableTile {
 }
 
 /**
- * Dijkstra 可达域。友军可穿越但不可停留，敌军阻挡通行。
+ * 是否处于敌方控制区：正交相邻有存活敌军。
+ * 进入控制区必须停下，部队无法沿着敌人边缘长距离穿插。
+ */
+export function inEnemyZoc(state: GameState, unit: Unit, x: number, y: number): boolean {
+  for (const step of NEIGHBOURS) {
+    const other = unitAt(state, x + step.x, y + step.y);
+    if (other && other.alive && !other.evacuated && other.faction !== unit.faction) return true;
+  }
+  return false;
+}
+
+/**
+ * Dijkstra 可达域。友军可穿越但不可停留，敌军阻挡通行；
+ * 进入敌方控制区后本次移动结束（起点除外，允许脱离接触）。
  */
 export function reachableTiles(state: GameState, unit: Unit): ReachableTile[] {
   const budget = unit.mpLeft;
@@ -67,6 +82,9 @@ export function reachableTiles(state: GameState, unit: Unit): ReachableTile[] {
     const occupant = unitAt(state, current.x, current.y);
     const stoppable = !occupant || occupant.id === unit.id;
     if (stoppable) results.push(current);
+
+    const isOrigin = current.x === unit.x && current.y === unit.y;
+    if (!isOrigin && inEnemyZoc(state, unit, current.x, current.y)) continue;
 
     for (const step of NEIGHBOURS) {
       const nx = current.x + step.x;
@@ -105,7 +123,18 @@ export function findPath(
   budget = Math.max(unit.mpLeft, 32),
 ): Vec2[] | null {
   if (from.x === to.x && from.y === to.y) return [{ x: from.x, y: from.y }];
+  // 先按控制区规则找；回放已结算的移动时敌情可能已变，退化为忽略控制区
+  return searchPath(state, unit, to, from, budget, true) ?? searchPath(state, unit, to, from, budget, false);
+}
 
+function searchPath(
+  state: GameState,
+  unit: Unit,
+  to: Vec2,
+  from: Vec2,
+  budget: number,
+  respectZoc: boolean,
+): Vec2[] | null {
   const key = (x: number, y: number) => y * state.width + x;
   const best = new Map<number, number>();
   const cameFrom = new Map<number, number>();
@@ -129,6 +158,9 @@ export function findPath(
       path.reverse();
       return path;
     }
+
+    const isOrigin = current.x === from.x && current.y === from.y;
+    if (respectZoc && !isOrigin && inEnemyZoc(state, unit, current.x, current.y)) continue;
 
     for (const step of NEIGHBOURS) {
       const nx = current.x + step.x;
@@ -155,7 +187,25 @@ export function findPath(
 export function attackRange(state: GameState, unit: Unit): { min: number; max: number } {
   const def = UNIT_TYPES[unit.type];
   const terrain = tileAt(state, unit.x, unit.y);
-  return { min: def.minRange, max: def.maxRange + terrain.rangeBonus };
+  const weaponBonus = WEAPONS[unit.weapon]?.rangeBonus ?? 0;
+  return {
+    min: Math.max(1, def.minRange + (WEAPONS[unit.weapon]?.minRangeBonus ?? 0)),
+    max: def.maxRange + terrain.rangeBonus + weaponBonus,
+  };
+}
+
+/** 当前站位上的全部攻击半径格子（含空地），供 UI 红圈叠加。 */
+export function attackRangeTiles(state: GameState, unit: Unit): Vec2[] {
+  const { min, max } = attackRange(state, unit);
+  const tiles: Vec2[] = [];
+  for (let y = Math.max(0, unit.y - max); y <= Math.min(state.height - 1, unit.y + max); y += 1) {
+    for (let x = Math.max(0, unit.x - max); x <= Math.min(state.width - 1, unit.x + max); x += 1) {
+      if (x === unit.x && y === unit.y) continue;
+      const distance = Math.abs(x - unit.x) + Math.abs(y - unit.y);
+      if (distance >= min && distance <= max) tiles.push({ x, y });
+    }
+  }
+  return tiles;
 }
 
 export function canAttack(state: GameState, attacker: Unit, defender: Unit): boolean {

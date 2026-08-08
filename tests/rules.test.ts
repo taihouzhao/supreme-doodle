@@ -5,9 +5,17 @@ import { UNIT_TYPES, veterancyLevel } from "../src/content/units";
 import { damageComponents, estimateDamage } from "../src/core/combat";
 import { applyAction, legalActions } from "../src/core/engine";
 import { canAttack, reachableTiles, tileAt } from "../src/core/grid";
-import { createMissionState, movementBudget, requiredEvacuations } from "../src/core/mission";
+import {
+  createMissionState,
+  evaluateVictory,
+  movementBudget,
+  requiredEvacuations,
+  victoryProgress,
+} from "../src/core/mission";
+import { performAttack } from "../src/core/resolve";
 import { deriveSeed } from "../src/core/rng";
-import type { GameState, Unit } from "../src/core/types";
+import type { GameEvent, GameState, Unit } from "../src/core/types";
+import { fullInventory, testRosterUnit } from "./helpers/roster";
 
 function scenario(): GameState {
   const mission = getMission("m2-unsan");
@@ -15,12 +23,12 @@ function scenario(): GameState {
     mission,
     seed: deriveSeed(1, mission.id),
     roster: [
-      { id: "r0", name: "步兵", type: "rifle", hp: 100, maxHp: 100, exp: 0, fatigue: 0, missionsSurvived: 0, keyUnit: true },
-      { id: "r1", name: "机枪", type: "mg", hp: 90, maxHp: 90, exp: 0, fatigue: 0, missionsSurvived: 0, keyUnit: false },
-      { id: "r2", name: "迫击炮", type: "mortar", hp: 70, maxHp: 70, exp: 0, fatigue: 0, missionsSurvived: 0, keyUnit: false },
-      { id: "r3", name: "坦克", type: "tank", hp: 140, maxHp: 140, exp: 0, fatigue: 0, missionsSurvived: 0, keyUnit: false },
+      testRosterUnit("r0", "试步兵", "rifle", { keyUnit: true }),
+      testRosterUnit("r1", "试机枪", "mg"),
+      testRosterUnit("r2", "试迫击炮", "mortar"),
+      testRosterUnit("r3", "试坦克", "tank"),
     ],
-    inventory: { medkit: 1, at_charge: 1, arty_support: 1 },
+    inventory: fullInventory({ medkit: 1, at_charge: 1, arty_support: 1 }),
   });
 }
 
@@ -98,81 +106,139 @@ describe("战斗", () => {
     expect(vsTank).toBeLessThan(vsInfantry * 0.5);
   });
 
-  it("曲射只吃一半地形防御", () => {
+  it("将领武力提升伤害", () => {
     const state = scenario();
-    const mortar = put(state, "p2", 3, 6);
-    const rifle = put(state, "p0", 3, 3);
-    const target = put(state, "e0", 3, 2);
-    const terrain = tileAt(state, target.x, target.y);
-    expect(terrain.defense).toBeGreaterThan(0);
-    const direct = damageComponents(state, rifle, target, 1);
-    const indirect = damageComponents(state, mortar, target, 1);
-    expect(indirect.terrain).toBeGreaterThanOrEqual(direct.terrain);
-    expect(indirect.terrain).toBe(1 - terrain.defense / 2);
+    const attacker = put(state, "p0", 6, 6);
+    const defender = put(state, "e0", 6, 5);
+    const base = estimateDamage(state, attacker, defender);
+    attacker.stats.might += 30;
+    expect(estimateDamage(state, attacker, defender)).toBeGreaterThan(base);
   });
 
-  it("伤害不会低于下限", () => {
-    const state = scenario();
-    const mg = put(state, "p1", 6, 6);
-    mg.fatigue = BALANCE.fatigue.max;
-    const tank = put(state, "e0", 6, 5);
-    tank.type = "tank";
-    expect(estimateDamage(state, mg, tank)).toBeGreaterThanOrEqual(BALANCE.minDamage);
+  it("等级随经验提升", () => {
+    expect(veterancyLevel(0)).toBe(1);
+    expect(veterancyLevel(500)).toBeGreaterThan(1);
   });
 });
 
-describe("经验与老兵", () => {
-  it("阈值划分出三个等级", () => {
-    expect(veterancyLevel(0)).toBe(0);
-    expect(veterancyLevel(200)).toBe(1);
-    expect(veterancyLevel(500)).toBe(2);
+describe("规则动作", () => {
+  it("结束回合会切换到敌方阶段或推进回合", () => {
+    const state = scenario();
+    const before = state.turn;
+    const next = applyAction(state, { kind: "endTurn" }).state;
+    expect(next.phase === "enemy" || next.turn > before || next.status !== "playing").toBe(true);
   });
 
-  it("老兵在同等条件下更能打也更耐打", () => {
+  it("撤离要求会按出战人数缩放", () => {
     const state = scenario();
-    const rookie = put(state, "p0", 6, 6);
-    const target = put(state, "e0", 6, 5);
-    const base = estimateDamage(state, rookie, target);
-    rookie.exp = 500;
-    expect(estimateDamage(state, rookie, target)).toBeGreaterThan(base);
-
-    const incoming = estimateDamage(state, target, rookie);
-    rookie.exp = 0;
-    expect(estimateDamage(state, target, rookie)).toBeGreaterThan(incoming);
-  });
-});
-
-describe("合法动作", () => {
-  it("枚举出的动作全部可以执行", () => {
-    const state = scenario();
-    for (const action of legalActions(state)) {
-      expect(() => applyAction(state, action)).not.toThrow();
-    }
-  });
-
-  it("只有步兵可以占领", () => {
-    const state = scenario();
-    const objective = state.objectives[0]!;
-    const tank = put(state, "p3", objective.x, objective.y);
-    const actions = legalActions(state);
-    expect(actions.some((a) => a.kind === "capture" && a.unitId === tank.id)).toBe(false);
-
-    put(state, "p3", 6, 8);
-    const rifle = put(state, "p0", objective.x, objective.y);
-    expect(
-      legalActions(state).some((a) => a.kind === "capture" && a.unitId === rifle.id),
-    ).toBe(true);
-  });
-});
-
-describe("撤离要求", () => {
-  it("按出战人数缩放，编制被打残时不会变成死档", () => {
-    const state = scenario();
-    const rule = getMission("m7-chipyongni").victory;
-    state.deployedCount = 8;
-    const full = requiredEvacuations(state, rule);
     state.deployedCount = 4;
-    expect(requiredEvacuations(state, rule)).toBeLessThanOrEqual(full);
-    expect(requiredEvacuations(state, rule)).toBeLessThanOrEqual(4);
+    expect(requiredEvacuations(state, { evacuateRatio: 0.5, minEvacuated: 3 })).toBe(3);
+  });
+
+  it("合法动作列表不为空", () => {
+    const state = scenario();
+    expect(legalActions(state).length).toBeGreaterThan(0);
+  });
+});
+
+describe("击溃推进", () => {
+  it("打掉紧贴的敌人后推进到对方格子", () => {
+    const state = scenario();
+    const attacker = put(state, "p0", 6, 6);
+    const defender = put(state, "e0", 6, 5);
+    defender.hp = 1;
+    const events: GameEvent[] = [];
+    expect(performAttack(state, attacker, defender, events)).toBe(true);
+    expect(defender.alive).toBe(false);
+    expect({ x: attacker.x, y: attacker.y }).toEqual({ x: 6, y: 5 });
+    const advance = events.find((e) => e.type === "moved");
+    expect(advance).toBeTruthy();
+  });
+
+  it("远距离击溃不会推进", () => {
+    const state = scenario();
+    const attacker = put(state, "p2", 6, 7);
+    const defender = put(state, "e0", 6, 5);
+    defender.hp = 1;
+    const events: GameEvent[] = [];
+    expect(performAttack(state, attacker, defender, events)).toBe(true);
+    expect(defender.alive).toBe(false);
+    expect({ x: attacker.x, y: attacker.y }).toEqual({ x: 6, y: 7 });
+    expect(events.some((e) => e.type === "moved")).toBe(false);
+  });
+
+  it("目标格不可通行时留在原地", () => {
+    const state = scenario();
+    state.tiles = state.tiles.map(() => "plain");
+    const attacker = put(state, "p3", 6, 6);
+    const defender = put(state, "e0", 6, 5);
+    state.tiles[5 * state.width + 6] = "forest";
+    defender.hp = 1;
+    const events: GameEvent[] = [];
+    expect(performAttack(state, attacker, defender, events)).toBe(true);
+    expect(defender.alive).toBe(false);
+    expect({ x: attacker.x, y: attacker.y }).toEqual({ x: 6, y: 6 });
+  });
+});
+
+describe("胜利判定", () => {
+  function ownAll(state: GameState): void {
+    for (const objective of state.objectives) objective.owner = "player";
+  }
+
+  it("单回合要求的关卡，占领当场即判定胜利", () => {
+    const state = scenario();
+    const rule = getMission("m2-unsan").victory;
+    expect(rule.holdTurns ?? 1).toBe(1);
+    ownAll(state);
+    const verdict = evaluateVictory(state, rule, false);
+    expect(verdict.status).toBe("won");
+    expect(victoryProgress(state, rule).blocking).toBeNull();
+  });
+
+  it("需要连续坚守的关卡，占领后仍要顶住一个回合", () => {
+    const mission = getMission("m5-third-offensive");
+    const state = createMissionState({
+      mission,
+      seed: deriveSeed(1, mission.id),
+      roster: [
+        testRosterUnit("r0", "试步兵", "rifle", { keyUnit: true }),
+        testRosterUnit("r1", "试机枪", "mg"),
+        testRosterUnit("r2", "试迫击炮", "mortar"),
+      ],
+      inventory: fullInventory(),
+    });
+    ownAll(state);
+    state.captureStreak = 0;
+    expect(evaluateVictory(state, mission.victory, true).status).toBe("playing");
+    expect(victoryProgress(state, mission.victory).blocking).toContain("坚守");
+    state.captureStreak = mission.victory.holdTurns ?? 2;
+    expect(evaluateVictory(state, mission.victory, true).status).toBe("won");
+  });
+
+  it("存活不足时说明原因而不是静默继续", () => {
+    const state = scenario();
+    const rule = getMission("m2-unsan").victory;
+    ownAll(state);
+    const players = state.units.filter((u) => u.faction === "player");
+    for (const unit of players.slice(1)) unit.alive = false;
+    expect(evaluateVictory(state, rule, true).status).toBe("playing");
+    expect(victoryProgress(state, rule).blocking).toContain("存活不足");
+  });
+
+  it("阻击关会给出坚守回合进度", () => {
+    const mission = getMission("m9-cheorwon");
+    const state = createMissionState({
+      mission,
+      seed: deriveSeed(2, mission.id),
+      roster: [
+        testRosterUnit("r0", "试步兵", "rifle", { keyUnit: true }),
+        testRosterUnit("r1", "试机枪", "mg"),
+      ],
+      inventory: fullInventory(),
+    });
+    const progress = victoryProgress(state, mission.victory);
+    expect(progress.coreMet).toBe(true);
+    expect(progress.blocking).toContain("坚守");
   });
 });

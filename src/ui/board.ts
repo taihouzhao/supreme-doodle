@@ -1,23 +1,29 @@
 import { TERRAIN } from "../content/terrain";
-import { veterancyLevel } from "../content/units";
 import type { Faction, GameState, Objective, TerrainId, Unit, UnitTypeId, Vec2 } from "../core/types";
-import { ITEM_ICON, TERRAIN_ICON, UI_ICON, UNIT_ICON } from "./assets";
+import { ITEM_ICON, UI_ICON, UNIT_ICON, terrainIcon } from "./assets";
 import { imageCache } from "./imageCache";
 import type { VisualFrame } from "./presentation";
 import { FACTION_STYLE, HIGHLIGHT, TERRAIN_STYLE } from "./theme";
 
-/** 决战朝鲜式大格：整图通常大于视口，靠拖拽浏览 */
-const TARGET_CSS_TILE = 72;
+/** 大格但不过分：整图通常略大于视口，靠拖拽 / 方向键浏览 */
+const TARGET_CSS_TILE = 76;
+const MIN_CSS_TILE = 52;
 const PAN_THRESHOLD = 8;
 /** 镜头可越出地图边缘的缓冲（格），避免贴边单位被 UI/视口裁切且拖不动 */
 const EDGE_BUFFER_TILES = 1.25;
+const KEY_PAN_STEP = 0.85;
 
 export interface BoardOverlay {
   selectedUnitId: string | null;
   moveTiles: Set<number>;
+  /** 攻击半径（含空地） */
   attackTiles: Set<number>;
+  /** 当前可点选的敌方目标格 */
+  attackTargets: Set<number>;
   itemTiles: Set<number>;
   inspected: Vec2 | null;
+  /** 任务目标点击后的地名高亮 */
+  highlightObjectiveId: string | null;
   visual: VisualFrame | null;
   /** 目标是否算「已完成控制」：己方持有 */
   objectiveDone: (objective: Objective) => boolean;
@@ -27,8 +33,10 @@ export const EMPTY_OVERLAY: BoardOverlay = {
   selectedUnitId: null,
   moveTiles: new Set(),
   attackTiles: new Set(),
+  attackTargets: new Set(),
   itemTiles: new Set(),
   inspected: null,
+  highlightObjectiveId: null,
   visual: null,
   objectiveDone: (o) => o.owner === "player",
 };
@@ -39,7 +47,7 @@ export class Board {
   /** 设备像素下的格子边长 */
   private tile = 32;
   /** CSS 像素下的格子边长（决战朝鲜式大格） */
-  private cssTile = TARGET_CSS_TILE;
+  private cssTile: number = TARGET_CSS_TILE;
   /** 视口左上角在地图上的 CSS 坐标 */
   private cameraX = 0;
   private cameraY = 0;
@@ -71,11 +79,41 @@ export class Board {
       this.onAssetsReady?.();
     });
     this.bindPointer();
+    this.bindKeyboard();
   }
 
   /** 点击格子（非拖拽）回调 */
   setTapHandler(handler: (tile: Vec2) => void): void {
     this.onTap = handler;
+  }
+
+  /** 方向键平移（供战斗界面使用） */
+  panByTiles(dx: number, dy: number): void {
+    if (!this.state) return;
+    this.cameraX += dx * this.cssTile * KEY_PAN_STEP;
+    this.cameraY += dy * this.cssTile * KEY_PAN_STEP;
+    this.clampCamera();
+    this.syncOrigin();
+    this.draw();
+  }
+
+  private bindKeyboard(): void {
+    window.addEventListener("keydown", (event) => {
+      if (!this.state) return;
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      let dx = 0;
+      let dy = 0;
+      if (event.key === "ArrowLeft" || event.key === "a" || event.key === "A") dx = -1;
+      else if (event.key === "ArrowRight" || event.key === "d" || event.key === "D") dx = 1;
+      else if (event.key === "ArrowUp" || event.key === "w" || event.key === "W") dy = -1;
+      else if (event.key === "ArrowDown" || event.key === "s" || event.key === "S") dy = 1;
+      else return;
+      event.preventDefault();
+      this.panByTiles(dx, dy);
+    });
   }
 
   render(state: GameState, overlay: BoardOverlay, missionKey?: string): void {
@@ -186,10 +224,13 @@ export class Board {
 
     this.viewCssW = availableWidth;
     this.viewCssH = availableHeight;
-    // 保证至少约 5～6 格宽可见，又不会把整张图塞进屏幕
-    const fitW = availableWidth / Math.max(5.5, state.width * 0.42);
-    const fitH = availableHeight / Math.max(4.5, state.height * 0.42);
-    this.cssTile = Math.max(48, Math.min(TARGET_CSS_TILE, Math.floor(Math.min(fitW, fitH))));
+    // 保证一屏能看到大半张地图，同时格子仍然够大能认清兵种
+    const fitW = availableWidth / Math.max(7, state.width * 0.72);
+    const fitH = availableHeight / Math.max(6, state.height * 0.72);
+    this.cssTile = Math.max(
+      MIN_CSS_TILE,
+      Math.min(TARGET_CSS_TILE, Math.floor(Math.min(fitW, fitH))),
+    );
 
     this.canvas.style.width = `${availableWidth}px`;
     this.canvas.style.height = `${availableHeight}px`;
@@ -309,12 +350,17 @@ export class Board {
       }
     }
 
+    this.drawPlaceLabels(state, x0, y0, x1, y1);
+
     for (const objective of state.objectives) {
       this.drawObjective(objective);
     }
 
     for (const item of state.fieldItems) {
       this.drawFieldItem(item.x, item.y);
+    }
+    for (const weapon of state.fieldWeapons) {
+      this.drawFieldItem(weapon.x, weapon.y);
     }
 
     this.drawOverlay(state);
@@ -329,11 +375,13 @@ export class Board {
     }
 
     for (const unit of state.units) {
-      if (!unit.alive || unit.evacuated) continue;
-      this.drawUnit(unit);
+      if (unit.evacuated) continue;
+      const linger = visual?.lingerUnits[unit.id];
+      if (!unit.alive && !linger) continue;
+      this.drawUnit(unit, linger?.alpha ?? 1, linger?.hp);
     }
 
-    this.drawTargetMarks(state, this.overlay.attackTiles);
+    this.drawTargetMarks(state, this.overlay.attackTargets);
     this.drawTargetMarks(state, this.overlay.itemTiles);
 
     if (visual?.strikeLine) {
@@ -342,9 +390,44 @@ export class Board {
     if (visual?.impact && visual.impactUnitId) {
       this.drawImpactForUnit(state, visual);
     }
+    if (visual?.routBurst) {
+      this.drawRoutBurst(state, visual);
+    }
+    if (visual?.promoteBurst) {
+      this.drawPromoteBurst(state, visual);
+    }
 
     ctx.restore();
     this.drawMinimap(state, dpr);
+  }
+
+  /** 真实地名标注：让「云山」「三所里」这类地标出现在棋盘上而不只在简报里 */
+  private drawPlaceLabels(
+    state: GameState,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): void {
+    if (state.places.length === 0) return;
+    const { ctx, tile } = this;
+    ctx.save();
+    ctx.font = `600 ${Math.round(tile * 0.2)}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const place of state.places) {
+      if (place.x < x0 || place.x > x1 || place.y < y0 || place.y > y1) continue;
+      const cx = place.x * tile + tile / 2;
+      const cy = place.y * tile + tile * 0.86;
+      const w = ctx.measureText(place.name).width + tile * 0.16;
+      ctx.fillStyle = "rgba(22, 26, 20, 0.62)";
+      ctx.beginPath();
+      ctx.roundRect(cx - w / 2, cy - tile * 0.11, w, tile * 0.22, tile * 0.05);
+      ctx.fill();
+      ctx.fillStyle = "rgba(240, 236, 214, 0.92)";
+      ctx.fillText(place.name, cx, cy);
+    }
+    ctx.restore();
   }
 
   /** 固定种子下完全静态的天气层：既表现战场气候，又不影响棋子可读性。 */
@@ -395,9 +478,8 @@ export class Board {
         }
       }
     } else if (state.weather === "snow") {
-      ctx.fillStyle = "rgba(226, 235, 237, 0.34)";
-      ctx.fillRect(left, top, width, height);
-      ctx.fillStyle = "rgba(255, 255, 250, 0.75)";
+      // 地面已换成雪地贴图，这里只补飘雪颗粒，不再压一层白蒙版
+      ctx.fillStyle = "rgba(255, 255, 250, 0.8)";
       for (let y = y0; y <= y1; y += 1) {
         for (let x = x0; x <= x1; x += 1) {
           const hash = (x * 31 + y * 17 + state.seed) >>> 0;
@@ -470,13 +552,30 @@ export class Board {
     const { ctx, tile } = this;
     const terrainId = state.tiles[y * state.width + x]!;
     const style = TERRAIN_STYLE[terrainId];
+    const snow = state.weather === "snow";
 
-    ctx.fillStyle = style.fill;
-    ctx.fillRect(x * tile, y * tile, tile, tile);
+    // 雪天连底色一起换成积雪色，靠贴图而不是蒙版表现天气
+    ctx.fillStyle = snow ? snowFill(style.fill) : style.fill;
+    if (terrainId === "cliff" || terrainId === "fort" || terrainId === "forest") {
+      // 非规则四边形边缘，打破「全是整齐小方块」的观感
+      const j = tile * 0.08;
+      const hash = (x * 13 + y * 29) & 7;
+      const ox = (hash & 1) === 0 ? j : -j * 0.4;
+      const oy = (hash & 2) === 0 ? j * 0.5 : -j;
+      ctx.beginPath();
+      ctx.moveTo(x * tile + ox, y * tile);
+      ctx.lineTo(x * tile + tile, y * tile + oy);
+      ctx.lineTo(x * tile + tile - ox * 0.5, y * tile + tile);
+      ctx.lineTo(x * tile, y * tile + tile - oy * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.fillRect(x * tile, y * tile, tile, tile);
+    }
 
-    // 决战朝鲜式：整格贴图铺满
+    // 整格贴图铺满
     const drawn = this.drawImage(
-      TERRAIN_ICON[terrainId],
+      terrainIcon(terrainId, state.weather),
       x * tile,
       y * tile,
       tile,
@@ -485,7 +584,7 @@ export class Board {
     );
     if (!drawn) this.drawTerrainIconFallback(terrainId, x, y);
 
-    ctx.strokeStyle = "rgba(20, 24, 16, 0.18)";
+    ctx.strokeStyle = snow ? "rgba(60, 70, 78, 0.22)" : "rgba(20, 24, 16, 0.18)";
     ctx.lineWidth = Math.max(1, tile * 0.02);
     ctx.strokeRect(x * tile + 0.5, y * tile + 0.5, tile - 1, tile - 1);
   }
@@ -567,6 +666,7 @@ export class Board {
   private drawObjective(objective: Objective): void {
     const { ctx, tile } = this;
     const done = this.overlay.objectiveDone(objective);
+    const focused = this.overlay.highlightObjectiveId === objective.id;
     const colour =
       objective.owner === "player"
         ? HIGHLIGHT.objectivePlayer
@@ -574,15 +674,22 @@ export class Board {
           ? HIGHLIGHT.objectiveEnemy
           : HIGHLIGHT.objectiveNeutral;
     ctx.save();
+    if (focused) {
+      ctx.fillStyle = HIGHLIGHT.objectiveFocus;
+      ctx.fillRect(objective.x * tile, objective.y * tile, tile, tile);
+      ctx.strokeStyle = HIGHLIGHT.selected;
+      ctx.lineWidth = Math.max(3, tile * 0.12);
+      ctx.strokeRect(objective.x * tile + 2, objective.y * tile + 2, tile - 4, tile - 4);
+    }
     ctx.strokeStyle = colour;
     ctx.lineWidth = Math.max(2.5, tile * 0.1);
     if (done) ctx.setLineDash([]);
     else ctx.setLineDash([tile * 0.16, tile * 0.1]);
     ctx.strokeRect(objective.x * tile + 3, objective.y * tile + 3, tile - 6, tile - 6);
 
-    const label = objective.name.slice(0, 2) || "标";
+    const label = focused ? objective.name : objective.name.slice(0, 2) || "标";
     ctx.fillStyle = colour;
-    ctx.font = `700 ${Math.round(tile * 0.22)}px "Noto Sans SC", sans-serif`;
+    ctx.font = `700 ${Math.round(tile * (focused ? 0.2 : 0.22))}px "Noto Sans SC", sans-serif`;
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText(label, objective.x * tile + tile * 0.12, objective.y * tile + tile * 0.1);
@@ -635,47 +742,131 @@ export class Board {
     ctx.restore();
   }
 
+  /**
+   * 移动格铺蓝底并只在区域外沿描边；攻击半径改用红色斜线阴影。
+   * 两者重叠时读作「蓝底 + 红斜线」，不会互相盖住。
+   */
   private drawOverlay(state: GameState): void {
     const { ctx, tile } = this;
-    const paint = (indices: Set<number>, fill: string, edge: string) => {
+
+    const fillRegion = (indices: Set<number>, fill: string) => {
+      ctx.fillStyle = fill;
       for (const index of indices) {
         const x = index % state.width;
         const y = Math.floor(index / state.width);
-        ctx.fillStyle = fill;
         ctx.fillRect(x * tile, y * tile, tile, tile);
-        ctx.strokeStyle = edge;
-        ctx.lineWidth = Math.max(2, tile * 0.08);
-        ctx.strokeRect(x * tile + 1.5, y * tile + 1.5, tile - 3, tile - 3);
       }
     };
 
-    paint(this.overlay.moveTiles, HIGHLIGHT.move, HIGHLIGHT.moveEdge);
-    paint(this.overlay.itemTiles, HIGHLIGHT.item, HIGHLIGHT.attackEdge);
-    paint(this.overlay.attackTiles, HIGHLIGHT.attack, HIGHLIGHT.attackEdge);
+    /** 只描区域外沿，避免每格一个方框把地图切碎 */
+    const outlineRegion = (indices: Set<number>, color: string, width: number, inset: number) => {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = "square";
+      ctx.beginPath();
+      for (const index of indices) {
+        const x = index % state.width;
+        const y = Math.floor(index / state.width);
+        const left = x * tile + inset;
+        const top = y * tile + inset;
+        const right = (x + 1) * tile - inset;
+        const bottom = (y + 1) * tile - inset;
+        if (!indices.has(index - state.width) || y === 0) {
+          ctx.moveTo(left, top);
+          ctx.lineTo(right, top);
+        }
+        if (!indices.has(index + state.width) || y === state.height - 1) {
+          ctx.moveTo(left, bottom);
+          ctx.lineTo(right, bottom);
+        }
+        if (x === 0 || !indices.has(index - 1)) {
+          ctx.moveTo(left, top);
+          ctx.lineTo(left, bottom);
+        }
+        if (x === state.width - 1 || !indices.has(index + 1)) {
+          ctx.moveTo(right, top);
+          ctx.lineTo(right, bottom);
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    const hatchRegion = (indices: Set<number>, color: string) => {
+      const step = Math.max(6, tile * 0.22);
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1.5, tile * 0.045);
+      for (const index of indices) {
+        const x = (index % state.width) * tile;
+        const y = Math.floor(index / state.width) * tile;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, tile, tile);
+        ctx.clip();
+        ctx.beginPath();
+        for (let offset = -tile; offset <= tile; offset += step) {
+          ctx.moveTo(x + offset, y + tile);
+          ctx.lineTo(x + offset + tile, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+    };
+
+    fillRegion(this.overlay.moveTiles, HIGHLIGHT.move);
+    outlineRegion(this.overlay.moveTiles, HIGHLIGHT.moveEdge, Math.max(2, tile * 0.05), 1);
+
+    hatchRegion(this.overlay.attackTiles, HIGHLIGHT.attackHatch);
+    outlineRegion(this.overlay.attackTiles, HIGHLIGHT.attackEdge, Math.max(2, tile * 0.06), 2.5);
+
+    fillRegion(this.overlay.itemTiles, HIGHLIGHT.item);
+    hatchRegion(this.overlay.itemTiles, HIGHLIGHT.itemHatch);
+    outlineRegion(this.overlay.itemTiles, HIGHLIGHT.attackEdge, Math.max(2, tile * 0.05), 2.5);
   }
 
   /** 目标标记画在单位之上，否则会被单位圆形盖住 */
   private drawTargetMarks(state: GameState, indices: Set<number>): void {
     const { ctx, tile } = this;
     for (const index of indices) {
-      const cx = (index % state.width) * tile + tile / 2;
-      const cy = Math.floor(index / state.width) * tile + tile / 2;
-      const radius = tile * 0.46;
+      const x = (index % state.width) * tile;
+      const y = Math.floor(index / state.width) * tile;
+      const cx = x + tile / 2;
+      const cy = y + tile / 2;
+      const radius = tile * 0.44;
       ctx.save();
-      ctx.strokeStyle = HIGHLIGHT.attackEdge;
-      ctx.lineWidth = Math.max(2, tile * 0.07);
+
+      // 双层描边保证在任何地形与单位色上都看得清
+      ctx.lineWidth = Math.max(3, tile * 0.09);
+      ctx.strokeStyle = "rgba(20, 10, 8, 0.55)";
       ctx.beginPath();
       ctx.arc(cx, cy, radius, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.lineWidth = Math.max(1.6, tile * 0.05);
+      ctx.strokeStyle = "#ffd9cf";
       ctx.beginPath();
-      for (const [dx, dy] of [
-        [-1, 0],
-        [1, 0],
-        [0, -1],
-        [0, 1],
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 四角括号，突出「这是可打的目标」
+      const arm = tile * 0.18;
+      const pad = tile * 0.08;
+      ctx.lineWidth = Math.max(2, tile * 0.06);
+      ctx.strokeStyle = HIGHLIGHT.attackEdge;
+      ctx.beginPath();
+      for (const [sx, sy] of [
+        [1, 1],
+        [-1, 1],
+        [1, -1],
+        [-1, -1],
       ] as const) {
-        ctx.moveTo(cx + dx * radius, cy + dy * radius);
-        ctx.lineTo(cx + dx * radius * 0.62, cy + dy * radius * 0.62);
+        const px = sx > 0 ? x + pad : x + tile - pad;
+        const py = sy > 0 ? y + pad : y + tile - pad;
+        ctx.moveTo(px + sx * arm, py);
+        ctx.lineTo(px, py);
+        ctx.lineTo(px, py + sy * arm);
       }
       ctx.stroke();
       ctx.restore();
@@ -696,7 +887,7 @@ export class Board {
     return faction === "player" ? "#e7efe9" : "#f6e9e6";
   }
 
-  private drawUnit(unit: Unit): void {
+  private drawUnit(unit: Unit, alpha = 1, hpOverride?: number): void {
     const { ctx, tile } = this;
     const style = FACTION_STYLE[unit.faction];
     const { cx, cy } = this.unitDrawPos(unit);
@@ -712,7 +903,7 @@ export class Board {
     }
 
     ctx.save();
-    ctx.globalAlpha = acted ? 0.55 : 1;
+    ctx.globalAlpha = (acted ? 0.55 : 1) * alpha;
 
     ctx.beginPath();
     ctx.arc(cx, cy, radius, 0, Math.PI * 2);
@@ -754,7 +945,11 @@ export class Board {
     }
 
     const hp =
-      visual?.hpDisplay[unit.id] !== undefined ? visual.hpDisplay[unit.id]! : unit.hp;
+      hpOverride !== undefined
+        ? hpOverride
+        : visual?.hpDisplay[unit.id] !== undefined
+          ? visual.hpDisplay[unit.id]!
+          : unit.hp;
     const barWidth = tile * 0.72;
     const barHeight = Math.max(3, tile * 0.09);
     const barX = cx - barWidth / 2;
@@ -765,11 +960,11 @@ export class Board {
     ctx.fillStyle = ratio > 0.55 ? "#5aa469" : ratio > 0.28 ? "#d9a326" : "#c8503c";
     ctx.fillRect(barX, barY, barWidth * ratio, barHeight);
 
-    const level = veterancyLevel(unit.exp);
-    for (let i = 0; i < level; i += 1) {
+    const pips = Math.min(5, Math.max(1, Math.ceil(unit.level / 4)));
+    for (let i = 0; i < pips; i += 1) {
       ctx.beginPath();
       ctx.arc(cx - tile * 0.22 + i * tile * 0.16, cy - radius * 0.85, tile * 0.055, 0, Math.PI * 2);
-      ctx.fillStyle = "#f5d76e";
+      ctx.fillStyle = unit.commanderKind === "story" ? "#9ec5e8" : "#f5d76e";
       ctx.fill();
       ctx.strokeStyle = "rgba(40, 32, 10, 0.7)";
       ctx.lineWidth = 1;
@@ -903,10 +1098,108 @@ export class Board {
     ctx.fillText(impact.text, cx, y);
     ctx.restore();
   }
+
+  /** 溃散：红色横幅 + 叉号，确保单位消失前有明确交代 */
+  private drawRoutBurst(state: GameState, visual: VisualFrame): void {
+    const burst = visual.routBurst;
+    if (!burst) return;
+    const unit = state.units.find((u) => u.id === burst.unitId);
+    if (!unit) return;
+    const { cx, cy } = this.unitDrawPos(unit);
+    const { ctx, tile } = this;
+    ctx.save();
+    ctx.globalAlpha = burst.alpha;
+
+    const cross = tile * 0.26;
+    ctx.strokeStyle = "rgba(28, 12, 10, 0.7)";
+    ctx.lineWidth = Math.max(4, tile * 0.11);
+    ctx.beginPath();
+    ctx.moveTo(cx - cross, cy - cross);
+    ctx.lineTo(cx + cross, cy + cross);
+    ctx.moveTo(cx + cross, cy - cross);
+    ctx.lineTo(cx - cross, cy + cross);
+    ctx.stroke();
+    ctx.strokeStyle = "#ff8f7a";
+    ctx.lineWidth = Math.max(2, tile * 0.055);
+    ctx.beginPath();
+    ctx.moveTo(cx - cross, cy - cross);
+    ctx.lineTo(cx + cross, cy + cross);
+    ctx.moveTo(cx + cross, cy - cross);
+    ctx.lineTo(cx - cross, cy + cross);
+    ctx.stroke();
+
+    const label = burst.text;
+    ctx.font = `700 ${Math.round(tile * 0.3)}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const y = cy - tile * 0.52;
+    const w = ctx.measureText(label).width + tile * 0.24;
+    ctx.fillStyle = "rgba(120, 24, 18, 0.88)";
+    ctx.beginPath();
+    ctx.roundRect(cx - w / 2, y - tile * 0.16, w, tile * 0.32, tile * 0.08);
+    ctx.fill();
+    ctx.strokeStyle = "#ffb9a8";
+    ctx.lineWidth = Math.max(1.5, tile * 0.02);
+    ctx.stroke();
+    ctx.fillStyle = "#fff1ec";
+    ctx.fillText(label, cx, y);
+    ctx.restore();
+  }
+
+  /** 晋升：金色横幅弹出 */
+  private drawPromoteBurst(state: GameState, visual: VisualFrame): void {
+    const burst = visual.promoteBurst;
+    if (!burst) return;
+    const unit = state.units.find((u) => u.id === burst.unitId);
+    if (!unit) return;
+    const { cx, cy } = this.unitDrawPos(unit);
+    const { ctx, tile } = this;
+    ctx.save();
+    ctx.globalAlpha = burst.alpha;
+    ctx.translate(cx, cy - tile * 0.62);
+    ctx.scale(burst.scale, burst.scale);
+    ctx.font = `700 ${Math.round(tile * 0.3)}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const w = ctx.measureText(burst.text).width + tile * 0.3;
+    ctx.fillStyle = "rgba(70, 52, 12, 0.9)";
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -tile * 0.18, w, tile * 0.36, tile * 0.09);
+    ctx.fill();
+    ctx.strokeStyle = "#f5d76e";
+    ctx.lineWidth = Math.max(1.8, tile * 0.025);
+    ctx.stroke();
+    ctx.fillStyle = "#ffeeb4";
+    ctx.fillText(burst.text, 0, 0);
+
+    // 星芒点出「这是好事」
+    ctx.strokeStyle = "#f5d76e";
+    ctx.lineWidth = Math.max(1.5, tile * 0.02);
+    ctx.beginPath();
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (Math.PI * 2 * i) / 6;
+      const r0 = tile * 0.24;
+      const r1 = tile * 0.34;
+      ctx.moveTo(Math.cos(angle) * r0, Math.sin(angle) * r0 * 0.6);
+      ctx.lineTo(Math.cos(angle) * r1, Math.sin(angle) * r1 * 0.6);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
 }
 
 export function terrainName(state: GameState, x: number, y: number): string {
   return TERRAIN[state.tiles[y * state.width + x]!].name;
+}
+
+/** 把地形底色推向积雪色，作为雪地贴图的兜底底板 */
+function snowFill(hex: string): string {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  const mix = (channel: number, target: number) => Math.round(channel + (target - channel) * 0.72);
+  return `rgb(${mix(r, 246)}, ${mix(g, 249)}, ${mix(b, 253)})`;
 }
 
 /** Expose item icon path for panel buttons (canvas uses UI field-item). */

@@ -1,4 +1,4 @@
-import { UNIT_TYPES, VETERANCY, veterancyLevel } from "../content/units";
+import { UNIT_TYPES, VETERANCY } from "../content/units";
 import { COUNTER_RATIO, estimateDamageFrom } from "../core/combat";
 import {
   attackableTargets,
@@ -113,7 +113,10 @@ export function dangerMap(state: GameState): number[] {
 
   for (const enemy of livingUnits(state, "enemy")) {
     const def = UNIT_TYPES[enemy.type];
-    const threat = def.attack * (1 + VETERANCY.attackPerLevel * veterancyLevel(enemy.exp));
+    const threat =
+      def.attack *
+      (1 + VETERANCY.attackPerLevel * Math.max(0, enemy.level - 1)) *
+      (1 + Math.max(0, enemy.stats.might - 40) * 0.006);
     // 每个敌人只算一次最强火力，再把所有敌人叠加，用来体现集火风险
     const perEnemy = new Array<number>(map.length).fill(0);
 

@@ -1,11 +1,17 @@
-import { CHAPTERS, commanderFromUnitName, rosterUnitName, type ChapterConfig } from "../content/chapter";
-import { designation } from "../content/naming";
+import {
+  CHAPTERS,
+  buildCompanionStats,
+  companionSeedExp,
+  rosterUnitName,
+  type ChapterConfig,
+} from "../content/chapter";
 import type { MissionConfig } from "../content/missions/schema";
-import { UNIT_TYPES, veterancyLevel } from "../content/units";
-import { effectiveMaxHp } from "./combat";
+import { levelFromExp, rankName, veterancyLevel } from "../content/units";
+import { WEAPONS, bestWeapon, defaultWeaponFor, weaponFits } from "../content/weapons";
+import { effectiveMaxHp } from "./commander";
 import { createMissionState, emptyInventory, type RosterUnit } from "./mission";
 import { deriveSeed, nextRandom } from "./rng";
-import type { GameState, ItemId, MissionStatus } from "./types";
+import type { GameState, ItemId, MissionStatus, WeaponId } from "./types";
 
 export interface MissionOutcome {
   missionId: string;
@@ -18,6 +24,7 @@ export interface MissionOutcome {
   permanentLosses: string[];
   returningUnits: string[];
   replacements: string[];
+  weaponsGained: WeaponId[];
   rosterAfter: number;
   veteransAfter: number;
 }
@@ -29,6 +36,7 @@ export interface CampaignState {
   missionIndex: number;
   roster: RosterUnit[];
   inventory: Record<ItemId, number>;
+  armory: WeaponId[];
   history: MissionOutcome[];
   serial: number;
   status: "running" | "complete";
@@ -40,19 +48,55 @@ function chapterOf(chapterId: string): ChapterConfig {
   return chapter;
 }
 
-export function createCampaign(chapterId: string, seed: number): CampaignState {
-  const chapter = chapterOf(chapterId);
-  const roster: RosterUnit[] = chapter.startingRoster.map((spec, index) => ({
-    id: `r${index}`,
-    name: rosterUnitName(spec),
+function rosterFromSpec(
+  id: string,
+  spec: {
+    commander: string;
+    type: RosterUnit["type"];
+    level: number;
+    baseStats?: Parameters<typeof buildCompanionStats>[0]["baseStats"];
+    weapon?: WeaponId;
+    keyUnit?: boolean;
+  },
+): RosterUnit {
+  const full = {
+    commander: spec.commander,
     type: spec.type,
-    hp: effectiveMaxHp(spec.type, spec.exp),
-    maxHp: effectiveMaxHp(spec.type, spec.exp),
-    exp: spec.exp,
+    level: spec.level,
+    baseStats: spec.baseStats,
+    weapon: spec.weapon,
+    keyUnit: spec.keyUnit,
+  };
+  const stats = buildCompanionStats(full);
+  const weapon = spec.weapon ?? defaultWeaponFor(spec.type, "early");
+  const exp = companionSeedExp(spec.level);
+  const draft: RosterUnit = {
+    id,
+    name: rosterUnitName(full),
+    type: spec.type,
+    hp: 1,
+    maxHp: 1,
+    exp,
     fatigue: 0,
     missionsSurvived: 0,
     keyUnit: spec.keyUnit ?? false,
-  }));
+    commanderKind: "companion",
+    commanderName: spec.commander,
+    level: spec.level,
+    rank: rankName(spec.level),
+    stats,
+    weapon,
+  };
+  draft.maxHp = effectiveMaxHp(draft);
+  draft.hp = draft.maxHp;
+  return draft;
+}
+
+export function createCampaign(chapterId: string, seed: number): CampaignState {
+  const chapter = chapterOf(chapterId);
+  const roster: RosterUnit[] = chapter.startingRoster.map((spec, index) =>
+    rosterFromSpec(`r${index}`, spec),
+  );
 
   return {
     chapterId,
@@ -61,6 +105,7 @@ export function createCampaign(chapterId: string, seed: number): CampaignState {
     missionIndex: 0,
     roster,
     inventory: { ...emptyInventory(), ...chapter.startingInventory },
+    armory: [...chapter.startingArmory],
     history: [],
     serial: roster.length,
     status: "running",
@@ -72,11 +117,54 @@ export function currentMission(campaign: CampaignState): MissionConfig | null {
   return chapter.missions[campaign.missionIndex] ?? null;
 }
 
+/** 自动换装只兜底：玩家手动挑过的武器（且仍然适配）保持不动 */
+function autoEquip(roster: RosterUnit[], armory: WeaponId[]): void {
+  for (const unit of roster) {
+    const keepManual = unit.manualWeapon && weaponFits(unit.weapon, unit.type);
+    if (!keepManual) {
+      unit.weapon = bestWeapon(unit.type, [...armory, unit.weapon], unit.weapon);
+      unit.manualWeapon = false;
+    }
+    unit.maxHp = effectiveMaxHp(unit);
+    unit.hp = Math.min(unit.hp, unit.maxHp);
+  }
+}
+
+/** 军械库里这位将领可以换的武器（含当前装备），按评分从高到低 */
+export function equippableWeapons(campaign: CampaignState, unitId: string): WeaponId[] {
+  const unit = campaign.roster.find((u) => u.id === unitId);
+  if (!unit) return [];
+  const pool = new Set<WeaponId>([unit.weapon, ...campaign.armory]);
+  return [...pool]
+    .filter((id) => weaponFits(id, unit.type))
+    .sort((a, b) => WEAPONS[b].score - WEAPONS[a].score);
+}
+
+/** 手动换装：只在出击前可用，落在花名册上跨关保留 */
+export function equipWeapon(
+  campaign: CampaignState,
+  unitId: string,
+  weapon: WeaponId,
+): CampaignState {
+  const index = campaign.roster.findIndex((u) => u.id === unitId);
+  const unit = campaign.roster[index];
+  if (!unit) return campaign;
+  if (!weaponFits(weapon, unit.type)) return campaign;
+  if (weapon !== unit.weapon && !campaign.armory.includes(weapon)) return campaign;
+
+  const roster = [...campaign.roster];
+  const updated: RosterUnit = { ...unit, weapon, manualWeapon: true };
+  updated.maxHp = effectiveMaxHp(updated);
+  updated.hp = Math.min(updated.hp, updated.maxHp);
+  roster[index] = updated;
+  return { ...campaign, roster };
+}
+
 /** 补充新兵，保证前一关重创后仍有可行解；每位主将仍只带一支部队 */
 function replenish(campaign: CampaignState, chapter: ChapterConfig): string[] {
   const added: string[] = [];
   let budget = chapter.maxReplacementsPerMission;
-  const usedCommanders = new Set(campaign.roster.map((unit) => commanderFromUnitName(unit.name)));
+  const usedCommanders = new Set(campaign.roster.map((unit) => unit.commanderName));
   let reserveIndex = 0;
   while (campaign.roster.length < chapter.minRoster && budget > 0) {
     while (
@@ -93,17 +181,13 @@ function replenish(campaign: CampaignState, chapter: ChapterConfig): string[] {
     const id = `r${campaign.serial}`;
     campaign.serial += 1;
     budget -= 1;
-    campaign.roster.push({
-      id,
-      name: designation(commander, "rifle"),
+    const unit = rosterFromSpec(id, {
+      commander,
       type: "rifle",
-      hp: effectiveMaxHp("rifle", 0),
-      maxHp: effectiveMaxHp("rifle", 0),
-      exp: 0,
-      fatigue: 0,
-      missionsSurvived: 0,
-      keyUnit: false,
+      level: 1,
+      weapon: defaultWeaponFor("rifle", "early"),
     });
+    campaign.roster.push(unit);
     added.push(id);
   }
   return added;
@@ -123,12 +207,17 @@ export function startMission(campaign: CampaignState): MissionStart {
 
   const next = structuredClone(campaign);
   const replacements = replenish(next, chapter);
+  autoEquip(next.roster, next.armory);
 
-  // 老兵优先上阵，出场顺序稳定
+  // 老兵优先上阵；剧情将领另占剩余出生点
+  const companionSlots = Math.max(
+    1,
+    mission.playerSpawns.length - (mission.storyAllies?.length ?? 0),
+  );
   const deployed = next.roster
     .slice()
     .sort((a, b) => b.exp - a.exp || a.id.localeCompare(b.id))
-    .slice(0, mission.playerSpawns.length);
+    .slice(0, companionSlots);
 
   const state = createMissionState({
     mission,
@@ -146,6 +235,7 @@ export function finishMission(
   replacements: string[] = [],
 ): { campaign: CampaignState; outcome: MissionOutcome } {
   const chapter = chapterOf(campaign.chapterId);
+  const mission = currentMission(campaign);
   const next = structuredClone(campaign);
   const won = finalState.status === "won";
   const lossChance = won ? chapter.permanentLossChance.won : chapter.permanentLossChance.lost;
@@ -168,24 +258,35 @@ export function finishMission(
         maxHp: deployed.maxHp,
         exp: deployed.exp,
         fatigue: deployed.fatigue,
+        level: deployed.level,
+        rank: deployed.rank,
+        stats: deployed.stats,
+        weapon: deployed.weapon,
         missionsSurvived: rosterUnit.missionsSurvived + 1,
       });
       continue;
     }
 
-    // 高大全是连续战役主角：单关被击溃会导致该关失败，但叙事上按重伤后送处理，
-    // 不参与随机永久减员，确保人物跨12关稳定存在。
+    // 高大全是连续战役主角：单关被击溃会导致该关失败，但叙事上按重伤后送处理
     if (rosterUnit.keyUnit) {
       const exp = Math.round(deployed.exp * 0.9);
+      const level = levelFromExp(exp);
       returningUnits.push(rosterUnit.id);
-      roster.push({
+      const restored: RosterUnit = {
         ...rosterUnit,
         hp: Math.max(25, chapter.returningUnit.hp),
-        maxHp: effectiveMaxHp(rosterUnit.type, exp),
         exp,
+        level,
+        rank: rankName(level),
+        stats: deployed.stats,
+        weapon: deployed.weapon,
         fatigue: deployed.fatigue,
         missionsSurvived: rosterUnit.missionsSurvived + 1,
-      });
+        maxHp: 1,
+      };
+      restored.maxHp = effectiveMaxHp(restored);
+      restored.hp = Math.min(restored.hp, restored.maxHp);
+      roster.push(restored);
       continue;
     }
 
@@ -197,23 +298,41 @@ export function finishMission(
     }
 
     const exp = Math.round(deployed.exp * (1 - chapter.returningUnit.expPenalty));
+    const level = levelFromExp(exp);
     returningUnits.push(rosterUnit.id);
-    roster.push({
+    const restored: RosterUnit = {
       ...rosterUnit,
       hp: chapter.returningUnit.hp,
-      maxHp: effectiveMaxHp(rosterUnit.type, exp),
       exp,
+      level,
+      rank: rankName(level),
+      stats: deployed.stats,
+      weapon: deployed.weapon,
       fatigue: deployed.fatigue,
       missionsSurvived: rosterUnit.missionsSurvived + 1,
-    });
+      maxHp: 1,
+    };
+    restored.maxHp = effectiveMaxHp(restored);
+    restored.hp = Math.min(restored.hp, restored.maxHp);
+    roster.push(restored);
   }
 
   // 关卡之间的休整
   for (const unit of roster) {
+    unit.maxHp = effectiveMaxHp(unit);
     const recovered = Math.round(unit.maxHp * chapter.restRecovery.hp);
     unit.hp = Math.min(unit.maxHp, unit.hp + recovered);
     unit.fatigue = Math.round(unit.fatigue * (1 - chapter.restRecovery.fatigue));
   }
+
+  const weaponsGained: WeaponId[] = [
+    ...finalState.pendingWeapons,
+    ...(won ? mission?.weaponRewards ?? [] : []),
+  ];
+  for (const weapon of weaponsGained) {
+    if (!next.armory.includes(weapon)) next.armory.push(weapon);
+  }
+  autoEquip(roster, next.armory);
 
   next.roster = roster;
   next.inventory = { ...finalState.inventory };
@@ -232,8 +351,9 @@ export function finishMission(
     permanentLosses,
     returningUnits,
     replacements,
+    weaponsGained,
     rosterAfter: roster.length,
-    veteransAfter: roster.filter((u) => veterancyLevel(u.exp) >= 1).length,
+    veteransAfter: roster.filter((u) => veterancyLevel(u.exp) >= 3).length,
   };
 
   next.history.push(outcome);
@@ -247,7 +367,7 @@ export function rosterSummary(campaign: CampaignState): string {
   return campaign.roster
     .map(
       (u) =>
-        `${u.name}(${UNIT_TYPES[u.type].name} ${u.hp}/${u.maxHp} 经验${Math.round(u.exp)})`,
+        `${u.name}(${u.rank}Lv${u.level} ${u.hp}/${u.maxHp} ${WEAPONS[u.weapon].name})`,
     )
     .join("、");
 }

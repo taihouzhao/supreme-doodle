@@ -1,4 +1,15 @@
-import type { Faction, ItemId, MissionKind, UnitTypeId, Vec2, Weather } from "../../core/types";
+import type {
+  CommanderStats,
+  Faction,
+  ItemId,
+  MissionKind,
+  PlaceLabel,
+  ScriptedRule,
+  UnitTypeId,
+  Vec2,
+  WeaponId,
+  Weather,
+} from "../../core/types";
 
 export interface HistoricalCommander {
   id: string;
@@ -24,6 +35,17 @@ export interface EnemySpec {
   hp?: number;
   name?: string;
   equipment?: string;
+  weapon?: WeaponId;
+}
+
+/** 剧情将领：本关客串出战，不进入跨关花名册。 */
+export interface StoryAllySpec {
+  commander: string;
+  type: UnitTypeId;
+  level: number;
+  weapon?: WeaponId;
+  stats?: Partial<CommanderStats>;
+  equipment?: string;
 }
 
 /** 受约束随机：只允许在预算内替换敌军编成 */
@@ -42,6 +64,12 @@ export interface ItemDropSpec {
   x: number;
   y: number;
   options: ItemId[];
+}
+
+export interface WeaponDropSpec {
+  x: number;
+  y: number;
+  options: WeaponId[];
 }
 
 export interface ObjectiveSpec {
@@ -72,6 +100,19 @@ export interface VictoryRule {
   requireKeyUnit?: boolean;
 }
 
+/** 地图上的地名标注，只做展示，让战场读起来像那段战史 */
+export type PlaceLabelSpec = PlaceLabel;
+
+/**
+ * 史实脚本事件。用少量可结算的规则表现各关的历史特征，
+ * 而不是只靠简报文字描述：
+ * - nightAssault 夜袭近战加成
+ * - barrage 敌方炮火准备
+ * - coldAttrition 严寒冻伤减员
+ * - supplyWindow 携行弹药耗尽后的攻击衰减（礼拜攻势）
+ */
+export type ScriptedEventSpec = ScriptedRule;
+
 export interface MissionConfig {
   id: string;
   name: string;
@@ -86,15 +127,26 @@ export interface MissionConfig {
   mapNote?: string;
   weather?: WeatherSpec;
   playerEquipment?: Partial<Record<UnitTypeId, string>>;
+  /** 装备时代，影响默认武器 */
+  equipmentEra?: "early" | "late";
   maxTurns: number;
   map: string[];
   playerSpawns: Vec2[];
+  /** 本关临时配属的剧情将领 */
+  storyAllies?: StoryAllySpec[];
   enemies: EnemySpec[];
   variantSlots: VariantSlot[];
   waves: WaveSpec[];
   objectives: ObjectiveSpec[];
   evacZone: Vec2[];
   itemDrops: ItemDropSpec[];
+  weaponDrops?: WeaponDropSpec[];
+  /** 通关后写入军械库的武器 */
+  weaponRewards?: WeaponId[];
+  /** 地图上标注的真实地名 */
+  places?: PlaceLabelSpec[];
+  /** 史实脚本事件 */
+  scripted?: ScriptedEventSpec[];
   /** 旧关卡兼容；新关卡统一使用 weather。 */
   rainChance?: number;
   victory: VictoryRule;

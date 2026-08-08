@@ -27,14 +27,17 @@ export interface Factor {
 export function breakdownFactors(breakdown: DamageBreakdown): Factor[] {
   const entries: [string, number][] = [
     ["兵种克制", breakdown.matchup],
-    ["经验", breakdown.veterancy],
+    ["等级", breakdown.veterancy],
+    ["将领", breakdown.commander],
+    ["武器", breakdown.weapon],
     ["疲劳", breakdown.fatigue],
     ["夹击", breakdown.flank],
     ["目标地形", breakdown.terrain],
-    ["目标经验", breakdown.defenderVeterancy],
+    ["目标防护", breakdown.defenderVeterancy],
     ["天气", breakdown.weather],
     ["架设", breakdown.setup],
     ["居高临下", breakdown.highGround],
+    ["战史加成", breakdown.scripted],
   ];
   return entries
     .filter(([, value]) => Math.abs(value - 1) > 0.001)
@@ -49,6 +52,8 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     }
     case "routed":
       return `${unitLabel(state, event.unitId)} 被击溃`;
+    case "levelUp":
+      return `${unitLabel(state, event.unitId)} 晋升 ${event.rank}（Lv.${event.from}→${event.to}）`;
     case "captured": {
       const objective = state.objectives.find((o) => o.id === event.objectiveId);
       const name = objective?.name ?? event.objectiveId;
@@ -61,10 +66,14 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     }
     case "itemPicked":
       return `${unitLabel(state, event.unitId)} 拾取了${ITEMS[event.item].name}`;
+    case "weaponPicked":
+      return `${unitLabel(state, event.unitId)} 缴获了武器`;
     case "reinforced":
       return `联合军增援抵达（${event.unitIds.length} 个单位）`;
     case "evacuated":
       return `${unitLabel(state, event.unitId)} 已撤离，完整保留`;
+    case "scripted":
+      return `${event.note}（${event.unitIds.length} 个单位受影响）`;
     case "missionEnded":
       return `任务结束：${event.reason}`;
     default:
