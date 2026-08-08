@@ -389,10 +389,11 @@ export class View {
     const goals = lines
       .map((line) => {
         const active = state.highlightObjectiveId === line.id ? " is-active" : "";
+        const objectiveLabel = `${line.name}：${line.detail}`;
         const content = `${ico(line.done ? UI_ICON.objDone : UI_ICON.objPending, "ico ico--xs")}<span>${esc(line.name)}<small>${esc(line.detail)}</small></span>`;
         return line.locatable
-          ? `<button type="button" class="hud-top__obj${line.done ? " is-done" : ""}${active}" data-action="focus-objective" data-value="${esc(line.id)}">${content}</button>`
-          : `<span class="hud-top__obj hud-top__obj--status${line.done ? " is-done" : ""}">${content}</span>`;
+          ? `<button type="button" class="hud-top__obj${line.done ? " is-done" : ""}${active}" data-action="focus-objective" data-value="${esc(line.id)}" title="${esc(objectiveLabel)}" aria-label="${esc(objectiveLabel)}">${content}</button>`
+          : `<span class="hud-top__obj hud-top__obj--status${line.done ? " is-done" : ""}" title="${esc(objectiveLabel)}" aria-label="${esc(objectiveLabel)}">${content}</span>`;
       })
       .join("");
     const weather = weatherPresentation(battle.weather);
@@ -408,17 +409,17 @@ export class View {
         <div class="hud-top__goals">${goals}</div>
       </div>
       <div class="hud-top__meta">
-        <span>T<strong>${battle.turn}</strong>/${battle.maxTurns}</span>
-        <span class="hud-top__pill" title="${esc(state.mission?.weather?.detail ?? "")}">${ico(weather.icon, "ico ico--xs ico--badge")}${weather.label}</span>
-        <span class="hud-top__pill">${ico(UI_ICON.factionPva, "ico ico--xs ico--badge")}${livingUnits(battle, "player").length}</span>
-        <span class="hud-top__pill">${ico(UI_ICON.factionUn, "ico ico--xs ico--badge")}${livingUnits(battle, "enemy").length}</span>
-        <button type="button" class="hud-top__pill hud-top__speed" data-action="cycle-fx-speed" title="交战动画倍速">${state.fxSpeed}×</button>
-        ${state.fxBusy ? `<button type="button" class="hud-top__pill hud-top__skip" data-action="skip-fx">跳过</button>` : ""}
+        <span class="hud-top__turn" title="当前回合 / 最大回合">T<strong>${battle.turn}</strong>/${battle.maxTurns}</span>
+        <span class="hud-top__pill" title="${esc(state.mission?.weather?.detail ?? "")}" aria-label="天气：${esc(weather.label)}">${ico(weather.icon, "ico ico--xs ico--badge")}<span class="hud-top__label">${weather.label}</span></span>
+        <span class="hud-top__pill" title="我方存活部队" aria-label="我方存活部队：${livingUnits(battle, "player").length}">${ico(UI_ICON.factionPva, "ico ico--xs ico--badge")}<span class="hud-top__label">${livingUnits(battle, "player").length}</span></span>
+        <span class="hud-top__pill" title="敌方存活部队" aria-label="敌方存活部队：${livingUnits(battle, "enemy").length}">${ico(UI_ICON.factionUn, "ico ico--xs ico--badge")}<span class="hud-top__label">${livingUnits(battle, "enemy").length}</span></span>
+        <button type="button" class="hud-top__pill hud-top__speed" data-action="cycle-fx-speed" title="交战动画倍速" aria-label="交战动画倍速">${state.fxSpeed}×</button>
+        ${state.fxBusy ? `<button type="button" class="hud-top__pill hud-top__skip" data-action="skip-fx" title="跳过动画" aria-label="跳过动画"><span class="hud-top__skip-label">跳过</span><span class="hud-top__skip-icon" aria-hidden="true">»</span></button>` : ""}
       </div>
       <div class="hud-top__actions">
-        ${unacted > 0 ? `<button class="btn hud-top__next" data-action="next-unit" title="快捷键 N">下一支</button>` : ""}
-        <button class="btn btn--primary hud-top__end" data-action="end-turn">
-          ${ico(UI_ICON.actEndTurn, "ico ico--btn")}${esc(endLabel)}
+        ${unacted > 0 ? `<button class="btn hud-top__next" data-action="next-unit" title="定位下一支未行动部队（N）" aria-label="定位下一支未行动部队">${ico(UI_ICON.keyUnit, "ico ico--btn")}<span class="hud-top__action-label">下一支</span></button>` : ""}
+        <button class="btn btn--primary hud-top__end" data-action="end-turn" title="${esc(endLabel)}" aria-label="${esc(endLabel)}">
+          ${ico(UI_ICON.actEndTurn, "ico ico--btn")}<span class="hud-top__action-label">${esc(endLabel)}</span>
         </button>
       </div>
     `;

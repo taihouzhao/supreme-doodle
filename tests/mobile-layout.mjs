@@ -93,6 +93,7 @@ async function measure(page) {
         height: rect.height,
         right: rect.right,
         bottom: rect.bottom,
+        centerY: rect.y + rect.height / 2,
         clientWidth: element.clientWidth,
         scrollWidth: element.scrollWidth,
       };
@@ -100,7 +101,7 @@ async function measure(page) {
 
     const objectives = [...document.querySelectorAll(".hud-top__obj")].map((element) => {
       const rect = element.getBoundingClientRect();
-      return { width: rect.width, height: rect.height };
+      return { width: rect.width, height: rect.height, y: rect.y };
     });
     const oneCharacterWidth = parseFloat(getComputedStyle(document.querySelector(".hud-top__name")).fontSize);
 
@@ -123,21 +124,20 @@ async function measure(page) {
 function assertMobileLayout(layout) {
   const { width, height } = layout.viewport;
   assert.ok(layout.hud.width <= width, `HUD overflows viewport: ${layout.hud.width} > ${width}`);
-  assert.ok(layout.hud.height <= Math.min(220, height * 0.28), `HUD is too tall: ${layout.hud.height}px`);
-  assert.ok(layout.name.width >= layout.oneCharacterWidth * 8, `Mission title collapsed to ${layout.name.width}px`);
-  assert.ok(layout.name.height <= 28, `Mission title wrapped vertically: ${layout.name.height}px`);
-  assert.ok(layout.goals.width >= width * 0.8, `Objectives collapsed to ${layout.goals.width}px`);
+  assert.ok(layout.hud.height <= 82, `HUD is not compact: ${layout.hud.height}px`);
+  assert.ok(layout.name.width >= layout.oneCharacterWidth * 3, `Mission title collapsed to ${layout.name.width}px`);
+  assert.ok(layout.name.height <= 24, `Mission title wrapped vertically: ${layout.name.height}px`);
+  assert.ok(layout.goals.width >= 24 && layout.goals.height <= 34, "Objective icon strip is missing or too tall");
   assert.ok(layout.objectives.length >= 1, "No objectives rendered");
   for (const objective of layout.objectives) {
-    assert.ok(objective.width >= (width <= 380 ? width * 0.8 : width * 0.35), `Objective collapsed to ${objective.width}px`);
-    assert.ok(objective.height <= 44, `Objective wrapped too tall: ${objective.height}px`);
+    assert.ok(objective.width >= 18 && objective.height <= 34, `Objective icon collapsed: ${objective.width}×${objective.height}px`);
   }
-  assert.ok(layout.meta.y >= layout.goals.y, "Battle metadata overlaps objectives");
-  assert.ok(layout.actions.y >= layout.meta.y, "Actions overlap battle metadata");
-  assert.ok(layout.next.width >= 70 && layout.next.height >= 40, "Next-unit touch target is undersized");
-  assert.ok(layout.end.width >= 130 && layout.end.height >= 40, "End-turn touch target is undersized");
+  const rowY = [layout.name.centerY, layout.goals.centerY, layout.meta.centerY, layout.actions.centerY];
+  assert.ok(Math.max(...rowY) - Math.min(...rowY) <= 3, `HUD controls wrapped into multiple rows: ${rowY.join(",")}`);
+  assert.ok(layout.next.width >= 36 && layout.next.height >= 40, "Next-unit touch target is undersized");
+  assert.ok(layout.end.width >= 40 && layout.end.height >= 40, "End-turn touch target is undersized");
   assert.ok(layout.actions.right <= width + 0.5, "Actions overflow the right edge");
-  assert.ok(layout.map.height >= height * 0.55, `Map only has ${layout.map.height}px of vertical space`);
+  assert.ok(layout.map.height >= height * 0.78, `Map only has ${layout.map.height}px of vertical space`);
   assert.ok(layout.map.bottom <= height + 0.5, "Map overflows the viewport");
 }
 
