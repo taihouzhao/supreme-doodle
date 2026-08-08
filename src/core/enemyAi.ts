@@ -1,8 +1,21 @@
 import { UNIT_TYPES } from "../content/units";
 import { COUNTER_RATIO, estimateDamageFrom } from "./combat";
-import { livingUnits, manhattan, reachableTiles, tileAt, unitAt } from "./grid";
+import {
+  livingUnits,
+  manhattan,
+  reachableTiles,
+  resupplyTargets,
+  tileAt,
+  unitAt,
+} from "./grid";
 import type { ReachableTile } from "./grid";
-import { performAttack, performCapture, performMove, performWait } from "./resolve";
+import {
+  performAttack,
+  performCapture,
+  performMove,
+  performResupply,
+  performWait,
+} from "./resolve";
 import type { GameEvent, GameState, Unit, Vec2 } from "./types";
 
 /** 防守型关卡里，敌人不会离开阵地太远去追人 */
@@ -138,6 +151,30 @@ export function runEnemyPhase(state: GameState, events: GameEvent[]): void {
     if (state.status !== "playing") return;
 
     if (performCapture(state, unit, events)) continue;
+
+    // 后勤：优先补充重伤友军
+    if (unit.type === "logistics") {
+      const needy = resupplyTargets(state, unit)
+        .slice()
+        .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp || a.id.localeCompare(b.id));
+      if (needy[0] && performResupply(state, unit, needy[0], events)) continue;
+      const wounded = livingUnits(state, "enemy")
+        .filter((ally) => ally.id !== unit.id && ally.hp < ally.maxHp * 0.7)
+        .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp || a.id.localeCompare(b.id))[0];
+      if (wounded) {
+        const tiles = reachableTiles(state, unit);
+        const approach = bestApproachTile(state, unit, tiles, wounded);
+        if (approach && approach.cost > 0) {
+          performMove(state, unit, { x: approach.x, y: approach.y }, events);
+        }
+        const after = resupplyTargets(state, unit).sort(
+          (a, b) => a.hp / a.maxHp - b.hp / b.maxHp || a.id.localeCompare(b.id),
+        )[0];
+        if (after) performResupply(state, unit, after, events);
+        else if (unit.alive && !unit.hasActed) performWait(state, unit);
+        continue;
+      }
+    }
 
     const tiles = reachableTiles(state, unit);
     const retake = lostObjective(state, unit);

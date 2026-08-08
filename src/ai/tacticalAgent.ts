@@ -2,7 +2,14 @@ import { ITEMS } from "../content/items";
 import { UNIT_TYPES } from "../content/units";
 import { getMission } from "../content/missions";
 import { COUNTER_RATIO, estimateDamageFrom, itemDamage } from "../core/combat";
-import { livingUnits, manhattan, orthogonalNeighbours, tileAt, unitAt } from "../core/grid";
+import {
+  livingUnits,
+  manhattan,
+  orthogonalNeighbours,
+  resupplyTargets,
+  tileAt,
+  unitAt,
+} from "../core/grid";
 import type { ReachableTile } from "../core/grid";
 import type { Rng } from "../core/rng";
 import type { Action, GameState, Unit, Vec2 } from "../core/types";
@@ -279,6 +286,8 @@ function priority(state: GameState, unit: Unit): number {
   if (unit.keyUnit) score += state.missionKind === "withdraw" ? 60 : 40;
   if (UNIT_TYPES[unit.type].indirect) score += 30;
   if (unit.type === "mg") score += 20;
+  if (unit.type === "artillery") score += 15;
+  if (unit.type === "logistics") score += 8;
   if (unit.type === "tank") score += 10;
   return score;
 }
@@ -301,6 +310,39 @@ export const tacticalAgent: Agent = {
 
     if (standingObjective(state, unit)) {
       return { kind: "capture", unitId: unit.id };
+    }
+
+    // 后勤：优先补充重伤/高疲劳友军，再接近伤员
+    if (unit.type === "logistics") {
+      const needy = resupplyTargets(state, unit)
+        .slice()
+        .sort(
+          (a, b) =>
+            a.hp / a.maxHp - b.hp / b.maxHp ||
+            b.fatigue - a.fatigue ||
+            a.id.localeCompare(b.id),
+        );
+      if (needy[0]) return { kind: "resupply", unitId: unit.id, targetId: needy[0].id };
+      const wounded = livingUnits(state, unit.faction)
+        .filter((ally) => ally.id !== unit.id && (ally.hp < ally.maxHp * 0.75 || ally.fatigue >= 25))
+        .sort(
+          (a, b) =>
+            a.hp / a.maxHp - b.hp / b.maxHp ||
+            b.fatigue - a.fatigue ||
+            a.id.localeCompare(b.id),
+        )[0];
+      if (wounded && unit.mpLeft > 0) {
+        let best: { x: number; y: number; dist: number } | null = null;
+        for (const tile of stoppableTiles(state, unit)) {
+          if (tile.cost === 0) continue;
+          const dist = manhattan(tile, wounded);
+          if (!best || dist < best.dist) best = { x: tile.x, y: tile.y, dist };
+        }
+        if (best && best.dist < manhattan(unit, wounded)) {
+          return { kind: "move", unitId: unit.id, to: { x: best.x, y: best.y } };
+        }
+      }
+      return { kind: "wait", unitId: unit.id };
     }
 
     // 突破关后半段：能占领的部队优先压向未占目标，避免清场后超时

@@ -66,6 +66,13 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
       if (event.heal > 0) return `${unitLabel(state, event.unitId)} 使用${name}，回复 ${event.heal}`;
       return `${unitLabel(state, event.unitId)} 使用${name}，造成 ${event.damage} 伤害`;
     }
+    case "resupplied": {
+      const parts = [
+        event.heal > 0 ? `回复 ${event.heal}` : "",
+        event.fatigueRelief > 0 ? `疲劳 -${event.fatigueRelief}` : "",
+      ].filter(Boolean);
+      return `${unitLabel(state, event.unitId)} 补充 ${unitLabel(state, event.targetId)}（${parts.join("，")}）`;
+    }
     case "itemPicked":
       return `${unitLabel(state, event.unitId)} 拾取了${ITEMS[event.item].name}`;
     case "weaponPicked":

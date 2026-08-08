@@ -4,7 +4,7 @@ import { getMission } from "../src/content/missions";
 import { UNIT_TYPES, veterancyLevel } from "../src/content/units";
 import { canCounter, damageComponents, estimateDamage } from "../src/core/combat";
 import { applyAction, legalActions } from "../src/core/engine";
-import { canAttack, reachableTiles, tileAt } from "../src/core/grid";
+import { canAttack, reachableTiles, resupplyTargets, tileAt } from "../src/core/grid";
 import {
   createMissionState,
   evaluateVictory,
@@ -12,7 +12,7 @@ import {
   requiredEvacuations,
   victoryProgress,
 } from "../src/core/mission";
-import { performAttack } from "../src/core/resolve";
+import { performAttack, performResupply } from "../src/core/resolve";
 import { deriveSeed } from "../src/core/rng";
 import type { GameEvent, GameState, Unit } from "../src/core/types";
 import { fullInventory, testRosterUnit } from "./helpers/roster";
@@ -42,7 +42,7 @@ function put(state: GameState, unitId: string, x: number, y: number): Unit {
 describe("地形与移动", () => {
   it("车辆无法进入森林与河流", () => {
     const state = scenario();
-    const tank = put(state, "p3", 6, 8);
+    const tank = put(state, "p3", 10, 6);
     tank.mpLeft = 20;
     const tiles = reachableTiles(state, tank);
     for (const tile of tiles) {
@@ -76,6 +76,31 @@ describe("射程", () => {
     expect(canAttack(state, mortar, enemy)).toBe(true);
   });
 
+  it("迫击炮最大射程为 3，不再覆盖远距离", () => {
+    const state = scenario();
+    const mortar = put(state, "p2", 6, 5);
+    const enemy = put(state, "e0", 6, 1);
+    expect(canAttack(state, mortar, enemy)).toBe(false);
+    put(state, "e0", 6, 2);
+    expect(canAttack(state, mortar, enemy)).toBe(true);
+  });
+
+  it("炮兵极慢且有最小射程，后勤不能进攻", () => {
+    const state = scenario();
+    const arty = put(state, "p0", 2, 5);
+    arty.type = "artillery";
+    arty.weapon = "type75";
+    const near = put(state, "e0", 4, 5);
+    expect(canAttack(state, arty, near)).toBe(false);
+    put(state, "e0", 7, 5);
+    expect(canAttack(state, arty, near)).toBe(true);
+
+    const logistics = put(state, "p1", 3, 5);
+    logistics.type = "logistics";
+    logistics.weapon = "supply_cart";
+    expect(canAttack(state, logistics, near)).toBe(false);
+  });
+
   it("高地为站立单位提供额外射程", () => {
     const state = scenario();
     const hillIndex = state.tiles.findIndex((terrain) => terrain === "hill");
@@ -84,6 +109,25 @@ describe("射程", () => {
     expect(tileAt(state, hill.x, hill.y).rangeBonus).toBe(1);
     const enemy = put(state, "e0", hill.x, Math.min(state.height - 1, hill.y + 3));
     expect(canAttack(state, mg, enemy)).toBe(true);
+  });
+});
+
+describe("后勤补充", () => {
+  it("邻接伤员可补充生命并降低疲劳", () => {
+    const state = scenario();
+    const logistics = put(state, "p1", 5, 5);
+    logistics.type = "logistics";
+    logistics.weapon = "supply_cart";
+    const ally = put(state, "p0", 5, 6);
+    ally.hp = 40;
+    ally.fatigue = 30;
+    expect(resupplyTargets(state, logistics).map((u) => u.id)).toContain(ally.id);
+    const events: GameEvent[] = [];
+    expect(performResupply(state, logistics, ally, events)).toBe(true);
+    expect(ally.hp).toBe(68);
+    expect(ally.fatigue).toBe(12);
+    expect(logistics.hasActed).toBe(true);
+    expect(events.some((e) => e.type === "resupplied")).toBe(true);
   });
 });
 

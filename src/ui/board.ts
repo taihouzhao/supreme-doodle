@@ -20,6 +20,8 @@ export interface BoardOverlay {
   attackTiles: Set<number>;
   /** 当前可点选的敌方目标格 */
   attackTargets: Set<number>;
+  /** 后勤可补充的友军格 */
+  resupplyTiles: Set<number>;
   itemTiles: Set<number>;
   inspected: Vec2 | null;
   /** 任务目标点击后的地名高亮 */
@@ -34,6 +36,7 @@ export const EMPTY_OVERLAY: BoardOverlay = {
   moveTiles: new Set(),
   attackTiles: new Set(),
   attackTargets: new Set(),
+  resupplyTiles: new Set(),
   itemTiles: new Set(),
   inspected: null,
   highlightObjectiveId: null,
@@ -385,6 +388,7 @@ export class Board {
     }
 
     this.drawTargetMarks(state, this.overlay.attackTargets);
+    this.drawTargetMarks(state, this.overlay.resupplyTiles);
     this.drawTargetMarks(state, this.overlay.itemTiles);
 
     if (visual?.strikeLine) {
@@ -825,6 +829,10 @@ export class Board {
     hatchRegion(this.overlay.attackTiles, HIGHLIGHT.attackHatch);
     outlineRegion(this.overlay.attackTiles, HIGHLIGHT.attackEdge, Math.max(2, tile * 0.06), 2.5);
 
+    fillRegion(this.overlay.resupplyTiles, HIGHLIGHT.resupply);
+    hatchRegion(this.overlay.resupplyTiles, HIGHLIGHT.resupplyHatch);
+    outlineRegion(this.overlay.resupplyTiles, HIGHLIGHT.resupplyEdge, Math.max(2, tile * 0.05), 2.5);
+
     fillRegion(this.overlay.itemTiles, HIGHLIGHT.item);
     hatchRegion(this.overlay.itemTiles, HIGHLIGHT.itemHatch);
     outlineRegion(this.overlay.itemTiles, HIGHLIGHT.attackEdge, Math.max(2, tile * 0.05), 2.5);
@@ -1057,6 +1065,31 @@ export class Board {
         ctx.beginPath();
         ctx.arc(cx + radius * 0.18, cy - radius * 0.42, radius * 0.1, 0, Math.PI * 2);
         ctx.fill();
+        break;
+      }
+      case "artillery": {
+        ctx.beginPath();
+        ctx.moveTo(cx - radius * 0.4, cy + radius * 0.3);
+        ctx.lineTo(cx + radius * 0.35, cy - radius * 0.25);
+        ctx.lineWidth = Math.max(2, radius * 0.22);
+        ctx.stroke();
+        ctx.lineWidth = Math.max(1.4, radius * 0.14);
+        ctx.beginPath();
+        ctx.arc(cx - radius * 0.28, cy + radius * 0.28, radius * 0.16, 0, Math.PI * 2);
+        ctx.arc(cx - radius * 0.05, cy + radius * 0.32, radius * 0.16, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "logistics": {
+        const w = radius * 0.9;
+        const h = radius * 0.55;
+        ctx.strokeRect(cx - w / 2, cy - h / 2, w, h);
+        ctx.beginPath();
+        ctx.moveTo(cx - w * 0.15, cy);
+        ctx.lineTo(cx + w * 0.15, cy);
+        ctx.moveTo(cx, cy - h * 0.25);
+        ctx.lineTo(cx, cy + h * 0.25);
+        ctx.stroke();
         break;
       }
       case "tank": {
