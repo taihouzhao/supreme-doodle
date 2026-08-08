@@ -34,6 +34,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Mobile browser layout
+        run: npm run test:mobile
+
       - name: Balance gates (smoke)
         # 小样本下胜率标准差会偏大；CI 只做方向性冒烟，正式报告用 npm run sim
         run: npm run sim -- --seeds=80 --campaign-seeds=20 --quiet

@@ -415,10 +415,12 @@ export class View {
         <button type="button" class="hud-top__pill hud-top__speed" data-action="cycle-fx-speed" title="交战动画倍速">${state.fxSpeed}×</button>
         ${state.fxBusy ? `<button type="button" class="hud-top__pill hud-top__skip" data-action="skip-fx">跳过</button>` : ""}
       </div>
-      ${unacted > 0 ? `<button class="btn hud-top__next" data-action="next-unit" title="快捷键 N">下一支</button>` : ""}
-      <button class="btn btn--primary hud-top__end" data-action="end-turn">
-        ${ico(UI_ICON.actEndTurn, "ico ico--btn")}${esc(endLabel)}
-      </button>
+      <div class="hud-top__actions">
+        ${unacted > 0 ? `<button class="btn hud-top__next" data-action="next-unit" title="快捷键 N">下一支</button>` : ""}
+        <button class="btn btn--primary hud-top__end" data-action="end-turn">
+          ${ico(UI_ICON.actEndTurn, "ico ico--btn")}${esc(endLabel)}
+        </button>
+      </div>
     `;
   }
 

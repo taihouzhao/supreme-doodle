@@ -81,6 +81,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Mobile browser layout
+        run: npm run test:mobile
+
       - name: Sync dist/ to R2
         run: npm run deploy:r2
 

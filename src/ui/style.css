@@ -194,6 +194,13 @@ body {
   color: var(--ink);
 }
 
+.hud-top__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-shrink: 0;
+}
+
 .hud-top__pill {
   display: inline-flex;
   align-items: center;
@@ -1576,7 +1583,7 @@ select:focus-visible,
     padding: 0.35rem 0.4rem;
   }
 
-  .hud-top__end {
+  .hud-top__actions {
     margin-left: auto;
   }
 
@@ -1622,8 +1629,89 @@ select:focus-visible,
 }
 
 @media (max-width: 620px) {
+  .hud-top {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "left"
+      "meta"
+      "actions";
+    align-items: stretch;
+    gap: 0.25rem;
+    padding: 0.38rem 0.45rem 0.45rem;
+  }
+
+  .hud-top__left {
+    grid-area: left;
+    width: 100%;
+  }
+
+  .hud-top__name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .hud-top__goals {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.18rem 0.3rem;
+    width: 100%;
+  }
+
+  .hud-top__obj {
+    min-width: 0;
+    width: 100%;
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .hud-top__obj > span {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    line-height: 1.2;
+  }
+
+  .hud-top__obj > span,
+  .hud-top__obj small {
+    max-width: 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
   .hud-top__obj small {
     display: block;
+  }
+
+  .hud-top__meta {
+    grid-area: meta;
+    width: 100%;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 0.22rem 0.4rem;
+    white-space: normal;
+  }
+
+  .hud-top__actions {
+    grid-area: actions;
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    margin-left: 0;
+  }
+
+  .hud-top__next {
+    flex: 0 1 7rem;
+  }
+
+  .hud-top__end {
+    flex: 0 1 12rem;
+    margin-left: 0;
   }
 
   .hud-sheet {
@@ -1654,6 +1742,23 @@ select:focus-visible,
   .hud-top__next,
   .hud-top__end {
     min-height: 40px;
+  }
+}
+
+@media (max-width: 380px) {
+  .hud-top__goals {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hud-top__obj > span {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.25rem;
+  }
+
+  .hud-top__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.35fr);
   }
 }
 
