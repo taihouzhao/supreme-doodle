@@ -2,6 +2,7 @@ import { BALANCE } from "../content/balance";
 import { ITEM_IDS } from "../content/items";
 import { designation } from "../content/naming";
 import { TERRAIN_CHARS } from "../content/terrain";
+import { scaleEnemyExp } from "../content/progress";
 import { UNIT_TYPES } from "../content/units";
 import { WEAPONS, defaultWeaponFor, weaponForEquipment } from "../content/weapons";
 import type { MissionConfig } from "../content/missions/schema";
@@ -46,6 +47,8 @@ export interface RosterUnit {
   level: number;
   rank: string;
   duty?: string;
+  /** 1 级绝对底板；归队/降级时按此重算 */
+  baseStats: CommanderStats;
   stats: CommanderStats;
   weapon: WeaponId;
   /** 玩家在军械库里手动指定过武器；自动换装不再覆盖 */
@@ -91,6 +94,7 @@ function makeUnit(params: {
   level: number;
   rank: string;
   duty?: string;
+  baseStats?: CommanderStats;
   stats: CommanderStats;
   x: number;
   y: number;
@@ -114,6 +118,7 @@ function makeUnit(params: {
     level: params.level,
     rank: params.rank,
     duty: params.duty,
+    baseStats: params.baseStats,
     stats: params.stats,
     x: params.x,
     y: params.y,
@@ -199,6 +204,7 @@ export function createMissionState(setup: MissionSetup): GameState {
         level: rosterUnit.level,
         rank: rosterUnit.rank,
         duty: rosterUnit.duty,
+        baseStats: rosterUnit.baseStats,
         stats: rosterUnit.stats,
         x: spawn.x,
         y: spawn.y,
@@ -238,7 +244,8 @@ export function createMissionState(setup: MissionSetup): GameState {
   enemySpecs.forEach((spec, index) => {
     const name = spec.name ?? UNIT_TYPES[spec.type].name;
     const weapon = spec.weapon ?? weaponForEquipment(spec.type, spec.equipment, "enemy");
-    const profile = makeEnemyCommander(spec.type, spec.exp ?? 0, weapon, name);
+    const exp = scaleEnemyExp(mission.id, spec.exp ?? 0);
+    const profile = makeEnemyCommander(spec.type, exp, weapon, name);
     const portraitGroup = enemyPortraitGroup(name);
     units.push(
       makeUnit({
@@ -264,7 +271,8 @@ export function createMissionState(setup: MissionSetup): GameState {
     const waveUnits = wave.units.map((spec, unitIndex) => {
       const name = spec.name ?? UNIT_TYPES[spec.type].name;
       const weapon = spec.weapon ?? weaponForEquipment(spec.type, spec.equipment, "enemy");
-      const profile = makeEnemyCommander(spec.type, spec.exp ?? 0, weapon, name);
+      const exp = scaleEnemyExp(mission.id, spec.exp ?? 0);
+      const profile = makeEnemyCommander(spec.type, exp, weapon, name);
       const portraitGroup = enemyPortraitGroup(name);
       return makeUnit({
         id: `w${waveIndex}_${unitIndex}`,

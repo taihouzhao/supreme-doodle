@@ -2,7 +2,7 @@ import { BALANCE } from "../content/balance";
 import { ITEMS } from "../content/items";
 import { UNIT_TYPES, VETERANCY } from "../content/units";
 import { WEAPONS } from "../content/weapons";
-import { syncLevelFromExp } from "./commander";
+import { effectiveStats, syncLevelFromExp } from "./commander";
 import { COUNTER_RATIO, canCounter, computeDamage, itemDamage, refreshMaxHp } from "./combat";
 import {
   canAttack,
@@ -300,7 +300,7 @@ export function performItem(
     if (manhattan(unit, center) > def.range) return false;
     const tiles = def.splash ? [center, ...orthogonalNeighbours(center)] : [center];
     const intellectScale =
-      1 + Math.max(0, unit.stats.intellect - 40) * 0.005;
+      1 + Math.max(0, effectiveStats(unit, state.inventory).intellect - 40) * 0.005;
     for (const tile of tiles) {
       const victim = unitAt(state, tile.x, tile.y);
       if (!victim || victim.faction === unit.faction) continue;

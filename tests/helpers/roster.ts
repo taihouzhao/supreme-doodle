@@ -13,7 +13,8 @@ export function testRosterUnit(
   const level = opts.level ?? 1;
   const commanderName = name.replace(/(步兵|机枪|迫击炮|坦克)$/, "") || name;
   const weapon = defaultWeaponFor(type, "early");
-  const stats = statsAtLevel(BASE_STATS, type, level, id.length);
+  const baseStats = { ...BASE_STATS };
+  const stats = statsAtLevel(baseStats, type, level, commanderName.length);
   const unit: RosterUnit = {
     id,
     name,
@@ -28,6 +29,7 @@ export function testRosterUnit(
     commanderName,
     level,
     rank: rankName(level),
+    baseStats,
     stats,
     weapon,
   };

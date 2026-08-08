@@ -6,9 +6,10 @@ import {
   type ChapterConfig,
 } from "../content/chapter";
 import type { MissionConfig } from "../content/missions/schema";
+import { BASE_STATS } from "../content/progress";
 import { levelFromExp, rankName, veterancyLevel } from "../content/units";
 import { WEAPONS, bestWeapon, defaultWeaponFor, weaponFits } from "../content/weapons";
-import { effectiveMaxHp } from "./commander";
+import { effectiveMaxHp, recomputeStatsAtLevel } from "./commander";
 import { createMissionState, emptyInventory, type RosterUnit } from "./mission";
 import { deriveSeed, nextRandom } from "./rng";
 import type { GameState, ItemId, MissionStatus, WeaponId } from "./types";
@@ -72,6 +73,7 @@ function rosterFromSpec(
     weapon: spec.weapon,
     keyUnit: spec.keyUnit,
   };
+  const baseStats: RosterUnit["baseStats"] = { ...BASE_STATS, ...spec.baseStats };
   const stats = buildCompanionStats(full);
   const weapon = spec.weapon ?? defaultWeaponFor(spec.type, "early");
   const exp = companionSeedExp(spec.level);
@@ -90,6 +92,7 @@ function rosterFromSpec(
     level: spec.level,
     rank: rankName(spec.level),
     duty: spec.duty ?? "直属作战分队指挥员",
+    baseStats,
     stats,
     weapon,
   };
@@ -288,7 +291,14 @@ export function finishMission(
         exp,
         level,
         rank: rankName(level),
-        stats: deployed.stats,
+        stats: rosterUnit.baseStats
+          ? recomputeStatsAtLevel(
+              rosterUnit.baseStats,
+              rosterUnit.type,
+              level,
+              rosterUnit.commanderName,
+            )
+          : deployed.stats,
         weapon: deployed.weapon,
         fatigue: deployed.fatigue,
         missionsSurvived: rosterUnit.missionsSurvived + 1,
@@ -318,7 +328,14 @@ export function finishMission(
       exp,
       level,
       rank: rankName(level),
-      stats: deployed.stats,
+      stats: rosterUnit.baseStats
+        ? recomputeStatsAtLevel(
+            rosterUnit.baseStats,
+            rosterUnit.type,
+            level,
+            rosterUnit.commanderName,
+          )
+        : deployed.stats,
       weapon: deployed.weapon,
       fatigue: deployed.fatigue,
       missionsSurvived: rosterUnit.missionsSurvived + 1,
