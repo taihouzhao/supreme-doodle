@@ -102,7 +102,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   mortar60: {
     id: "mortar60",
-    name: "60毫米迫击炮",
+    name: "31式60毫米迫击炮",
     forTypes: ["mortar"],
     stats: { intellect: 4, might: 2 },
     attackBonus: 0.03,
@@ -114,7 +114,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   mortar82: {
     id: "mortar82",
-    name: "82毫米迫击炮",
+    name: "82-PM-37迫击炮",
     forTypes: ["mortar"],
     stats: { intellect: 7, might: 3, leadership: 1 },
     attackBonus: 0.08,
@@ -126,7 +126,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   bazooka: {
     id: "bazooka",
-    name: "火箭筒（支援）",
+    name: "缴获M9A1火箭筒",
     forTypes: ["rifle", "tank"],
     stats: { might: 5, intellect: 2 },
     attackBonus: 0.04,
@@ -174,7 +174,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
   },
   m1919: {
     id: "m1919",
-    name: "勃朗宁M1919",
+    name: "勃朗宁M1919A4",
     forTypes: ["mg"],
     stats: { might: 5, leadership: 2 },
     attackBonus: 0.05,
@@ -182,6 +182,18 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     rangeBonus: 0,
     minRangeBonus: 0,
     score: 20,
+    era: "enemy",
+  },
+  m2_mortar: {
+    id: "m2_mortar",
+    name: "M2 60毫米迫击炮",
+    forTypes: ["mortar"],
+    stats: { intellect: 4, might: 1, agility: 1 },
+    attackBonus: 0.03,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 16,
     era: "enemy",
   },
   m1_mortar: {
@@ -208,6 +220,84 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     score: 36,
     era: "enemy",
   },
+  lee_enfield: {
+    id: "lee_enfield",
+    name: "李-恩菲尔德 No.4",
+    forTypes: ["rifle"],
+    stats: { might: 4, stamina: 1, agility: 1 },
+    attackBonus: 0.035,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 16,
+    era: "enemy",
+  },
+  bren: {
+    id: "bren",
+    name: "布伦轻机枪",
+    forTypes: ["mg"],
+    stats: { might: 5, leadership: 2, agility: 1 },
+    attackBonus: 0.045,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 19,
+    era: "enemy",
+  },
+  mac24: {
+    id: "mac24",
+    name: "MAC 24/29轻机枪",
+    forTypes: ["mg"],
+    stats: { might: 5, leadership: 1, agility: 1 },
+    attackBonus: 0.04,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 18,
+    era: "enemy",
+  },
+  centurion: {
+    id: "centurion",
+    name: "百夫长 Mk.3",
+    forTypes: ["tank"],
+    stats: { might: 8, stamina: 7, intellect: 1 },
+    attackBonus: 0.11,
+    defenseBonus: 0.055,
+    rangeBonus: 1,
+    minRangeBonus: 0,
+    score: 42,
+    era: "enemy",
+  },
+};
+
+export interface WeaponHistory {
+  origin: string;
+  caliber: string;
+  note: string;
+}
+
+/** 只记录能由型号确认的史实；游戏数值仍由 WeaponDef 独立平衡。 */
+export const WEAPON_HISTORY: Record<WeaponId, WeaponHistory> = {
+  type38: { origin: "日本", caliber: "6.5×50毫米有坂弹", note: "日制栓动步枪，志愿军早期装备中的旧存与缴获来源之一。" },
+  zhongzheng: { origin: "中国", caliber: "7.92×57毫米", note: "以毛瑟体系为基础的中正式步枪，随原有与缴获库存投入朝鲜战场。" },
+  mosin: { origin: "苏联", caliber: "7.62×54毫米R", note: "苏制莫辛-纳甘栓动步枪，后续换装来源之一。" },
+  ppsh50: { origin: "中国", caliber: "7.62×25毫米", note: "仿PPSh-41生产的50式冲锋枪，适合近距离夜战。" },
+  zb26: { origin: "捷克斯洛伐克／中国", caliber: "7.92×57毫米", note: "顶部弹匣供弹的ZB-26及中国仿制型，早期班组火力常见。" },
+  dp28: { origin: "苏联", caliber: "7.62×54毫米R", note: "盘形弹匣供弹的DP-28轻机枪，后续换装班组火力。" },
+  mortar60: { origin: "中国", caliber: "60毫米", note: "31式60毫米迫击炮，源自美制M2体系，便于步兵分队携行。" },
+  mortar82: { origin: "苏联", caliber: "82毫米", note: "82-PM-37系列迫击炮，用作营级曲射火力的游戏化代表。" },
+  bazooka: { origin: "美国（缴获）", caliber: "2.36英寸火箭弹", note: "M9A1火箭筒作为缴获反装甲支援，不视为志愿军制式普遍装备。" },
+  t34_85: { origin: "苏联", caliber: "85毫米主炮", note: "T-34-85曾装备中朝装甲部队；关卡中只代表有限配属装甲支援。" },
+  m1_garand: { origin: "美国", caliber: ".30-06", note: "M1半自动步枪，美军步兵主要制式步枪。" },
+  m1_carbine: { origin: "美国", caliber: ".30 Carbine", note: "M1卡宾枪，多用于军官、通信与支援人员，也大量援助韩军。" },
+  m1919: { origin: "美国", caliber: ".30-06", note: "M1919A4中型机枪，常以两脚架或三脚架提供持续火力。" },
+  m2_mortar: { origin: "美国", caliber: "60毫米", note: "M2型60毫米迫击炮，美韩步兵分队使用的轻型曲射支援武器。" },
+  m1_mortar: { origin: "美国", caliber: "81毫米", note: "M1型81毫米迫击炮，美军营级曲射支援武器。" },
+  sherman: { origin: "美国", caliber: "76毫米主炮", note: "M4A3E8“Easy Eight”谢尔曼，朝鲜战场常见美军坦克型号。" },
+  lee_enfield: { origin: "英国", caliber: ".303 British", note: "No.4 Mk I栓动步枪，英联邦部队在朝鲜战场的主要步枪之一。" },
+  bren: { origin: "英国／加拿大", caliber: ".303 British", note: "布伦轻机枪是英联邦步兵班组的主要自动火力；游戏中兼表同阵地的维克斯支援。" },
+  mac24: { origin: "法国", caliber: "7.5×54毫米", note: "MAC 24/29轻机枪，法国联合国营的代表性班组自动武器。" },
+  centurion: { origin: "英国", caliber: "20磅炮（84毫米）", note: "百夫长Mk.3装备20磅炮，英军第8骠骑兵团在朝鲜战场投入使用。" },
 };
 
 export const WEAPON_IDS = Object.keys(WEAPONS) as WeaponId[];
@@ -224,6 +314,34 @@ export function defaultWeaponFor(type: UnitTypeId, era: "early" | "late" | "enem
     return era === "enemy" ? "sherman" : "t34_85";
   }
   return pool.sort((a, b) => WEAPONS[a].score - WEAPONS[b].score)[0]!;
+}
+
+/**
+ * 把史料化装备名称映射到真实机械型号。任务数据允许写完整编制说明，
+ * 但战斗结算不能再默默回退成同兵种的最低分美式默认武器。
+ */
+export function weaponForEquipment(
+  type: UnitTypeId,
+  equipment: string | undefined,
+  fallbackEra: "early" | "late" | "enemy" = "enemy",
+): WeaponId {
+  const text = equipment ?? "";
+  const matches: [RegExp, WeaponId][] = [
+    [/百夫长/i, "centurion"],
+    [/谢尔曼|M4A3E8/i, "sherman"],
+    [/李[-－]?恩菲尔德|Lee[- ]?Enfield/i, "lee_enfield"],
+    [/布伦|维克斯|Bren|Vickers/i, "bren"],
+    [/MAC\s*24\/?29/i, "mac24"],
+    [/M1919|勃朗宁M1919/i, "m1919"],
+    [/M1\s*加兰德|加兰德/i, "m1_garand"],
+    [/M1\s*卡宾|卡宾枪/i, "m1_carbine"],
+    [/M2(?:型)?\s*60|M1(?:型)?\s*60|60毫米迫击炮/i, "m2_mortar"],
+    [/M1(?:型)?\s*81|81毫米迫击炮/i, "m1_mortar"],
+  ];
+  for (const [pattern, weapon] of matches) {
+    if (pattern.test(text) && weaponFits(weapon, type)) return weapon;
+  }
+  return defaultWeaponFor(type, fallbackEra);
 }
 
 export function weaponFits(weapon: WeaponId, type: UnitTypeId): boolean {

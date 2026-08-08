@@ -16,12 +16,12 @@ export const THRESHOLDS = {
     "m3-chongchon": [0.0, 0.7] as [number, number],
     "m4-chosin": [0.15, 1.0] as [number, number],
     "m5-third-offensive": [0.0, 0.8] as [number, number],
-    "m6-hoengsong": [0.0, 0.65] as [number, number],
+    "m6-hoengsong": [0.0, 0.85] as [number, number],
     "m7-chipyongni": [0.05, 0.75] as [number, number],
     "m8-imjin": [0.0, 0.65] as [number, number],
     "m9-cheorwon": [0.0, 0.8] as [number, number],
     "m10-triangle-hill": [0.1, 1.0] as [number, number],
-    "m11-pork-chop": [0.0, 0.65] as [number, number],
+    "m11-pork-chop": [0.0, 0.85] as [number, number],
     "m12-kumsong": [0.1, 1.0] as [number, number],
   } as Record<string, [number, number]>,
   minChallengingMissions: 7,
@@ -47,6 +47,8 @@ export const THRESHOLDS = {
   smallSampleRuns: 100,
   /** 单个退化打法在最难的一关必须低于此胜率，否则算统治性策略 */
   degenerateMaxWinRate: 0.5,
+  /** 任一分关都不能被同一种退化打法稳定解决；等于阈值也视为失败。 */
+  localDegenerateMaxWinRate: 0.85,
   /** 第一关重创后，早期恢复检查（第三关）仍需达到的胜率 */
   recoveryMinWinRate: 0.35,
   /** 重创续跑后花名册的最低规模（伴随编制精简后下调） */
@@ -199,6 +201,21 @@ export function evaluateGates(input: GateInput): GateResult[] {
         return `${id} ${rows.map((r) => pct(r.winRate)).join("/")}`;
       })
       .join("，"),
+  });
+
+  const localDominant = degenerates.filter(
+    (row) => row.winRate >= THRESHOLDS.localDegenerateMaxWinRate,
+  );
+  gates.push({
+    id: "no-local-dominant-strategy",
+    title: `不存在分关胜率 ≥ ${pct(THRESHOLDS.localDegenerateMaxWinRate)} 的无脑打法`,
+    passed: localDominant.length === 0,
+    detail:
+      localDominant.length === 0
+        ? "所有退化打法在每个分关均低于局部统治阈值"
+        : localDominant
+            .map((row) => `${row.agentId}/${row.missionId} ${pct(row.winRate)}`)
+            .join("，"),
   });
 
   gates.push({

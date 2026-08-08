@@ -18,6 +18,10 @@ export interface HistoricalCommander {
   role: string;
   formation: string;
   portrait?: string;
+  /** 以本关发生时为准；志愿军写职务制而不是套用1955年军衔。 */
+  historicalRank?: string;
+  /** public/assets/ranks 下的历史徽记 id。 */
+  rankInsignia?: string;
 }
 
 export interface WeatherSpec {
@@ -98,6 +102,8 @@ export interface VictoryRule {
   evacuateRatio?: number;
   /** 必须包含指定主力单位 */
   requireKeyUnit?: boolean;
+  /** 撤离前至少击溃的敌军单位；用于“接触施压后脱离”而非开局直奔出口 */
+  minEnemiesRouted?: number;
 }
 
 /** 地图上的地名标注，只做展示，让战场读起来像那段战史 */

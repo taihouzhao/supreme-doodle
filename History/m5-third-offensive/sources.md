@@ -2,6 +2,13 @@
 
 摘录日期：2026-08-08。
 
+### 第二轮校核：美国陆军官方战史
+
+- 出处：U.S. Army Center of Military History, *The Chinese Intervention*, CMH Pub 19-8，第 27–31 页（第三次战役态势图）
+- 链接：https://history.army.mil/portals/143/Images/Publications/catalog/19-8.pdf
+- 证据等级：A（12 月 31 日攻势、临津江—议政府—汉城纵深关系）；B（多个渡河场合并为一处战术渡河带）
+- 校核结论：目标改成前后梯次的“临津江渡河带→议政府北侧山口”，不再使用左右对称的两个任意据点。
+
 ### 第三次战役公开战史
 
 - 出处：中国军网 / 国防部 / 党史公开叙述

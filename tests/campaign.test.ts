@@ -110,7 +110,17 @@ describe("战役继承", () => {
     key.hp = 0;
     const verdict = evaluateVictory(started.state, started.mission.victory, false);
     expect(verdict.status).toBe("lost");
-    expect(verdict.reason).toContain("主力阵亡");
+    expect(verdict.reason).toContain("主力重伤");
+  });
+
+  it("高大全绝对属性底板不会再次叠加40点", () => {
+    const campaign = createCampaign("chapter-one", 1);
+    const started = startMission(campaign);
+    const key = started.state.units.find((unit) => unit.keyUnit)!;
+    expect(key.stats).toEqual({ leadership: 49, intellect: 44, might: 46, stamina: 47, agility: 42 });
+    expect(key.maxHp).toBe(165);
+    expect(key.duty).toBe("志司直属加强营指挥员");
+    expect(key.rank).toBe("熟练");
   });
 
   it("部队番号为唯一主将+兵种，不带序号", () => {

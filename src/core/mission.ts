@@ -3,7 +3,7 @@ import { ITEM_IDS } from "../content/items";
 import { designation } from "../content/naming";
 import { TERRAIN_CHARS } from "../content/terrain";
 import { UNIT_TYPES } from "../content/units";
-import { WEAPONS, defaultWeaponFor } from "../content/weapons";
+import { WEAPONS, defaultWeaponFor, weaponForEquipment } from "../content/weapons";
 import type { MissionConfig } from "../content/missions/schema";
 import {
   agilityMoveBonus,
@@ -44,6 +44,7 @@ export interface RosterUnit {
   commanderName: string;
   level: number;
   rank: string;
+  duty?: string;
   stats: CommanderStats;
   weapon: WeaponId;
   /** 玩家在军械库里手动指定过武器；自动换装不再覆盖 */
@@ -86,6 +87,7 @@ function makeUnit(params: {
   commanderName: string;
   level: number;
   rank: string;
+  duty?: string;
   stats: CommanderStats;
   x: number;
   y: number;
@@ -106,6 +108,7 @@ function makeUnit(params: {
     commanderName: params.commanderName,
     level: params.level,
     rank: params.rank,
+    duty: params.duty,
     stats: params.stats,
     x: params.x,
     y: params.y,
@@ -158,12 +161,14 @@ export function createMissionState(setup: MissionSetup): GameState {
         faction: "player",
         type: rosterUnit.type,
         name: rosterUnit.name,
-        equipment: mission.playerEquipment?.[rosterUnit.type] ?? WEAPONS[rosterUnit.weapon].name,
+        // 花名册实际装备决定战斗结算与显示；关卡装备表只用于历史简报。
+        equipment: WEAPONS[rosterUnit.weapon].name,
         weapon: rosterUnit.weapon,
         commanderKind: rosterUnit.commanderKind,
         commanderName: rosterUnit.commanderName,
         level: rosterUnit.level,
         rank: rosterUnit.rank,
+        duty: rosterUnit.duty,
         stats: rosterUnit.stats,
         x: spawn.x,
         y: spawn.y,
@@ -190,6 +195,7 @@ export function createMissionState(setup: MissionSetup): GameState {
         name: designation(ally.commander, ally.type),
         equipment: ally.equipment ?? WEAPONS[weapon].name,
         ...profile,
+        duty: `临时配属${UNIT_TYPES[ally.type].name}分队`,
         x: spawn.x,
         y: spawn.y,
         keyUnit: false,
@@ -199,7 +205,7 @@ export function createMissionState(setup: MissionSetup): GameState {
 
   enemySpecs.forEach((spec, index) => {
     const name = spec.name ?? UNIT_TYPES[spec.type].name;
-    const weapon = spec.weapon ?? defaultWeaponFor(spec.type, "enemy");
+    const weapon = spec.weapon ?? weaponForEquipment(spec.type, spec.equipment, "enemy");
     const profile = makeEnemyCommander(spec.type, spec.exp ?? 0, weapon, name);
     units.push(
       makeUnit({
@@ -210,6 +216,7 @@ export function createMissionState(setup: MissionSetup): GameState {
         name,
         equipment: spec.equipment ?? WEAPONS[weapon].name,
         ...profile,
+        duty: "敌军作战分队",
         x: spec.x,
         y: spec.y,
         hp: spec.hp,
@@ -221,7 +228,7 @@ export function createMissionState(setup: MissionSetup): GameState {
     const turn = waveRng.int(wave.window[0], wave.window[1]);
     const waveUnits = wave.units.map((spec, unitIndex) => {
       const name = spec.name ?? UNIT_TYPES[spec.type].name;
-      const weapon = spec.weapon ?? defaultWeaponFor(spec.type, "enemy");
+      const weapon = spec.weapon ?? weaponForEquipment(spec.type, spec.equipment, "enemy");
       const profile = makeEnemyCommander(spec.type, spec.exp ?? 0, weapon, name);
       return makeUnit({
         id: `w${waveIndex}_${unitIndex}`,
@@ -231,6 +238,7 @@ export function createMissionState(setup: MissionSetup): GameState {
         name,
         equipment: spec.equipment ?? WEAPONS[weapon].name,
         ...profile,
+        duty: "敌军增援分队",
         x: spec.x,
         y: spec.y,
         hp: spec.hp,
@@ -401,7 +409,7 @@ export function runScripted(state: GameState, events: GameEvent[]): void {
     if (rule.kind === "barrage") {
       if (!rule.turns.includes(state.turn)) continue;
       const hit: string[] = [];
-      for (const unit of livingUnits(state, "player")) {
+      for (const unit of livingUnits(state, rule.target ?? "player")) {
         const cover = tileAt(state, unit.x, unit.y).defense;
         const damage = Math.max(1, Math.round(rule.damage * (1 - Math.max(0, cover))));
         unit.hp -= damage;
@@ -509,7 +517,8 @@ export function coreObjectiveMet(state: GameState, rule: MissionConfig["victory"
     const keyEvacuated = state.units.some((u) => u.keyUnit && u.evacuated);
     return (
       state.stats.playerEvacuated >= requiredEvacuations(state, rule) &&
-      (!rule.requireKeyUnit || keyEvacuated)
+      (!rule.requireKeyUnit || keyEvacuated) &&
+      state.stats.enemyRouted >= (rule.minEnemiesRouted ?? 0)
     );
   }
   if (state.missionKind === "breakthrough") {
@@ -593,10 +602,14 @@ export function victoryProgress(state: GameState, rule: MissionConfig["victory"]
   const evacuated = state.stats.playerEvacuated;
   const required = requiredEvacuations(state, rule);
   const keyEvacuated = state.units.some((u) => u.keyUnit && u.evacuated);
-  const coreMet = evacuated >= required && (!rule.requireKeyUnit || keyEvacuated);
+  const pressureMet = state.stats.enemyRouted >= (rule.minEnemiesRouted ?? 0);
+  const coreMet =
+    evacuated >= required && (!rule.requireKeyUnit || keyEvacuated) && pressureMet;
   let blocking: string | null = null;
   if (evacuated < required) blocking = `还需撤离 ${required - evacuated} 个单位`;
   else if (rule.requireKeyUnit && !keyEvacuated) blocking = "主力尚未撤离";
+  else if (!pressureMet)
+    blocking = `还需击溃 ${(rule.minEnemiesRouted ?? 0) - state.stats.enemyRouted} 个外围守军`;
   return {
     coreMet,
     blocking,
@@ -625,14 +638,15 @@ export function evaluateVictory(
   // 主力阵亡：任一关立即失败（撤离成功的主力不算阵亡）
   const keyFallen = state.units.some((u) => u.keyUnit && !u.alive && !u.evacuated);
   if (keyFallen) {
-    return { status: "lost", reason: "主力阵亡，战役无法继续" };
+    return { status: "lost", reason: "主力重伤失去指挥，任务失败" };
   }
 
   if (state.missionKind === "withdraw") {
     const evacuated = state.stats.playerEvacuated;
     const required = requiredEvacuations(state, rule);
     const keyEvacuated = state.units.some((u) => u.keyUnit && u.evacuated);
-    if (evacuated >= required && (!rule.requireKeyUnit || keyEvacuated)) {
+    const pressureMet = state.stats.enemyRouted >= (rule.minEnemiesRouted ?? 0);
+    if (evacuated >= required && (!rule.requireKeyUnit || keyEvacuated) && pressureMet) {
       return { status: "won", reason: `已撤离 ${evacuated} 个单位，主力安全脱离` };
     }
     if (playerAlive.length === 0) {
@@ -648,7 +662,11 @@ export function evaluateVictory(
       const keyLost = rule.requireKeyUnit && !keyEvacuated;
       return {
         status: "lost",
-        reason: keyLost ? "主力未能撤出" : `仅撤离 ${evacuated}/${required} 个单位`,
+        reason: keyLost
+          ? "主力未能撤出"
+          : !pressureMet
+            ? `未完成外线牵制，仅击溃 ${state.stats.enemyRouted}/${rule.minEnemiesRouted ?? 0} 个敌军单位`
+            : `仅撤离 ${evacuated}/${required} 个单位`,
       };
     }
     return { status: "playing", reason: "" };

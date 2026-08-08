@@ -1,7 +1,7 @@
-import type { Faction, ItemId, TerrainId, UnitTypeId, Weather } from "../core/types";
+import type { Faction, ItemId, TerrainId, UnitTypeId, WeaponId, Weather } from "../core/types";
 
 /** Cache-bust when swapping generated art without renaming. */
-const V = "?v=5";
+const V = "?v=6";
 
 /** Static art under /assets (served from public/). */
 
@@ -34,22 +34,68 @@ export function terrainIcon(terrain: TerrainId, weather: Weather): string {
 
 export const UNIT_ICON: Record<UnitTypeId, Record<Faction, string>> = {
   rifle: {
-    player: `/assets/units/rifle-player-v2.png${V}`,
-    enemy: `/assets/units/rifle-enemy-v2.png${V}`,
+    player: `/assets/units/rifle-player-v3.png${V}`,
+    enemy: `/assets/units/rifle-enemy-v3.png${V}`,
   },
   mg: {
-    player: `/assets/units/mg-player-v2.png${V}`,
-    enemy: `/assets/units/mg-enemy-v2.png${V}`,
+    player: `/assets/units/mg-player-v3.png${V}`,
+    enemy: `/assets/units/mg-enemy-v3.png${V}`,
   },
   mortar: {
-    player: `/assets/units/mortar-player-v2.png${V}`,
-    enemy: `/assets/units/mortar-enemy-v2.png${V}`,
+    player: `/assets/units/mortar-player-v3.png${V}`,
+    enemy: `/assets/units/mortar-enemy-v3.png${V}`,
   },
   tank: {
-    player: `/assets/units/tank-player-v2.png${V}`,
-    enemy: `/assets/units/tank-enemy-v2.png${V}`,
+    player: `/assets/units/tank-player-v3.png${V}`,
+    enemy: `/assets/units/tank-enemy-v3.png${V}`,
   },
 };
+
+/** 地图单位使用人物肖像为主体，兵种由独立小角标辨识。 */
+export const UNIT_ROLE_ICON: Record<UnitTypeId, string> = {
+  rifle: `/assets/roles/rifle.svg${V}`,
+  mg: `/assets/roles/mg.svg${V}`,
+  mortar: `/assets/roles/mortar.svg${V}`,
+  tank: `/assets/roles/tank.svg${V}`,
+};
+
+export const WEAPON_ICON: Record<WeaponId, string> = {
+  type38: `/assets/weapons/type38.svg${V}`,
+  zhongzheng: `/assets/weapons/zhongzheng.svg${V}`,
+  mosin: `/assets/weapons/mosin.svg${V}`,
+  ppsh50: `/assets/weapons/ppsh50.svg${V}`,
+  zb26: `/assets/weapons/zb26.svg${V}`,
+  dp28: `/assets/weapons/dp28.svg${V}`,
+  mortar60: `/assets/weapons/mortar60.svg${V}`,
+  mortar82: `/assets/weapons/mortar82.svg${V}`,
+  bazooka: `/assets/weapons/bazooka.svg${V}`,
+  t34_85: `/assets/weapons/t34_85.svg${V}`,
+  m1_garand: `/assets/weapons/m1_garand.svg${V}`,
+  m1_carbine: `/assets/weapons/m1_carbine.svg${V}`,
+  m1919: `/assets/weapons/m1919.svg${V}`,
+  m2_mortar: `/assets/weapons/mortar60.svg${V}`,
+  m1_mortar: `/assets/weapons/m1_mortar.svg${V}`,
+  sherman: `/assets/weapons/sherman.svg${V}`,
+  // 复用现有同类剪影；机械型号与历史名称已经独立，不再套用错误数值。
+  lee_enfield: `/assets/weapons/mosin.svg${V}`,
+  bren: `/assets/weapons/zb26.svg${V}`,
+  mac24: `/assets/weapons/zb26.svg${V}`,
+  centurion: `/assets/weapons/sherman.svg${V}`,
+};
+
+export const RANK_INSIGNIA: Record<string, string> = {
+  "rok-brigadier-general": `/assets/ranks/rok-brigadier-general.svg${V}`,
+  "rok-major-general": `/assets/ranks/rok-major-general.svg${V}`,
+  "us-major-general": `/assets/ranks/us-major-general.svg${V}`,
+  "us-lieutenant-general": `/assets/ranks/us-lieutenant-general.svg${V}`,
+  "us-colonel": `/assets/ranks/us-colonel.svg${V}`,
+  "uk-lieutenant-colonel": `/assets/ranks/uk-lieutenant-colonel.svg${V}`,
+  "fr-lieutenant-colonel": `/assets/ranks/fr-lieutenant-colonel.svg${V}`,
+};
+
+export function rankInsignia(id: string): string {
+  return RANK_INSIGNIA[id] ?? "";
+}
 
 export const ITEM_ICON: Record<ItemId, string> = {
   medkit: `/assets/items/medkit.png${V}`,
@@ -88,6 +134,23 @@ export const COMMANDER_PORTRAIT: Record<string, string> = {
   "qin-jiwei": `/assets/commanders/qin-jiwei.png${V}`,
   "matthew-ridgway": `/assets/commanders/matthew-ridgway.png${V}`,
   "oliver-smith": `/assets/commanders/oliver-smith.png${V}`,
+  "wen-yucheng": `/assets/commanders/wen-yucheng.png${V}`,
+  "paik-sun-yup": `/assets/commanders/paik-sun-yup.png${V}`,
+  "kim-jong-oh": `/assets/commanders/kim-jong-oh.png${V}`,
+  "hobart-gay": `/assets/commanders/hobart-gay.png${V}`,
+  "liang-xingchu": `/assets/commanders/liang-xingchu.png${V}`,
+  "walton-walker": `/assets/commanders/walton-walker.png${V}`,
+  "edward-almond": `/assets/commanders/edward-almond.png${V}`,
+  "paul-freeman": `/assets/commanders/paul-freeman.png${V}`,
+  "ralph-monclar": `/assets/commanders/ralph-monclar.png${V}`,
+  "fu-chongbi": `/assets/commanders/fu-chongbi.png${V}`,
+  "james-carne": `/assets/commanders/james-carne.png${V}`,
+  "james-van-fleet": `/assets/commanders/james-van-fleet.png${V}`,
+  "wayne-smith": `/assets/commanders/wayne-smith.png${V}`,
+  "zhong-guochu": `/assets/commanders/zhong-guochu.png${V}`,
+  "arthur-trudeau": `/assets/commanders/arthur-trudeau.png${V}`,
+  "yang-yong": `/assets/commanders/yang-yong.png${V}`,
+  "maxwell-taylor": `/assets/commanders/maxwell-taylor.png${V}`,
 };
 
 /** Every asset URL used by the game (for preload). */
@@ -96,6 +159,9 @@ export function allAssetUrls(): string[] {
     ...Object.values(TERRAIN_ICON),
     ...Object.values(TERRAIN_ICON_SNOW),
     ...Object.values(UNIT_ICON).flatMap((pair) => Object.values(pair)),
+    ...Object.values(UNIT_ROLE_ICON),
+    ...Object.values(WEAPON_ICON),
+    ...Object.values(RANK_INSIGNIA),
     ...Object.values(ITEM_ICON),
     ...Object.values(UI_ICON),
     ...Object.values(COMMANDER_PORTRAIT),

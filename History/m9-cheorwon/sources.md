@@ -2,6 +2,20 @@
 
 摘录日期：2026-08-08。
 
+### 第二轮校核：美国陆军官方战史
+
+- 出处：U.S. Army Center of Military History, *Restoring the Balance*, CMH Pub 19-9，第 23–25 页
+- 链接：https://history.army.mil/portals/143/Images/Publications/catalog/19-9.pdf
+- 证据等级：A（联合国军从南向北反攻、6 月 11 日美第 3 师占领铁原、铁原—金化横向公路）；B（第 63 军多道阻击线在战术图中的合并）
+- 校核结论：敌军必须由地图南缘进入，玩家依次利用前沿与纵深阵地阻击；前沿阵地可放弃，最终以时限和北撤完成度结算。
+
+### 铁原附近装甲活动照片
+
+- 出处：U.S. Army Center of Military History, *Korea 1951–1953: A Photo History*
+- 链接：https://history.army.mil/Portals/143/Images/Publications/Publication%20By%20Title%20Images/K%20Pdf/CMH_Pub_21-2.pdf
+- 页码或章节：图片说明“tank south of Ch’orwon, 10 June”
+- 证据等级：A（联合国军装甲在铁原以南活动）；C（仅凭该照片确定本关每一波次的具体车型、数量和编制）。
+
 ### 铁原阻击 / 63 军公开战史
 
 - 出处：中国军网、国防部及部队史公开叙述（“英雄铁军”相关）
@@ -24,3 +38,9 @@
 
 - 时间窗约 1951-05-22 后至 6 月上旬。
 - 铁原为交通枢纽，失守将危及金化、平康走廊。
+
+### 字段结论
+
+- **必须采用**：联合国军从南向北追击；第63军等部弹性阻击、掩护北撤；终局不要求两点同时占有。
+- **可游戏化**：多道阵地合并成前沿迟滞线和纵深掩护线；用时限、撤出人数和存活率结算。
+- **证据不足暂缓**：逐营阵地编号、单格位置、每一装甲波次的具体车型和数量。

@@ -12,6 +12,7 @@
 | [03-tech-architecture.md](./03-tech-architecture.md) | 四部分架构、目录、确定性与重放 |
 | [04-validation-and-balance.md](./04-validation-and-balance.md) | 数学验证门槛与真人验证观察项 |
 | [05-roadmap.md](./05-roadmap.md) | 阶段划分 |
+| [06-audit-and-optimization-plan.md](./06-audit-and-optimization-plan.md) | 2026-08 全面审计、经典对标、问题优先级与本轮实施验收 |
 
 ## 使用约定
 

@@ -35,8 +35,13 @@ export type WeaponId =
   | "m1_garand"
   | "m1_carbine"
   | "m1919"
+  | "m2_mortar"
   | "m1_mortar"
-  | "sherman";
+  | "sherman"
+  | "lee_enfield"
+  | "bren"
+  | "mac24"
+  | "centurion";
 
 export type Weather = "clear" | "overcast" | "rain" | "snow" | "fog";
 
@@ -130,6 +135,8 @@ export interface Unit {
   commanderName: string;
   level: number;
   rank: string;
+  /** 叙事中的固定职务/单位身份；与战斗等级分离。 */
+  duty?: string;
   /** 已含成长、不含武器/物资被动的将领五维 */
   stats: CommanderStats;
   x: number;
@@ -193,7 +200,7 @@ export interface PlaceLabel {
 /** 史实脚本规则：把各关的历史特征做成可结算的规则 */
 export type ScriptedRule =
   | { kind: "nightAssault"; turns: [number, number]; attackBonus: number; note: string }
-  | { kind: "barrage"; turns: number[]; damage: number; note: string }
+  | { kind: "barrage"; turns: number[]; damage: number; target?: Faction; note: string }
   | { kind: "coldAttrition"; fromTurn: number; damage: number; note: string }
   | { kind: "supplyWindow"; untilTurn: number; penalty: number; note: string };
 
@@ -250,6 +257,8 @@ export interface DamageBreakdown {
   flank: number;
   terrain: number;
   defenderVeterancy: number;
+  /** 主力护卫减伤；普通单位为 1。 */
+  keyGuard: number;
   weather: number;
   setup: number;
   highGround: number;

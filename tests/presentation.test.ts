@@ -14,6 +14,7 @@ function blankBreakdown(total = 20): DamageBreakdown {
     flank: 1,
     terrain: 1,
     defenderVeterancy: 1,
+    keyGuard: 1,
     weather: 1,
     setup: 1,
     highGround: 1,

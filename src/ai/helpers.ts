@@ -1,13 +1,17 @@
 import { UNIT_TYPES, VETERANCY } from "../content/units";
 import { COUNTER_RATIO, estimateDamageFrom } from "../core/combat";
 import {
+  attackRange,
   attackableTargets,
+  canEnter,
   livingUnits,
   manhattan,
+  orthogonalNeighbours,
   reachableTiles,
   tileAt,
   unitAt,
 } from "../core/grid";
+import { movementBudget } from "../core/mission";
 import type { ReachableTile } from "../core/grid";
 import type { GameState, Unit, Vec2 } from "../core/types";
 
@@ -20,6 +24,21 @@ export interface AttackOption {
   damage: number;
   counter: number;
   lethal: boolean;
+}
+
+/**
+ * 计算单位从候选格开火时的完整射程。
+ *
+ * 射程规则只由 core/attackRange 维护；AI 不再复制兵种、地形与武器修正公式，
+ * 避免带射程／最小射程修正的武器在规则里能打、规划时却被忽略。
+ */
+export function attackRangeFrom(
+  state: GameState,
+  unit: Unit,
+  from: Vec2,
+): { min: number; max: number } {
+  if (unit.x === from.x && unit.y === from.y) return attackRange(state, unit);
+  return attackRange(state, { ...unit, x: from.x, y: from.y });
 }
 
 export function attackOptions(state: GameState, unit: Unit): AttackOption[] {
@@ -40,10 +59,9 @@ export function attackOptions(state: GameState, unit: Unit): AttackOption[] {
 
 export function canBeCountered(state: GameState, attacker: Unit, defender: Unit): boolean {
   if (UNIT_TYPES[attacker.type].indirect) return false;
-  const def = UNIT_TYPES[defender.type];
-  const bonus = tileAt(state, defender.x, defender.y).rangeBonus;
+  const range = attackRange(state, defender);
   const distance = manhattan(attacker, defender);
-  return distance >= def.minRange && distance <= def.maxRange + bonus;
+  return distance >= range.min && distance <= range.max;
 }
 
 export function stoppableTiles(state: GameState, unit: Unit): ReachableTile[] {
@@ -97,8 +115,57 @@ export function standingObjective(state: GameState, unit: Unit): boolean {
   );
 }
 
+/**
+ * 估算跨回合路线成本。单格地形消耗若高于该单位一整回合的移动力，
+ * 对它就是真正的不可通行地形；单纯用曼哈顿距离会把低机动力火力组
+ * 引到这种“看起来最近、实际上永远进不去”的山口前。
+ */
+export function routeCost(
+  state: GameState,
+  unit: Unit,
+  from: Vec2,
+  to: Vec2,
+): number | null {
+  const key = (x: number, y: number) => y * state.width + x;
+  const fullTurnBudget = movementBudget(unit, state.weather, state.inventory);
+  const best = new Map<number, number>([[key(from.x, from.y), 0]]);
+  const frontier: Array<{ x: number; y: number; cost: number }> = [
+    { x: from.x, y: from.y, cost: 0 },
+  ];
+
+  while (frontier.length > 0) {
+    frontier.sort((a, b) => a.cost - b.cost);
+    const current = frontier.shift()!;
+    const currentKey = key(current.x, current.y);
+    if ((best.get(currentKey) ?? Infinity) < current.cost) continue;
+    if (current.x === to.x && current.y === to.y) return current.cost;
+
+    for (const next of orthogonalNeighbours(current)) {
+      if (!canEnter(state, unit, next.x, next.y)) continue;
+      const stepCost = tileAt(state, next.x, next.y).moveCost;
+      if (stepCost > fullTurnBudget) continue;
+      const blocker = unitAt(state, next.x, next.y);
+      if (blocker && blocker.faction !== unit.faction) continue;
+
+      const cost = current.cost + stepCost;
+      const nextKey = key(next.x, next.y);
+      if (cost >= (best.get(nextKey) ?? Infinity)) continue;
+      best.set(nextKey, cost);
+      frontier.push({ x: next.x, y: next.y, cost });
+    }
+  }
+
+  return null;
+}
+
 export function evacGoal(state: GameState, unit: Unit): Vec2 | null {
-  return nearest(unit, state.evacZone);
+  let best: { goal: Vec2; cost: number } | null = null;
+  for (const goal of state.evacZone) {
+    const cost = routeCost(state, unit, unit, goal);
+    if (cost === null) continue;
+    if (!best || cost < best.cost) best = { goal, cost };
+  }
+  return best?.goal ?? null;
 }
 
 /**
@@ -121,12 +188,12 @@ export function dangerMap(state: GameState): number[] {
     const perEnemy = new Array<number>(map.length).fill(0);
 
     for (const tile of reachableTiles(state, enemy)) {
-      const range = def.maxRange + tileAt(state, tile.x, tile.y).rangeBonus;
-      for (let dy = -range; dy <= range; dy += 1) {
-        const span = range - Math.abs(dy);
+      const range = attackRangeFrom(state, enemy, tile);
+      for (let dy = -range.max; dy <= range.max; dy += 1) {
+        const span = range.max - Math.abs(dy);
         for (let dx = -span; dx <= span; dx += 1) {
           const distance = Math.abs(dx) + Math.abs(dy);
-          if (distance < def.minRange) continue;
+          if (distance < range.min) continue;
           const x = tile.x + dx;
           const y = tile.y + dy;
           if (x < 0 || y < 0 || x >= state.width || y >= state.height) continue;

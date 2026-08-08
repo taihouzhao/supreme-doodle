@@ -7,6 +7,8 @@ export interface ObjectiveLine {
   name: string;
   done: boolean;
   detail: string;
+  /** 是否对应棋盘上的一个可定位位置。 */
+  locatable: boolean;
 }
 
 /** 战斗中与简报共用的目标清单 */
@@ -29,7 +31,17 @@ export function objectiveLines(battle: GameState, mission: MissionConfig | null)
       name: "撤离通道",
       done: quotaDone && (!victory?.requireKeyUnit || keyDone),
       detail: `已撤离 ${evacuated}/${required}${victory?.requireKeyUnit ? ` · 主力${keyDone ? "已撤" : "未撤"}` : ""}`,
+      locatable: true,
     });
+    if (victory?.minEnemiesRouted) {
+      lines.push({
+        id: "contact-pressure",
+        name: "外线牵制",
+        done: battle.stats.enemyRouted >= victory.minEnemiesRouted,
+        detail: `已击溃 ${battle.stats.enemyRouted}/${victory.minEnemiesRouted} 个外围守军`,
+        locatable: false,
+      });
+    }
     return lines;
   }
 
@@ -41,6 +53,7 @@ export function objectiveLines(battle: GameState, mission: MissionConfig | null)
         name: objective.name,
         done: owned,
         detail: owned ? "已占领" : "未占领",
+        locatable: true,
       });
     } else {
       lines.push({
@@ -48,6 +61,7 @@ export function objectiveLines(battle: GameState, mission: MissionConfig | null)
         name: objective.name,
         done: owned,
         detail: owned ? "据守中" : "已失守",
+        locatable: true,
       });
     }
   }
@@ -64,6 +78,7 @@ export function objectiveLines(battle: GameState, mission: MissionConfig | null)
       detail: progress.coreMet
         ? `${progress.streak}/${progress.holdTurns} 回合`
         : "需先占领全部目标",
+      locatable: false,
     });
   }
   if (battle.missionKind === "hold") {
@@ -72,6 +87,7 @@ export function objectiveLines(battle: GameState, mission: MissionConfig | null)
       name: "坚守进度",
       done: battle.turn > battle.maxTurns,
       detail: `第 ${Math.min(battle.turn, battle.maxTurns)}/${battle.maxTurns} 回合`,
+      locatable: false,
     });
   }
   if (progress.blocking) {
@@ -80,6 +96,7 @@ export function objectiveLines(battle: GameState, mission: MissionConfig | null)
       name: "尚未达成",
       done: false,
       detail: progress.blocking,
+      locatable: false,
     });
   }
 
@@ -104,9 +121,12 @@ export function briefVictoryLines(mission: MissionConfig): string[] {
     if (v.minPostsHeld) lines.push(`结束时至少持有 ${v.minPostsHeld} 处据点`);
     if (v.minSurvivors) lines.push(`至少保留 ${v.minSurvivors} 支志愿军单位`);
   } else if (mission.kind === "withdraw") {
+    if (v.minEnemiesRouted) lines.push(`撤离前至少击溃 ${v.minEnemiesRouted} 个外围守军单位`);
     lines.push("将部队撤入北面撤离带");
     if (v.requireKeyUnit) lines.push("主力单位必须撤离");
-    lines.push("撤离人数需达到编制比例要求");
+    const ratio = Math.round((v.evacuateRatio ?? 0.6) * 100);
+    const minimum = v.minEvacuated ?? 3;
+    lines.push(`撤离人数不少于 ${minimum} 支且达到出战编制 ${ratio}%（取较高者）`);
   }
   return lines;
 }

@@ -1,4 +1,5 @@
 import { UNIT_TYPES } from "../content/units";
+import { getMission } from "../content/missions";
 import { livingUnits, manhattan } from "../core/grid";
 import type { Rng } from "../core/rng";
 import type { Action, GameState, Unit, Vec2 } from "../core/types";
@@ -17,14 +18,18 @@ import type { Agent } from "./types";
 
 function basicGoal(state: GameState, unit: Unit): Vec2 | null {
   const enemies = livingUnits(state, "enemy");
+  const pressurePending =
+    state.missionKind === "withdraw" &&
+    state.stats.enemyRouted < (getMission(state.missionId).victory.minEnemiesRouted ?? 0);
 
   if (unit.keyUnit) {
-    if (state.missionKind === "withdraw") return evacGoal(state, unit);
-    const posts =
-      state.missionKind === "hold"
-        ? state.objectives.filter((o) => o.kind === "hold" && o.owner === "player")
-        : state.objectives.filter((o) => o.kind === "capture");
-    const post = nearest(unit, posts);
+    if (state.missionKind === "withdraw")
+      return pressurePending ? nearest(unit, enemies) : evacGoal(state, unit);
+    const posts = state.missionKind === "hold"
+      ? state.objectives.filter((o) => o.kind === "hold")
+      : state.objectives.filter((o) => o.kind === "capture");
+    const contested = posts.filter((post) => post.owner !== "player");
+    const post = nearest(unit, contested.length > 0 ? contested : posts);
     if (post && manhattan(unit, post) > 2) return post;
     return null;
   }
@@ -38,12 +43,13 @@ function basicGoal(state: GameState, unit: Unit): Vec2 | null {
   }
 
   if (state.missionKind === "withdraw") {
-    return evacGoal(state, unit);
+    return pressurePending ? nearest(unit, enemies) : evacGoal(state, unit);
   }
 
-  const held = state.objectives.filter((o) => o.kind === "hold" && o.owner === "player");
-  const post = nearest(unit, held);
-  if (post && manhattan(unit, post) > 1) return post;
+  const posts = state.objectives.filter((o) => o.kind === "hold");
+  const contested = posts.filter((post) => post.owner !== "player");
+  const post = nearest(unit, contested.length > 0 ? contested : posts);
+  if (post && manhattan(unit, post) > (contested.length > 0 ? 0 : 1)) return post;
   return null;
 }
 
@@ -61,6 +67,18 @@ function retreatTile(state: GameState, unit: Unit): Vec2 | null {
   return null;
 }
 
+function attackInCurrentRange(state: GameState, unit: Unit): Action | null {
+  const options = attackOptions(state, unit).filter(
+    (option) => !(unit.keyUnit && canBeCountered(state, unit, option.target)),
+  );
+  if (options.length === 0) return null;
+  const best = options.reduce((chosen, candidate) => {
+    if (candidate.lethal !== chosen.lethal) return candidate.lethal ? candidate : chosen;
+    return candidate.target.hp < chosen.target.hp ? candidate : chosen;
+  });
+  return { kind: "attack", unitId: unit.id, targetId: best.target.id };
+}
+
 /** 朝目标推进，攻击射程内最容易击溃的敌人。作为「一般玩家」的基线。 */
 export const basicAgent: Agent = {
   id: "basic",
@@ -72,14 +90,25 @@ export const basicAgent: Agent = {
       }
 
       const fragileKey = Boolean(unit.keyUnit && unit.hp / unit.maxHp < 0.7);
+      const pressurePending =
+        state.missionKind === "withdraw" &&
+        state.stats.enemyRouted < (getMission(state.missionId).victory.minEnemiesRouted ?? 0);
+
+      // 已在完整武器射程内就开火，避免带增程武器的单位仍无脑贴到相邻格。
+      if (!fragileKey) {
+        const attack = attackInCurrentRange(state, unit);
+        if (attack) return attack;
+      }
 
       if (unit.mpLeft > 0) {
         if (fragileKey) {
           const safeGoal =
-            state.missionKind === "withdraw" ? evacGoal(state, unit) : retreatTile(state, unit);
+            state.missionKind === "withdraw" && !pressurePending
+              ? evacGoal(state, unit)
+              : retreatTile(state, unit);
           if (safeGoal) {
             const tile =
-              state.missionKind === "withdraw"
+              state.missionKind === "withdraw" && !pressurePending
                 ? approachTile(state, unit, safeGoal)
                 : { x: safeGoal.x, y: safeGoal.y, cost: 1 };
             if (tile && (tile.x !== unit.x || tile.y !== unit.y)) {
@@ -94,19 +123,6 @@ export const basicAgent: Agent = {
               return { kind: "move", unitId: unit.id, to: { x: tile.x, y: tile.y } };
             }
           }
-        }
-      }
-
-      if (!fragileKey) {
-        const options = attackOptions(state, unit).filter(
-          (option) => !(unit.keyUnit && canBeCountered(state, unit, option.target)),
-        );
-        if (options.length > 0) {
-          const best = options.reduce((chosen, candidate) => {
-            if (candidate.lethal !== chosen.lethal) return candidate.lethal ? candidate : chosen;
-            return candidate.target.hp < chosen.target.hp ? candidate : chosen;
-          });
-          return { kind: "attack", unitId: unit.id, targetId: best.target.id };
         }
       }
 

@@ -2,6 +2,13 @@
 
 摘录日期：2026-08-08。
 
+### 第二轮校核：美国陆军官方战史
+
+- 出处：U.S. Army Center of Military History, *The Chinese Intervention*, CMH Pub 19-8，第 10–14 页（含第 13 页态势图）
+- 链接：https://history.army.mil/portals/143/Images/Publications/catalog/19-8.pdf
+- 证据等级：A（军隅里—顺川撤退轴、三所里位置、道路阻断）；B（龙源里在 14×10 战术图中的相对压缩）
+- 校核结论：本关表现的是第 38 军进入敌后切断南撤道路的局部行动，不把清川江正面战线误画成近距离渡河战。
+
 ### 三所里、龙源里战斗（军网/党史公开叙述）
 
 - 出处：中国军网、人民网党史频道等公开战史转载

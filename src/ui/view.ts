@@ -1,16 +1,18 @@
-import { ITEMS } from "../content/items";
+import { ITEMS, ITEM_IDS } from "../content/items";
+import { BALANCE } from "../content/balance";
 import { CHAPTER_ONE } from "../content/chapter";
 import { TERRAIN } from "../content/terrain";
 import { PROGRESS, levelFromExp } from "../content/progress";
 import { UNIT_TYPES } from "../content/units";
-import { WEAPONS } from "../content/weapons";
+import { WEAPONS, WEAPON_HISTORY } from "../content/weapons";
 import { equippableWeapons } from "../core/campaign";
 import { effectiveStats } from "../core/commander";
 import { attackRange, livingUnits, unitAt } from "../core/grid";
 import { isEvacTile, movementBudget, type RosterUnit } from "../core/mission";
 import type { GameState, ItemId, Unit, WeaponId, Weather } from "../core/types";
-import { COMMANDER_PORTRAIT, ITEM_ICON, TERRAIN_ICON, UI_ICON, UNIT_ICON } from "./assets";
+import { COMMANDER_PORTRAIT, ITEM_ICON, TERRAIN_ICON, UI_ICON, UNIT_ICON, WEAPON_ICON, rankInsignia } from "./assets";
 import { Board, terrainName } from "./board";
+import { breakdownFactors } from "./format";
 import { briefVictoryLines, objectiveLines } from "./objectives";
 import type { Session, SessionState } from "./session";
 import { downloadReplay, loadReplays } from "./storage";
@@ -29,10 +31,10 @@ function meter(label: string, value: number, max = 100): string {
   return `<div class="meter" title="${esc(label)} ${value}"><span class="meter__lab">${esc(label)}</span><i style="width:${pct}%"></i><em>${value}</em></div>`;
 }
 
-/** 物资固定 6 格，空位画虚线占位，布局不会随库存跳动 */
-const ITEM_SLOT_COUNT = 6;
+/** 与内容表同源，不能静默吞掉第七种物资。 */
+export const ITEM_SLOT_COUNT = ITEM_IDS.length;
 
-function itemSlots(
+export function renderItemSlots(
   items: { id: ItemId; count: number }[],
   pending: ItemId | null,
   locked: boolean,
@@ -47,10 +49,10 @@ function itemSlots(
     const def = ITEMS[entry.id];
     const active = pending === entry.id ? " is-active" : "";
     cells.push(
-      `<button type="button" class="slot${active}" data-action="use-item" data-value="${entry.id}" title="${esc(def.name)}：${esc(def.description)}" ${locked ? "disabled" : ""}>` +
+      `<button type="button" class="slot${active}" data-action="use-item" data-value="${entry.id}" title="${esc(def.name)}：${esc(def.description)}" aria-label="${esc(`${def.name}，${entry.count}个，${itemEffectLabel(entry.id)}`)}" ${locked ? "disabled" : ""}>` +
         `<img class="slot__ico" src="${ITEM_ICON[entry.id]}" alt="" draggable="false" />` +
         `<span class="slot__count">${entry.count}</span>` +
-        `<span class="slot__effect">${esc(itemEffectLabel(entry.id))}</span>` +
+        `<span class="slot__effect">${esc(def.name)}</span>` +
         `</button>`,
     );
   }
@@ -81,7 +83,7 @@ function combatSummary(battle: GameState, unit: Unit): StatCell[] {
   );
 
   return [
-    { label: "攻击", value: String(attack), hint: `兵种底火 ${def.attack} × 将领与武器加成` },
+    { label: "基础火力", value: String(attack), hint: `兵种底火 ${def.attack} × 将领与武器加成；对具体目标请看攻击预测` },
     {
       label: "防御",
       value: `${defence >= 0 ? "+" : ""}${defence}%`,
@@ -101,13 +103,14 @@ const SKELETON = `
     <div class="stage" data-region="stage">
       <header class="hud-top" data-region="hud-top"></header>
       <div class="stage__map" data-region="map">
-        <canvas data-region="canvas" aria-label="战场棋盘"></canvas>
-        <aside class="hud-sheet" data-region="panel" hidden></aside>
-        <div class="notice" data-region="notice" hidden></div>
+        <canvas data-region="canvas" tabindex="0" aria-label="战场棋盘；获得焦点后可用方向键平移"></canvas>
+        <aside class="hud-sheet" data-region="panel" aria-live="polite" hidden></aside>
+        <aside class="battle-intel" data-region="intel" aria-label="交战情报"></aside>
+        <div class="notice" data-region="notice" role="status" aria-live="polite" hidden></div>
       </div>
     </div>
   </div>
-  <div class="overlay" data-region="overlay" hidden></div>
+  <div class="overlay" data-region="overlay" role="dialog" aria-modal="true" hidden></div>
 `;
 
 function ico(src: string, cls = "ico"): string {
@@ -141,6 +144,7 @@ export class View {
   private readonly session: Session;
   private readonly board: Board;
   private readonly regions: Record<string, HTMLElement>;
+  private overlayScreen: SessionState["screen"] | null = null;
   constructor(root: HTMLElement, session: Session) {
     this.root = root;
     this.session = session;
@@ -156,14 +160,28 @@ export class View {
     this.bindEvents();
     this.bindArmory();
     window.addEventListener("resize", () => this.render(this.session.current));
-    // 空格快进正在播放的交战动画
+    // 战斗快捷键只在战场页生效；不拦截表单控件。
     window.addEventListener("keydown", (event) => {
-      if (event.code !== "Space") return;
       const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-      if (!this.session.current.fxBusy) return;
-      event.preventDefault();
-      this.session.skipFx();
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) return;
+      if (this.session.current.screen !== "battle") return;
+      if (event.code === "Space" && this.session.current.fxBusy) {
+        event.preventDefault();
+        this.session.skipFx();
+      } else if (event.key === "n" || event.key === "N") {
+        event.preventDefault();
+        this.focusNextUnit();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        if (this.session.current.pendingAttack) this.session.cancelAttack();
+        else this.session.clearFocus();
+      }
     });
   }
 
@@ -186,6 +204,15 @@ export class View {
           break;
         case "end-turn":
           this.session.endTurn();
+          break;
+        case "next-unit":
+          this.focusNextUnit();
+          break;
+        case "confirm-attack":
+          this.session.confirmAttack();
+          break;
+        case "cancel-attack":
+          this.session.cancelAttack();
           break;
         case "proceed":
           this.session.proceed();
@@ -241,6 +268,15 @@ export class View {
     });
   }
 
+  private focusNextUnit(): void {
+    const unit = this.session.selectNextUnit();
+    if (!unit) return;
+    queueMicrotask(() => {
+      this.board.focusTile(unit.x, unit.y);
+      this.renderBoard();
+    });
+  }
+
   private bindArmory(): void {
     this.root.addEventListener("change", (event) => {
       const select = (event.target as HTMLElement).closest<HTMLSelectElement>(
@@ -275,6 +311,7 @@ export class View {
     if (battleVisible && state.battle) {
       this.renderHudTop(state, state.battle);
       this.renderSheet(state, state.battle);
+      this.renderIntel(state, state.battle);
       this.renderNotice(state);
       const endBtn = this.root.querySelector<HTMLButtonElement>('[data-action="end-turn"]');
       if (endBtn) endBtn.disabled = state.fxBusy;
@@ -316,15 +353,46 @@ export class View {
     notice.textContent = state.notice ?? "";
   }
 
+  private renderIntel(state: SessionState, battle: GameState): void {
+    const intel = this.regions.intel!;
+    const strike = state.lastStrike;
+    const attacker = strike ? battle.units.find((unit) => unit.id === strike.attackerId) : null;
+    const defender = strike ? battle.units.find((unit) => unit.id === strike.defenderId) : null;
+    const factors = strike ? breakdownFactors(strike.breakdown).slice(0, 8) : [];
+    const recent = state.log.slice(-5);
+    intel.hidden = recent.length === 0 && !strike;
+    intel.innerHTML = `
+      ${strike ? `<section class="intel__strike" aria-label="最近一次交火">
+        <strong>${esc(attacker?.name ?? "攻方")} → ${esc(defender?.name ?? "守方")}</strong>
+        <span>伤害 ${strike.damage}${strike.counterDamage > 0 ? ` · 反击 ${strike.counterDamage}` : " · 未受反击"}</span>
+        ${factors.length > 0 ? `<ul class="factors">${factors.map((factor) =>
+          `<li class="${factor.favourable ? "is-up" : "is-down"}"><span>${esc(factor.label)}</span><strong>×${factor.value.toFixed(2)}</strong></li>`,
+        ).join("")}</ul>` : ""}
+      </section>` : `<strong class="intel__title">战场记录</strong>`}
+      <ol class="log" role="log" aria-live="polite">
+        ${recent.map((entry) => `<li class="log__item log__item--${entry.tone}"><span class="log__turn">T${entry.turn}</span>${esc(entry.text)}</li>`).join("")}
+      </ol>
+    `;
+  }
+
   private renderHudTop(state: SessionState, battle: GameState): void {
     const lines = objectiveLines(battle, state.mission);
     const goals = lines
       .map((line) => {
         const active = state.highlightObjectiveId === line.id ? " is-active" : "";
-        return `<button type="button" class="hud-top__obj${line.done ? " is-done" : ""}${active}" data-action="focus-objective" data-value="${esc(line.id)}" title="${esc(line.detail)}">${ico(line.done ? UI_ICON.objDone : UI_ICON.objPending, "ico ico--xs")}<span>${esc(line.name)}</span></button>`;
+        const content = `${ico(line.done ? UI_ICON.objDone : UI_ICON.objPending, "ico ico--xs")}<span>${esc(line.name)}<small>${esc(line.detail)}</small></span>`;
+        return line.locatable
+          ? `<button type="button" class="hud-top__obj${line.done ? " is-done" : ""}${active}" data-action="focus-objective" data-value="${esc(line.id)}">${content}</button>`
+          : `<span class="hud-top__obj hud-top__obj--status${line.done ? " is-done" : ""}">${content}</span>`;
       })
       .join("");
     const weather = weatherPresentation(battle.weather);
+    const unacted = this.session.unactedPlayerUnits().length;
+    const endLabel = state.endTurnArmed
+      ? "确认结束"
+      : unacted > 0
+        ? `结束回合 · ${unacted}未动`
+        : "结束回合";
     this.regions["hud-top"]!.innerHTML = `
       <div class="hud-top__left">
         <strong class="hud-top__name">${esc(state.mission?.name ?? "")}</strong>
@@ -338,8 +406,9 @@ export class View {
         <button type="button" class="hud-top__pill hud-top__speed" data-action="cycle-fx-speed" title="交战动画倍速">${state.fxSpeed}×</button>
         ${state.fxBusy ? `<button type="button" class="hud-top__pill hud-top__skip" data-action="skip-fx">跳过</button>` : ""}
       </div>
+      ${unacted > 0 ? `<button class="btn hud-top__next" data-action="next-unit" title="快捷键 N">下一支</button>` : ""}
       <button class="btn btn--primary hud-top__end" data-action="end-turn">
-        ${ico(UI_ICON.actEndTurn, "ico ico--btn")}结束回合
+        ${ico(UI_ICON.actEndTurn, "ico ico--btn")}${esc(endLabel)}
       </button>
     `;
   }
@@ -440,22 +509,48 @@ export class View {
         : UNIT_ICON[unit.type][unit.faction];
     const kind =
       unit.commanderKind === "story" ? "剧情" : unit.commanderKind === "companion" ? "伴随" : "敌军";
+    const duty = unit.duty ?? (unit.keyUnit ? CHAPTER_ONE.protagonist.title : `${kind}作战分队`);
+    const preview = this.session.attackPreview();
+    const previewForUnit = preview?.attackerId === unit.id ? preview : null;
+    const previewTarget = previewForUnit
+      ? battle.units.find((candidate) => candidate.id === previewForUnit.defenderId)
+      : null;
 
     const combat = combatSummary(battle, unit);
     const slots = !isMine
       ? ""
       : `<div class="slots" role="group" aria-label="随行物资">
-          ${itemSlots(items, state.pendingItem, locked || unit.hasActed)}
+          ${renderItemSlots(items, state.pendingItem, locked || unit.hasActed)}
         </div>`;
 
     const actions = !isMine
       ? ""
+      : previewForUnit
+        ? ""
       : unit.hasActed
         ? `<p class="card__dim">本回合已行动</p>`
         : `<div class="actions">
           ${canCapture ? `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}" ${locked ? "disabled" : ""}>${ico(UI_ICON.actCapture, "ico ico--btn")}占领</button>` : ""}
           <button class="btn" data-action="unit-wait" data-value="${unit.id}" ${locked ? "disabled" : ""}>待命</button>
         </div>`;
+
+    const attackPreview = previewForUnit && previewTarget
+      ? `<section class="attack-preview" aria-label="攻击预测">
+          <div class="attack-preview__head"><strong>攻击预测 · ${esc(previewTarget.name)}</strong><span>${previewForUnit.rout === "certain" ? "确定击溃" : previewForUnit.rout === "possible" ? "可能击溃" : "无法击溃"}</span></div>
+          <div class="attack-preview__numbers">
+            <span>预计伤害 <b>${previewForUnit.damage.min}–${previewForUnit.damage.max}</b><small>中值 ${previewForUnit.damage.expected}</small></span>
+            <span>目标剩余 <b>${previewForUnit.defenderHpAfter.min}–${previewForUnit.defenderHpAfter.max}</b><small>当前 ${previewTarget.hp}</small></span>
+            <span>预计反击 <b>${previewForUnit.counter ? `${previewForUnit.counter.min}–${previewForUnit.counter.max}` : "无"}</b><small>${previewForUnit.counterConditional ? "若未被击溃" : previewForUnit.counter ? "射程可及" : "无法反击"}</small></span>
+          </div>
+          <ul class="factors">${breakdownFactors(previewForUnit.breakdown).slice(0, 8).map((factor) =>
+            `<li class="${factor.favourable ? "is-up" : "is-down"}"><span>${esc(factor.label)}</span><strong>×${factor.value.toFixed(2)}</strong></li>`,
+          ).join("")}</ul>
+          <div class="actions">
+            <button class="btn btn--primary" data-action="confirm-attack" ${locked ? "disabled" : ""}>确认攻击</button>
+            <button class="btn" data-action="cancel-attack">取消</button>
+          </div>
+        </section>`
+      : "";
 
     const detail = state.detailExpanded
       ? `<div class="card__help">
@@ -478,19 +573,23 @@ export class View {
         <img class="card__avatar" src="${portrait}" alt="" />
         <div class="card__id">
           <div class="card__name">${esc(unit.name)}${unit.keyUnit ? " ★" : ""}</div>
-          <div class="card__meta"><span>${esc(unit.rank)}</span><span>Lv.${unit.level}</span><span>${esc(def.name)}</span><span>${esc(kind)}</span></div>
+          <div class="card__meta"><span>${esc(duty)}</span><span>战斗 Lv.${unit.level}</span><span>${esc(def.name)}</span><span>${esc(kind)}</span></div>
         </div>
         <button class="card__more" data-action="toggle-detail" type="button" title="详细说明">${state.detailExpanded ? "收起" : "详"}</button>
       </div>
       <div class="card__bars">
         <div class="bar bar--hp" title="生命 ${unit.hp}/${unit.maxHp}"><i style="width:${hpPct}%"></i><span>${unit.hp}/${unit.maxHp}</span></div>
         <div class="bar bar--xp" title="经验 ${Math.round(unit.exp)} → Lv.${Math.min(PROGRESS.maxLevel, level + 1)}"><i style="width:${xpPct}%"></i><span>EXP</span></div>
+        <div class="bar bar--fatigue" title="疲劳 ${unit.fatigue}/100"><i style="width:${Math.max(0, Math.min(100, unit.fatigue))}%"></i><span>疲劳 ${unit.fatigue}</span></div>
       </div>
       <div class="card__combat">
         ${combat.map((cell) => `<div class="stat" title="${esc(cell.hint)}"><span>${esc(cell.label)}</span><b>${esc(cell.value)}</b></div>`).join("")}
       </div>
-      <div class="card__gear" title="${esc(weapon.name)}">${ico(UNIT_ICON[unit.type][unit.faction], "ico ico--xs")}<span>${esc(weapon.name)}</span><span class="card__range">${range.min}–${range.max}格</span></div>
+      <div class="card__gear" title="${esc(`${unit.equipment} · 机械型号 ${weapon.name} · ${WEAPON_HISTORY[unit.weapon].caliber}`)}">${ico(WEAPON_ICON[unit.weapon], "ico ico--weapon")}<span>${esc(unit.equipment)}</span><span class="card__range">${range.min}–${range.max}格</span></div>
+      ${unit.keyUnit ? `<p class="card__state">主力护卫：承受伤害 ×${BALANCE.keyUnitDamageTaken.toFixed(2)}；重伤将立即失败</p>` : ""}
+      ${def.setupBonus > 0 ? `<p class="card__state">${unit.movedThisTurn ? "机枪已移动：本回合无架设加成" : `机枪已架设：伤害 +${Math.round(def.setupBonus * 100)}%`}</p>` : ""}
       ${slots}
+      ${attackPreview}
       ${detail}
       ${actions}
     </section>`;
@@ -501,6 +600,7 @@ export class View {
   private armoryRow(state: SessionState, unit: RosterUnit): string {
     const options = equippableWeapons(state.campaign, unit.id);
     const current = WEAPONS[unit.weapon];
+    const history = WEAPON_HISTORY[unit.weapon];
     const bonus = [
       current.stats.might ? `武+${current.stats.might}` : "",
       current.stats.intellect ? `智+${current.stats.intellect}` : "",
@@ -515,10 +615,10 @@ export class View {
       .join(" · ");
 
     return `<li class="armory__row">
-      ${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}
+      ${ico(WEAPON_ICON[unit.weapon], "armory__weapon")}
       <div class="armory__who">
         <strong>${esc(unit.name)}${unit.keyUnit ? " · 主角" : ""}</strong>
-        <small>${esc(unit.rank)} Lv.${unit.level} · ${esc(UNIT_TYPES[unit.type].name)}</small>
+        <small>${esc(unit.duty ?? "直属作战分队")} · 战斗 Lv.${unit.level} · ${esc(UNIT_TYPES[unit.type].name)}</small>
       </div>
       <div class="armory__pick">
         <select data-action="equip-weapon" data-value="${esc(unit.id)}" aria-label="${esc(unit.name)}的武器">
@@ -529,6 +629,7 @@ export class View {
             )
             .join("")}
         </select>
+        <small>${esc(`${history.origin} · ${history.caliber}`)}</small>
         <small>${esc(bonus || "无额外加成")}${unit.manualWeapon ? " · 手动锁定" : ""}</small>
       </div>
     </li>`;
@@ -536,9 +637,29 @@ export class View {
 
   private renderOverlay(state: SessionState): void {
     const overlay = this.regions.overlay!;
+    const sameScreen = this.overlayScreen === state.screen;
+    const scrollTop = sameScreen ? overlay.scrollTop : 0;
+    const focused = document.activeElement as HTMLElement | null;
+    const focusAction = sameScreen && overlay.contains(focused)
+      ? focused?.dataset.action ?? null
+      : null;
+    const focusValue = sameScreen && overlay.contains(focused)
+      ? focused?.dataset.value ?? null
+      : null;
     const content = this.overlayContent(state);
     overlay.hidden = content === null;
     overlay.innerHTML = content ?? "";
+    this.overlayScreen = state.screen;
+    if (sameScreen && content !== null) {
+      overlay.scrollTop = scrollTop;
+      if (focusAction) {
+        const candidates = overlay.querySelectorAll<HTMLElement>(`[data-action="${focusAction}"]`);
+        const target = [...candidates].find((candidate) =>
+          focusValue === null || candidate.dataset.value === focusValue,
+        );
+        target?.focus({ preventScroll: true });
+      }
+    }
   }
 
   private overlayContent(state: SessionState): string | null {
@@ -549,7 +670,7 @@ export class View {
             <img class="title-hero__portrait" src="${COMMANDER_PORTRAIT[CHAPTER_ONE.protagonist.portrait]}" alt="高大全肖像" />
             <div><p class="sheet__eyebrow">历史战役篇 · 1950—1953</p><h1>高大全</h1><p class="title-hero__rank">${esc(CHAPTER_ONE.protagonist.title)}</p></div>
           </div>
-          <p class="sheet__lead">沿十二场关键战役走过运动战与阵地战。高大全和直属部队是虚构角色；战役时间、主要地形、参战编制、历史将领与代表性装备按公开战史还原。</p>
+          <p class="sheet__lead">沿十二场关键战役走过运动战与阵地战。高大全和直属部队是虚构角色；章节采用战史选集式叙事，连续成长不代表真实人物能按日跨越东西战区。战役时间、主要地形、参战编制、历史将领与代表性装备按公开战史还原。</p>
           <div class="sheet__actions">
             <button class="btn btn--primary" data-action="new-campaign">新的战役</button>
             ${state.hasSave ? `<button class="btn" data-action="continue">继续（第 ${state.campaign.missionIndex + 1} 关）</button>` : ""}
@@ -586,7 +707,7 @@ export class View {
           <div class="commander-strip">
             ${historicalCommanders.map((commander) => `<article class="commander-card">
               ${commander.portrait && COMMANDER_PORTRAIT[commander.portrait] ? `<img src="${COMMANDER_PORTRAIT[commander.portrait]}" alt="${esc(commander.name)}肖像" />` : `<span class="commander-card__fallback">${esc(commander.name.slice(0, 1))}</span>`}
-              <div><strong>${esc(commander.name)}</strong><small>${esc(commander.formation)} · ${esc(commander.role)}</small></div>
+              <div><strong>${esc(commander.name)}</strong><small>${esc(commander.formation)} · ${esc(commander.role)}</small><span class="commander-card__rank">${commander.rankInsignia ? `<img src="${rankInsignia(commander.rankInsignia)}" alt="" />` : ""}<em>${esc(commander.historicalRank ?? "职务资料待核")}</em></span></div>
             </article>`).join("")}
           </div>
           <h3>任务目标</h3>
@@ -598,7 +719,8 @@ export class View {
           <ul class="armory">
             ${state.campaign.roster.map((unit) => this.armoryRow(state, unit)).join("")}
           </ul>
-          <h3>本关剧情将领</h3>
+          <h3>本关虚构配属角色</h3>
+          <p class="sheet__hint">以下角色只用于战术抽象，不是历史人物；真实指挥体系见上方资料卡。</p>
           <ul class="sheet__roster">
             ${(mission.storyAllies ?? [])
               .map(
@@ -634,14 +756,19 @@ export class View {
             </article>
           </div>
           <ul class="sheet__stats">
+            <li><span>使用回合</span><strong>${outcome.turnsUsed}</strong></li>
             <li><span>志愿军溃散</span><strong>${outcome.playerRouted}</strong></li>
             <li><span>联合军溃散</span><strong>${outcome.enemyRouted}</strong></li>
             <li><span>撤离</span><strong>${outcome.evacuated}</strong></li>
             <li><span>永久损失</span><strong>${outcome.permanentLosses.length}</strong></li>
             <li><span>归队</span><strong>${outcome.returningUnits.length}</strong></li>
-            <li><span>少尉以上</span><strong>${outcome.veteransAfter}</strong></li>
+            <li><span>3级以上老兵</span><strong>${outcome.veteransAfter}</strong></li>
             <li><span>缴获武器</span><strong>${outcome.weaponsGained.length}</strong></li>
           </ul>
+          ${outcome.permanentLossNames.length > 0 ? `<p class="result-detail"><strong>永久损失：</strong>${esc(outcome.permanentLossNames.join("、"))}</p>` : ""}
+          ${outcome.returningUnitNames.length > 0 ? `<p class="result-detail"><strong>重伤归队：</strong>${esc(outcome.returningUnitNames.join("、"))}</p>` : ""}
+          ${outcome.replacementNames.length > 0 ? `<p class="result-detail"><strong>补充编入：</strong>${esc(outcome.replacementNames.join("、"))}</p>` : ""}
+          ${outcome.weaponsGained.length > 0 ? `<p class="result-detail"><strong>缴获/奖励：</strong>${esc(outcome.weaponsGained.map((id) => WEAPONS[id].name).join("、"))}</p>` : ""}
           <p class="sheet__note">${
             outcome.permanentLosses.length > 0
               ? "被击溃的伴随部队里有一部分永远回不来了。剧情将领本关结算后离开编制。"
@@ -666,11 +793,11 @@ export class View {
             ${state.campaign.roster
               .map(
                 (unit) =>
-                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}</span><span>${esc(unit.rank)} Lv.${unit.level} · 参战 ${unit.missionsSurvived} 次</span></li>`,
+                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}</span><span>${esc(unit.duty ?? "直属作战分队")} · 战斗 Lv.${unit.level} · 参战 ${unit.missionsSurvived} 次</span></li>`,
               )
               .join("")}
           </ul>
-          <p class="sheet__note">其中 ${veterans.length} 人已晋升至少尉以上——他们是这一章真正的产出。</p>
+          <p class="sheet__note">其中 ${veterans.length} 人达到战斗 Lv.6 以上——他们是这一章真正的产出。等级代表战斗资历，不等同历史军衔或职务晋升。</p>
           <div class="sheet__actions">
             <button class="btn btn--primary" data-action="new-campaign">再打一遍</button>
             <button class="btn" data-action="download-replay">导出回放</button>

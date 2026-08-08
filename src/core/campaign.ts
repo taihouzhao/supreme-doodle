@@ -22,8 +22,11 @@ export interface MissionOutcome {
   enemyRouted: number;
   evacuated: number;
   permanentLosses: string[];
+  permanentLossNames: string[];
   returningUnits: string[];
+  returningUnitNames: string[];
   replacements: string[];
+  replacementNames: string[];
   weaponsGained: WeaponId[];
   rosterAfter: number;
   veteransAfter: number;
@@ -54,6 +57,7 @@ function rosterFromSpec(
     commander: string;
     type: RosterUnit["type"];
     level: number;
+    duty?: string;
     baseStats?: Parameters<typeof buildCompanionStats>[0]["baseStats"];
     weapon?: WeaponId;
     keyUnit?: boolean;
@@ -63,6 +67,7 @@ function rosterFromSpec(
     commander: spec.commander,
     type: spec.type,
     level: spec.level,
+    duty: spec.duty,
     baseStats: spec.baseStats,
     weapon: spec.weapon,
     keyUnit: spec.keyUnit,
@@ -84,6 +89,7 @@ function rosterFromSpec(
     commanderName: spec.commander,
     level: spec.level,
     rank: rankName(spec.level),
+    duty: spec.duty ?? "直属作战分队指挥员",
     stats,
     weapon,
   };
@@ -185,6 +191,7 @@ function replenish(campaign: CampaignState, chapter: ChapterConfig): string[] {
       commander,
       type: "rifle",
       level: 1,
+      duty: "补充步兵分队指挥员",
       weapon: defaultWeaponFor("rifle", "early"),
     });
     campaign.roster.push(unit);
@@ -241,7 +248,9 @@ export function finishMission(
   const lossChance = won ? chapter.permanentLossChance.won : chapter.permanentLossChance.lost;
 
   const permanentLosses: string[] = [];
+  const permanentLossNames: string[] = [];
   const returningUnits: string[] = [];
+  const returningUnitNames: string[] = [];
   const roster: RosterUnit[] = [];
 
   for (const rosterUnit of next.roster) {
@@ -272,6 +281,7 @@ export function finishMission(
       const exp = Math.round(deployed.exp * 0.9);
       const level = levelFromExp(exp);
       returningUnits.push(rosterUnit.id);
+      returningUnitNames.push(rosterUnit.name);
       const restored: RosterUnit = {
         ...rosterUnit,
         hp: Math.max(25, chapter.returningUnit.hp),
@@ -294,12 +304,14 @@ export function finishMission(
     next.rng = draw.state;
     if (draw.value < lossChance) {
       permanentLosses.push(rosterUnit.id);
+      permanentLossNames.push(rosterUnit.name);
       continue;
     }
 
     const exp = Math.round(deployed.exp * (1 - chapter.returningUnit.expPenalty));
     const level = levelFromExp(exp);
     returningUnits.push(rosterUnit.id);
+    returningUnitNames.push(rosterUnit.name);
     const restored: RosterUnit = {
       ...rosterUnit,
       hp: chapter.returningUnit.hp,
@@ -349,8 +361,13 @@ export function finishMission(
     enemyRouted: finalState.stats.enemyRouted,
     evacuated: finalState.stats.playerEvacuated,
     permanentLosses,
+    permanentLossNames,
     returningUnits,
+    returningUnitNames,
     replacements,
+    replacementNames: replacements
+      .map((id) => next.roster.find((unit) => unit.id === id)?.name)
+      .filter((name): name is string => Boolean(name)),
     weaponsGained,
     rosterAfter: roster.length,
     veteransAfter: roster.filter((u) => veterancyLevel(u.exp) >= 3).length,

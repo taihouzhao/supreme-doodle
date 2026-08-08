@@ -2,6 +2,13 @@
 
 摘录日期：2026-08-08。
 
+### 第二轮校核：美国陆军官方战史
+
+- 出处：U.S. Army Center of Military History, *Restoring the Balance*, CMH Pub 19-9，第 9–10 页
+- 链接：https://history.army.mil/portals/143/Images/Publications/catalog/19-9.pdf
+- 证据等级：A（砥平里环形防御、守军守住、南方装甲纵队解围）；B（北撤区在战术图上的具体宽度）
+- 校核结论：砥平里只作为高风险敌方核心标注，不设为玩家必夺目标；胜利仍是外线施压后的有序撤出。
+
 ### Battle of Chipyong-ni（英文维基，对照地理与日程）
 
 - 出处：Wikipedia: Battle of Chipyong-ni

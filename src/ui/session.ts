@@ -30,6 +30,7 @@ import type {
   WeaponId,
   Weather,
 } from "../core/types";
+import { buildAttackPreview, type AttackPreview } from "./combatPreview";
 import { describeEvent } from "./format";
 import { clipsFromEvents, Presentation } from "./presentation";
 import {
@@ -58,6 +59,11 @@ export interface LastStrike {
   breakdown: DamageBreakdown;
 }
 
+export interface PendingAttack {
+  attackerId: string;
+  defenderId: string;
+}
+
 export interface SessionState {
   screen: Screen;
   campaign: CampaignState;
@@ -68,6 +74,9 @@ export interface SessionState {
   highlightObjectiveId: string | null;
   detailExpanded: boolean;
   pendingItem: ItemId | null;
+  pendingAttack: PendingAttack | null;
+  /** 尚有未行动单位时，结束回合需要第二次确认。 */
+  endTurnArmed: boolean;
   log: LogEntry[];
   lastStrike: LastStrike | null;
   outcome: MissionOutcome | null;
@@ -103,6 +112,8 @@ export class Session {
       highlightObjectiveId: null,
       detailExpanded: false,
       pendingItem: null,
+      pendingAttack: null,
+      endTurnArmed: false,
       log: [],
       lastStrike: null,
       outcome: null,
@@ -196,6 +207,8 @@ export class Session {
       hasSave: false,
       notice: null,
       inspectedTile: null,
+      pendingAttack: null,
+      endTurnArmed: false,
       fxBusy: false,
     });
   }
@@ -227,6 +240,8 @@ export class Session {
       selectedUnitId: null,
       inspectedTile: null,
       pendingItem: null,
+      pendingAttack: null,
+      endTurnArmed: false,
       lastStrike: null,
       outcome: null,
       actions: [],
@@ -249,6 +264,8 @@ export class Session {
     this.update({
       selectedUnitId: unitId,
       pendingItem: null,
+      pendingAttack: null,
+      endTurnArmed: false,
       inspectedTile: unit ? { x: unit.x, y: unit.y } : this.state.inspectedTile,
     });
   }
@@ -258,6 +275,8 @@ export class Session {
     this.update({
       selectedUnitId: null,
       pendingItem: null,
+      pendingAttack: null,
+      endTurnArmed: false,
       inspectedTile: null,
       highlightObjectiveId: null,
       detailExpanded: false,
@@ -284,6 +303,8 @@ export class Session {
           highlightObjectiveId: objectiveId,
           inspectedTile: { x: Math.round(cx), y: Math.round(cy) },
           selectedUnitId: null,
+          pendingAttack: null,
+          endTurnArmed: false,
         });
       }
       return;
@@ -292,19 +313,73 @@ export class Session {
       highlightObjectiveId: objectiveId,
       inspectedTile: { x: objective.x, y: objective.y },
       selectedUnitId: null,
+      pendingAttack: null,
+      endTurnArmed: false,
       detailExpanded: false,
     });
   }
 
   toggleItem(item: ItemId | null): void {
     if (this.state.fxBusy) return;
-    this.update({ pendingItem: this.state.pendingItem === item ? null : item });
+    this.update({
+      pendingItem: this.state.pendingItem === item ? null : item,
+      pendingAttack: null,
+      endTurnArmed: false,
+    });
   }
 
   get selectedUnit(): Unit | null {
     const { battle, selectedUnitId } = this.state;
     if (!battle || !selectedUnitId) return null;
     return battle.units.find((u) => u.id === selectedUnitId) ?? null;
+  }
+
+  attackPreview(): AttackPreview | null {
+    const battle = this.state.battle;
+    const pending = this.state.pendingAttack;
+    if (!battle || !pending) return null;
+    const attacker = battle.units.find((u) => u.id === pending.attackerId);
+    const defender = battle.units.find((u) => u.id === pending.defenderId);
+    if (!attacker || !defender || !attacker.alive || !defender.alive) return null;
+    return buildAttackPreview(battle, attacker, defender);
+  }
+
+  confirmAttack(): void {
+    const pending = this.state.pendingAttack;
+    if (!pending) return;
+    this.dispatch({
+      kind: "attack",
+      unitId: pending.attackerId,
+      targetId: pending.defenderId,
+    });
+  }
+
+  cancelAttack(): void {
+    if (!this.state.pendingAttack) return;
+    this.update({ pendingAttack: null, notice: null });
+  }
+
+  unactedPlayerUnits(): Unit[] {
+    const battle = this.state.battle;
+    if (!battle) return [];
+    return livingUnits(battle, "player").filter((unit) => !unit.hasActed);
+  }
+
+  selectNextUnit(): Unit | null {
+    if (this.state.fxBusy) return null;
+    const units = this.unactedPlayerUnits();
+    if (units.length === 0) return null;
+    const current = units.findIndex((unit) => unit.id === this.state.selectedUnitId);
+    const next = units[(current + 1 + units.length) % units.length]!;
+    this.update({
+      selectedUnitId: next.id,
+      inspectedTile: { x: next.x, y: next.y },
+      pendingItem: null,
+      pendingAttack: null,
+      endTurnArmed: false,
+      notice: null,
+    });
+    return next;
   }
 
   /** 当前选中单位可以停留的格子 */
@@ -413,7 +488,12 @@ export class Session {
 
     if (unit && unit.faction === "player" && !unit.hasActed) {
       if (occupant?.faction === "enemy" && this.attackTiles().has(pos.y * battle.width + pos.x)) {
-        this.dispatch({ kind: "attack", unitId: unit.id, targetId: occupant.id });
+        this.update({
+          pendingAttack: { attackerId: unit.id, defenderId: occupant.id },
+          inspectedTile: { ...pos },
+          endTurnArmed: false,
+          notice: null,
+        });
         return;
       }
       if (!occupant && this.moveTiles().has(pos.y * battle.width + pos.x)) {
@@ -426,6 +506,8 @@ export class Session {
       this.update({
         selectedUnitId: occupant.id,
         pendingItem: null,
+        pendingAttack: null,
+        endTurnArmed: false,
         inspectedTile: { x: pos.x, y: pos.y },
       });
       return;
@@ -434,6 +516,8 @@ export class Session {
     this.update({
       selectedUnitId: null,
       pendingItem: null,
+      pendingAttack: null,
+      endTurnArmed: false,
       inspectedTile: { x: pos.x, y: pos.y },
     });
   }
@@ -488,6 +572,8 @@ export class Session {
       log: this.pushLog(entries, next.turn),
       lastStrike: strike,
       pendingItem: null,
+      pendingAttack: null,
+      endTurnArmed: false,
       notice: clips.length > 0 ? null : this.pendingRoutNotice,
       selectedUnitId: selected && selected.alive && !selected.hasActed ? selected.id : null,
       fxBusy: clips.length > 0,
@@ -508,6 +594,15 @@ export class Session {
   }
 
   endTurn(): void {
+    const pending = this.unactedPlayerUnits();
+    if (pending.length > 0 && !this.state.endTurnArmed) {
+      this.update({
+        endTurnArmed: true,
+        pendingAttack: null,
+        notice: `还有 ${pending.length} 支部队未行动。再点一次确认结束，或定位下一支部队。`,
+      });
+      return;
+    }
     this.dispatch({ kind: "endTurn" });
   }
 
@@ -530,6 +625,8 @@ export class Session {
       hasSave: true,
       selectedUnitId: null,
       inspectedTile: null,
+      pendingAttack: null,
+      endTurnArmed: false,
       fxBusy: false,
     });
   }
@@ -539,6 +636,8 @@ export class Session {
       screen: this.state.campaign.status === "complete" ? "chapterEnd" : "brief",
       battle: null,
       mission: null,
+      pendingAttack: null,
+      endTurnArmed: false,
     });
   }
 
@@ -588,7 +687,7 @@ function combatNotice(state: GameState, events: GameEvent[]): string | null {
     .filter((e): e is Extract<GameEvent, { type: "levelUp" }> => e.type === "levelUp")
     .map((e) => {
       const unit = state.units.find((u) => u.id === e.unitId);
-      return unit && unit.faction === "player" ? `${unit.name} 晋升${e.rank}` : null;
+      return unit && unit.faction === "player" ? `${unit.name} 提升至战斗 Lv.${e.to}` : null;
     })
     .filter((text): text is string => Boolean(text));
   if (promotions.length > 0) parts.push(promotions.join("、"));

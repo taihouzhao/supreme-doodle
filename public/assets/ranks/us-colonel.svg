@@ -1,0 +1,3 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 96" role="img" aria-label="us-colonel">
+<defs><filter id="grain"><feTurbulence baseFrequency=".7" numOctaves="2" stitchTiles="stitch" result="n"/><feColorMatrix in="n" values="0 0 0 0 .18 0 0 0 0 .15 0 0 0 0 .1 0 0 0 .08 0"/><feBlend in="SourceGraphic" mode="multiply"/></filter></defs>
+<rect width="100%" height="100%" rx="10" fill="#d9caa9"/><g filter="url(#grain)" fill="#34372f" stroke="#24251f" stroke-linecap="round" stroke-linejoin="round"><path d="M128 12l12 14 25-6-13 20 14 16-26-2-12 17-12-17-26 2 14-16-13-20 25 6z" fill="#e8e8df"/><path d="M128 28v25M111 38l17 8 17-8" fill="none" stroke="#55574f" stroke-width="3"/></g></svg>

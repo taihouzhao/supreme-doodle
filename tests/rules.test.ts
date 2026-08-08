@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { BALANCE } from "../src/content/balance";
 import { getMission } from "../src/content/missions";
 import { UNIT_TYPES, veterancyLevel } from "../src/content/units";
-import { damageComponents, estimateDamage } from "../src/core/combat";
+import { canCounter, damageComponents, estimateDamage } from "../src/core/combat";
 import { applyAction, legalActions } from "../src/core/engine";
 import { canAttack, reachableTiles, tileAt } from "../src/core/grid";
 import {
@@ -78,14 +78,27 @@ describe("射程", () => {
 
   it("高地为站立单位提供额外射程", () => {
     const state = scenario();
-    const mg = put(state, "p1", 4, 6);
-    expect(tileAt(state, 4, 6).rangeBonus).toBe(1);
-    const enemy = put(state, "e0", 4, 3);
+    const hillIndex = state.tiles.findIndex((terrain) => terrain === "hill");
+    const hill = { x: hillIndex % state.width, y: Math.floor(hillIndex / state.width) };
+    const mg = put(state, "p1", hill.x, hill.y);
+    expect(tileAt(state, hill.x, hill.y).rangeBonus).toBe(1);
+    const enemy = put(state, "e0", hill.x, Math.min(state.height - 1, hill.y + 3));
     expect(canAttack(state, mg, enemy)).toBe(true);
   });
 });
 
 describe("战斗", () => {
+  it("反击射程与武器增程和最小射程使用同一套核心规则", () => {
+    const state = scenario();
+    const attacker = put(state, "p0", 6, 6);
+    const defender = put(state, "e0", 6, 3);
+    defender.type = "mg";
+    defender.weapon = "bren";
+    expect(canCounter(state, attacker, defender)).toBe(false);
+    defender.weapon = "dp28";
+    expect(canCounter(state, attacker, defender)).toBe(true);
+  });
+
   it("抖动被限制在窄区间内，没有暴击", () => {
     const state = scenario();
     const attacker = put(state, "p0", 6, 6);
@@ -227,7 +240,7 @@ describe("胜利判定", () => {
   });
 
   it("阻击关会给出坚守回合进度", () => {
-    const mission = getMission("m9-cheorwon");
+    const mission = getMission("m10-triangle-hill");
     const state = createMissionState({
       mission,
       seed: deriveSeed(2, mission.id),
@@ -237,6 +250,7 @@ describe("胜利判定", () => {
       ],
       inventory: fullInventory(),
     });
+    for (const objective of state.objectives) objective.owner = "player";
     const progress = victoryProgress(state, mission.victory);
     expect(progress.coreMet).toBe(true);
     expect(progress.blocking).toContain("坚守");

@@ -1,6 +1,6 @@
 import { TERRAIN } from "../content/terrain";
 import type { Faction, GameState, Objective, TerrainId, Unit, UnitTypeId, Vec2 } from "../core/types";
-import { ITEM_ICON, UI_ICON, UNIT_ICON, terrainIcon } from "./assets";
+import { COMMANDER_PORTRAIT, ITEM_ICON, UI_ICON, UNIT_ICON, UNIT_ROLE_ICON, terrainIcon } from "./assets";
 import { imageCache } from "./imageCache";
 import type { VisualFrame } from "./presentation";
 import { FACTION_STYLE, HIGHLIGHT, TERRAIN_STYLE } from "./theme";
@@ -98,12 +98,8 @@ export class Board {
   }
 
   private bindKeyboard(): void {
-    window.addEventListener("keydown", (event) => {
+    this.canvas.addEventListener("keydown", (event) => {
       if (!this.state) return;
-      const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
-        return;
-      }
       let dx = 0;
       let dy = 0;
       if (event.key === "ArrowLeft" || event.key === "a" || event.key === "A") dx = -1;
@@ -169,6 +165,7 @@ export class Board {
     el.addEventListener("pointerdown", (event) => {
       if (event.button !== 0) return;
       event.preventDefault();
+      el.focus({ preventScroll: true });
       this.pointerId = event.pointerId;
       this.didPan = false;
       this.dragStartX = event.clientX;
@@ -923,8 +920,11 @@ export class Board {
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 0.86, 0, Math.PI * 2);
     ctx.clip();
+    const portrait = unit.keyUnit
+      ? COMMANDER_PORTRAIT["gao-daquan"]!
+      : UNIT_ICON[unit.type][unit.faction];
     const iconDrawn = this.drawImage(
-      UNIT_ICON[unit.type][unit.faction],
+      portrait,
       cx - iconSize / 2,
       cy - iconSize / 2,
       iconSize,
@@ -934,6 +934,19 @@ export class Board {
     if (!iconDrawn) {
       this.drawUnitSilhouette(unit.type, cx, cy, radius, style.body);
     }
+
+    // 人物肖像是单位主体；右下角用独立兵种角标保证缩小时仍可识别。
+    const roleSize = radius * 0.78;
+    const roleX = cx + radius * 0.18;
+    const roleY = cy + radius * 0.18;
+    ctx.beginPath();
+    ctx.arc(roleX + roleSize / 2, roleY + roleSize / 2, roleSize * 0.55, 0, Math.PI * 2);
+    ctx.fillStyle = unit.faction === "player" ? "#e4d39d" : "#d9b4aa";
+    ctx.fill();
+    ctx.strokeStyle = style.body;
+    ctx.lineWidth = Math.max(1.5, tile * 0.025);
+    ctx.stroke();
+    this.drawImage(UNIT_ROLE_ICON[unit.type], roleX, roleY, roleSize, roleSize);
 
     ctx.restore();
 

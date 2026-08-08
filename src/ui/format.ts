@@ -1,5 +1,6 @@
 import { ITEMS } from "../content/items";
 import { UNIT_TYPES, veterancyName } from "../content/units";
+import { WEAPONS } from "../content/weapons";
 import type { DamageBreakdown, GameEvent, GameState, Unit } from "../core/types";
 
 export function factionLabel(faction: "player" | "enemy"): string {
@@ -34,6 +35,7 @@ export function breakdownFactors(breakdown: DamageBreakdown): Factor[] {
     ["夹击", breakdown.flank],
     ["目标地形", breakdown.terrain],
     ["目标防护", breakdown.defenderVeterancy],
+    ["主力护卫", breakdown.keyGuard],
     ["天气", breakdown.weather],
     ["架设", breakdown.setup],
     ["居高临下", breakdown.highGround],
@@ -53,7 +55,7 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     case "routed":
       return `${unitLabel(state, event.unitId)} 被击溃`;
     case "levelUp":
-      return `${unitLabel(state, event.unitId)} 晋升 ${event.rank}（Lv.${event.from}→${event.to}）`;
+      return `${unitLabel(state, event.unitId)} 战斗等级提升（Lv.${event.from}→${event.to}）`;
     case "captured": {
       const objective = state.objectives.find((o) => o.id === event.objectiveId);
       const name = objective?.name ?? event.objectiveId;
@@ -67,7 +69,7 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     case "itemPicked":
       return `${unitLabel(state, event.unitId)} 拾取了${ITEMS[event.item].name}`;
     case "weaponPicked":
-      return `${unitLabel(state, event.unitId)} 缴获了武器`;
+      return `${unitLabel(state, event.unitId)} 缴获了${WEAPONS[event.weapon].name}`;
     case "reinforced":
       return `联合军增援抵达（${event.unitIds.length} 个单位）`;
     case "evacuated":

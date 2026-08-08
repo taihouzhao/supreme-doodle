@@ -4,23 +4,14 @@ export type { CommanderStats, CommanderKind } from "../core/types";
 
 export type StatKey = keyof CommanderStats;
 
-/** 军衔随等级晋升；显示名用于 UI。 */
+/** 战斗熟练度称谓；不等同任何一方的军衔或剧情职务。 */
 export const RANKS: { minLevel: number; name: string }[] = [
-  { minLevel: 1, name: "列兵" },
-  { minLevel: 2, name: "上等兵" },
-  { minLevel: 3, name: "下士" },
-  { minLevel: 4, name: "中士" },
-  { minLevel: 5, name: "上士" },
-  { minLevel: 6, name: "少尉" },
-  { minLevel: 7, name: "中尉" },
-  { minLevel: 8, name: "上尉" },
-  { minLevel: 9, name: "少校" },
-  { minLevel: 10, name: "中校" },
-  { minLevel: 11, name: "上校" },
-  { minLevel: 12, name: "大校" },
-  { minLevel: 14, name: "少将" },
-  { minLevel: 16, name: "中将" },
-  { minLevel: 18, name: "上将" },
+  { minLevel: 1, name: "新锐" },
+  { minLevel: 2, name: "熟练" },
+  { minLevel: 4, name: "老兵" },
+  { minLevel: 7, name: "精锐" },
+  { minLevel: 11, name: "资深" },
+  { minLevel: 16, name: "王牌" },
 ];
 
 export const PROGRESS = {

@@ -4,7 +4,7 @@ import { WEATHER_EFFECT } from "../content/terrain";
 import { MATCHUP, PROGRESS, UNIT_TYPES } from "../content/units";
 import { WEAPONS } from "../content/weapons";
 import { effectiveMaxHp, effectiveStats } from "./commander";
-import { adjacentAllies, manhattan, tileAt } from "./grid";
+import { adjacentAllies, attackRange, manhattan, tileAt } from "./grid";
 import { nightAssaultBonus, supplyPenalty } from "./mission";
 import { nextRange } from "./rng";
 import type { DamageBreakdown, GameState, Unit } from "./types";
@@ -127,6 +127,7 @@ export function damageComponents(
     flank,
     terrain,
     defenderVeterancy,
+    keyGuard,
     weather,
     setup,
     highGround,
@@ -176,10 +177,9 @@ export function estimateDamageFrom(
 export function canCounter(state: GameState, attacker: Unit, defender: Unit): boolean {
   if (!defender.alive || defender.hp <= 0) return false;
   if (UNIT_TYPES[attacker.type].indirect) return false;
-  const def = UNIT_TYPES[defender.type];
-  const bonus = tileAt(state, defender.x, defender.y).rangeBonus;
+  const range = attackRange(state, defender);
   const distance = manhattan(attacker, defender);
-  return distance >= def.minRange && distance <= def.maxRange + bonus;
+  return distance >= range.min && distance <= range.max;
 }
 
 export function itemDamage(item: keyof typeof ITEMS, target: Unit, user?: Unit, state?: GameState): number {

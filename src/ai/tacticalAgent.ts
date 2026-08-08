@@ -1,11 +1,13 @@
 import { ITEMS } from "../content/items";
 import { UNIT_TYPES } from "../content/units";
+import { getMission } from "../content/missions";
 import { COUNTER_RATIO, estimateDamageFrom, itemDamage } from "../core/combat";
 import { livingUnits, manhattan, orthogonalNeighbours, tileAt, unitAt } from "../core/grid";
 import type { ReachableTile } from "../core/grid";
 import type { Rng } from "../core/rng";
 import type { Action, GameState, Unit, Vec2 } from "../core/types";
 import {
+  attackRangeFrom,
   attackOptions,
   canBeCountered,
   dangerAt,
@@ -113,6 +115,13 @@ function missionBonus(state: GameState, unit: Unit, tile: Vec2): number {
     );
   }
 
+  const pressurePending =
+    state.stats.enemyRouted < (getMission(state.missionId).victory.minEnemiesRouted ?? 0);
+  if (pressurePending && !unit.keyUnit) {
+    const contact = nearest(tile, livingUnits(state, "enemy"));
+    return contact ? -manhattan(tile, contact) * WEIGHTS.breakthroughPull : 0;
+  }
+
   const evac = nearest(tile, state.evacZone);
   if (!evac) return 0;
   const pull = unit.keyUnit ? WEIGHTS.keyUnitWithdrawPull : WEIGHTS.withdrawPull;
@@ -184,7 +193,6 @@ function planItem(state: GameState, unit: Unit): Plan | null {
 function planCombat(state: GameState, unit: Unit, danger: number[]): Plan | null {
   const tiles = stoppableTiles(state, unit);
   const targets = livingUnits(state, "enemy");
-  const def = UNIT_TYPES[unit.type];
   let best: Plan | null = null;
 
   const consider = (score: number, action: Action) => {
@@ -209,10 +217,10 @@ function planCombat(state: GameState, unit: Unit, danger: number[]): Plan | null
       reposition,
     );
 
-    const range = def.maxRange + terrain.rangeBonus;
+    const range = attackRangeFrom(state, unit, tile);
     for (const target of targets) {
       const distance = manhattan(tile, target);
-      if (distance < def.minRange || distance > range) continue;
+      if (distance < range.min || distance > range.max) continue;
 
       const damage = estimateDamageFrom(state, unit, target, tile, moved);
       const lethal = target.hp <= damage;
@@ -319,7 +327,8 @@ export const tacticalAgent: Agent = {
 
     // 阻击关：先占住据点，据点上优先自救；非据点单位不要去追击散兵
     if (state.missionKind === "hold") {
-      const posts = state.objectives.filter((o) => o.kind === "hold" && o.owner === "player");
+      // 上界策略会主动夺回失守据点；只筛 player 会让 AI 永久忽略刚被敌军占领的高地。
+      const posts = state.objectives.filter((o) => o.kind === "hold");
       const onPost = posts.some((o) => o.x === unit.x && o.y === unit.y);
       if (!onPost && unit.mpLeft > 0) {
         const vacant = posts.filter((post) => {
@@ -349,6 +358,7 @@ export const tacticalAgent: Agent = {
         }
         const options = attackOptions(state, unit).filter((option) => {
           if (unit.keyUnit && canBeCountered(state, unit, option.target)) return false;
+          // 满血守军可以利用工事主动压低突击梯队；低血量单位只补刀，避免无谓换血。
           if (hpRatio < 0.35 && !option.lethal) return false;
           return true;
         });
@@ -364,7 +374,10 @@ export const tacticalAgent: Agent = {
       return { kind: "wait", unitId: unit.id };
     }
 
-    if (state.missionKind === "withdraw" && unit.mpLeft > 0) {
+    const pressurePending =
+      state.missionKind === "withdraw" &&
+      state.stats.enemyRouted < (getMission(state.missionId).victory.minEnemiesRouted ?? 0);
+    if (state.missionKind === "withdraw" && !pressurePending && unit.mpLeft > 0) {
       const evac = evacGoal(state, unit);
       if (evac) {
         const onEvac = stoppableTiles(state, unit).find((tile) =>

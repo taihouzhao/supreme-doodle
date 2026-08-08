@@ -71,7 +71,7 @@ export const MATCHUP: Record<UnitTypeId, Record<UnitTypeId, number>> = {
 /** @deprecated 兼容旧测试命名；新逻辑请用 levelFromExp / levelLabel */
 export const VETERANCY = {
   thresholds: [0, PROGRESS.expForLevel(3), PROGRESS.expForLevel(6)] as const,
-  names: ["列兵", "下士", "少尉"] as const,
+  names: ["新锐", "老兵", "精锐"] as const,
   attackPerLevel: PROGRESS.attackPerLevel,
   defensePerLevel: PROGRESS.defensePerLevel,
   maxHpPerLevel: 8,

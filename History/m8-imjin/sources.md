@@ -2,6 +2,15 @@
 
 摘录日期：2026-08-08。
 
+### 第二轮校核：美英权威资料
+
+- 出处：U.S. Army Center of Military History, *Restoring the Balance*, CMH Pub 19-9，第 16–19 页
+- 链接：https://history.army.mil/portals/143/Images/Publications/catalog/19-9.pdf
+- 补充：National Army Museum, “The Battle of the Imjin River”
+- 链接：https://www.nam.ac.uk/explore/battle-imjin
+- 证据等级：A（临津江桥头—雪马里—235高地北南纵深、英29旅与格洛斯特营结局）
+- 校核结论：把两个左右并列目标改成逐次推进的桥头与 235 高地，雪马里位于中间谷地。
+
 ### Battle of the Imjin River / Gloster Hill（英文维基）
 
 - 出处：Wikipedia: Battle of the Imjin River；Gloucester Hill Battle Monument

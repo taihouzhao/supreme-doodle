@@ -5,7 +5,6 @@ import type { MissionConfig } from "./missions/schema";
 import {
   BASE_STATS,
   PROGRESS,
-  addStats,
   statsAtLevel,
   type CommanderKind,
 } from "./progress";
@@ -15,6 +14,8 @@ export interface StartingUnitSpec {
   type: UnitTypeId;
   /** 起始等级（1 起） */
   level: number;
+  /** 战时职务/单位身份，不随战斗等级自动晋升。 */
+  duty?: string;
   /** 底板属性（未含等级成长） */
   baseStats?: Partial<CommanderStats>;
   weapon?: WeaponId;
@@ -72,6 +73,7 @@ export const CHAPTER_ONE: ChapterConfig = {
       commander: "高大全",
       type: "rifle",
       level: 2,
+      duty: "志司直属加强营指挥员",
       keyUnit: true,
       baseStats: { leadership: 48, intellect: 44, might: 45, stamina: 46, agility: 42 },
       weapon: "zhongzheng",
@@ -80,6 +82,7 @@ export const CHAPTER_ONE: ChapterConfig = {
       commander: "王铁山",
       type: "rifle",
       level: 1,
+      duty: "直属步兵分队指挥员",
       baseStats: { leadership: 40, intellect: 36, might: 42, stamina: 44, agility: 40 },
       weapon: "type38",
     },
@@ -87,6 +90,7 @@ export const CHAPTER_ONE: ChapterConfig = {
       commander: "刘黑牛",
       type: "mg",
       level: 1,
+      duty: "直属机枪分队指挥员",
       baseStats: { leadership: 42, intellect: 38, might: 40, stamina: 40, agility: 36 },
       weapon: "zb26",
     },
@@ -94,6 +98,7 @@ export const CHAPTER_ONE: ChapterConfig = {
       commander: "孙有田",
       type: "mortar",
       level: 1,
+      duty: "直属迫击炮分队指挥员",
       baseStats: { leadership: 38, intellect: 44, might: 38, stamina: 38, agility: 38 },
       weapon: "mortar60",
     },
@@ -145,7 +150,9 @@ export function companionSeedExp(level: number): number {
 }
 
 export function buildCompanionStats(spec: StartingUnitSpec): CommanderStats {
-  const base = addStats(BASE_STATS, spec.baseStats ?? {});
+  // `baseStats` 是绝对底板；缺省项才回退到 40。旧实现使用 addStats，
+  // 会把高大全 48/44/45/46/42 再加一次 40，造成五维与 HP 双计。
+  const base: CommanderStats = { ...BASE_STATS, ...spec.baseStats };
   return statsAtLevel(base, spec.type, spec.level, spec.commander.length);
 }
 

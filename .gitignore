@@ -9,3 +9,6 @@ dist/
 .wrangler/
 .dev.vars
 reports/*.json
+
+# 本地生成母版体积较大，不进入版本库或线上静态产物；游戏使用切分后的派生素材。
+public/assets/masters/
