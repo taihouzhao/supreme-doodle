@@ -103,7 +103,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { type: "rifle", x: 9, y: 4, name: "韩6师2团3营前卫连", equipment: "M1加兰德步枪", exp: 55 },
       { type: "rifle", x: 10, y: 7, name: "韩6师2团3营先遣连", equipment: "M1卡宾枪", exp: 48 },
       { type: "mg", x: 9, y: 6, name: "韩6师2团3营机枪排", equipment: "勃朗宁M1919机枪", exp: 60 },
-      { type: "mortar", x: 11, y: 10, name: "韩6师2团3营迫击炮组", equipment: "M2 60毫米迫击炮", exp: 48 },
+      { type: "mortar", x: 11, y: 10, name: "韩6师2团配属炮兵中队", equipment: "M2 60毫米迫击炮", exp: 48 },
       { type: "rifle", x: 10, y: 9, name: "温井警戒排", equipment: "M1加兰德步枪", exp: 40 },
     ],
     variantSlots: [],
