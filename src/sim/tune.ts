@@ -7,7 +7,7 @@ import { renderReport } from "./report";
 import { runSimulation, type SimulationResult } from "./simulate";
 
 /**
- * 以「基础策略十二关平均任务胜率 ≈ 70%」为靶心，搜索敌军伤害系数。
+ * 以「基础策略十二关平均任务胜率 ≈ 30%」为靶心，搜索敌军伤害系数。
  * 玩法数值变更后应跑此工具反复打磨，再部署试玩。
  */
 
@@ -175,8 +175,9 @@ function prefer(candidate: TuneTrial, incumbent: TuneTrial, target: number): boo
 }
 
 function buildCandidates(center: number): number[] {
-  const coarse = [0.75, 0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15, 1.25, 1.35];
+  const coarse = [1.2, 1.35, 1.45, 1.55, 1.65, 1.75, 1.85, 1.95, 2.05, 2.15];
   const fine = [
+    center - 0.12,
     center - 0.08,
     center - 0.04,
     center,
@@ -185,7 +186,7 @@ function buildCandidates(center: number): number[] {
     center + 0.12,
   ];
   return [...coarse, ...fine]
-    .map((v) => Math.round(Math.min(1.5, Math.max(0.6, v)) * 1000) / 1000)
+    .map((v) => Math.round(Math.min(2.3, Math.max(1.0, v)) * 1000) / 1000)
     .filter((v, i, arr) => arr.indexOf(v) === i)
     .sort((a, b) => a - b);
 }

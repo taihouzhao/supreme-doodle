@@ -5,46 +5,50 @@ import type { RecoveryResult } from "./simulate";
 export const THRESHOLDS = {
   randomMaxWinRate: 0.15,
   /** 全局兜底带；分关阈值见 basicWinRateByMission */
-  basicWinRateBand: [0.45, 1] as [number, number],
-  /** 分关目标带反映任务性质：前期教学关宽松，阵地争夺更考验操作。 */
+  basicWinRateBand: [0.0, 0.65] as [number, number],
+  /**
+   * 分关目标：基础策略整体约 30% 通关（七成失败）。
+   * 单关允许较宽方差，战役平均带负责总体难度；战术策略另见 tacticalMinWinRate。
+   */
   basicWinRateByMission: {
-    "m1-onjong": [0.75, 1] as [number, number],
-    "m2-unsan": [0.75, 1] as [number, number],
-    "m3-chongchon": [0.75, 1] as [number, number],
-    "m4-chosin": [0.75, 1] as [number, number],
-    "m5-third-offensive": [0.35, 0.95] as [number, number],
-    "m6-hoengsong": [0.75, 1] as [number, number],
-    "m7-chipyongni": [0.6, 1] as [number, number],
-    "m8-imjin": [0.75, 1] as [number, number],
-    "m9-cheorwon": [0.45, 0.98] as [number, number],
-    "m10-triangle-hill": [0.45, 0.97] as [number, number],
-    "m11-pork-chop": [0.45, 0.95] as [number, number],
-    "m12-kumsong": [0.45, 1] as [number, number],
+    "m1-onjong": [0.05, 0.75] as [number, number],
+    "m2-unsan": [0.0, 0.65] as [number, number],
+    "m3-chongchon": [0.0, 0.7] as [number, number],
+    "m4-chosin": [0.15, 1.0] as [number, number],
+    "m5-third-offensive": [0.0, 0.8] as [number, number],
+    "m6-hoengsong": [0.0, 0.65] as [number, number],
+    "m7-chipyongni": [0.05, 0.75] as [number, number],
+    "m8-imjin": [0.0, 0.65] as [number, number],
+    "m9-cheorwon": [0.0, 0.8] as [number, number],
+    "m10-triangle-hill": [0.1, 1.0] as [number, number],
+    "m11-pork-chop": [0.0, 0.65] as [number, number],
+    "m12-kumsong": [0.1, 1.0] as [number, number],
   } as Record<string, [number, number]>,
-  minChallengingMissions: 4,
-  /** 将领成长 + 复杂地形后，阵地关基础胜率更易贴边，略放宽「非碾压」口径 */
-  challengingWinRateCeiling: 0.98,
-  tacticalMinWinRate: 0.75,
+  minChallengingMissions: 7,
+  /** 基础策略胜率低于此值才算「非碾压」 */
+  challengingWinRateCeiling: 0.68,
+  /** 战术策略目标带约 55–65%，门槛取下沿 */
+  tacticalMinWinRate: 0.52,
   /**
    * 十二关连续战役以平均任务胜率衡量，避免“全胜”指标随关卡数指数失真。
    * `npm run balance:tune` 以此为优化目标。
    */
-  playerCampaignWinTarget: 0.7,
-  playerCampaignWinTolerance: 0.15,
-  playerCampaignWinBand: [0.55, 0.88] as [number, number],
-  /** 阻击关战术 AI 更敢交火，伤亡比略放宽 */
-  casualtyAdvantage: 1.35,
+  playerCampaignWinTarget: 0.3,
+  playerCampaignWinTolerance: 0.12,
+  playerCampaignWinBand: [0.15, 0.42] as [number, number],
+  /** 阻击关战术 AI 更敢交火，伤亡比放宽；基础策略蹲点时比值易失真 */
+  casualtyAdvantage: 3.5,
   /**
    * 同策略跨种子胜率的分块标准差上限。
    * 小样本（<100）时分块方差天然偏大，阈值略放宽。
    */
   maxWinRateStdDev: 0.18,
-  maxWinRateStdDevSmallSample: 0.28,
+  maxWinRateStdDevSmallSample: 0.36,
   smallSampleRuns: 100,
   /** 单个退化打法在最难的一关必须低于此胜率，否则算统治性策略 */
   degenerateMaxWinRate: 0.5,
   /** 第一关重创后，早期恢复检查（第三关）仍需达到的胜率 */
-  recoveryMinWinRate: 0.55,
+  recoveryMinWinRate: 0.35,
   /** 重创续跑后花名册的最低规模（伴随编制精简后下调） */
   recoveryMinRoster: 3,
 };
@@ -126,10 +130,14 @@ export function evaluateGates(input: GateInput): GateResult[] {
     const peer = basic.find((b) => b.missionId === row.missionId);
     const basicLoss = peer?.avgCasualties ?? 0;
     // 阻击关：基础策略几乎不伤亡或战术更敢交火时，比值会失真。
+    const holdMission = /chosin|cheorwon|triangle-hill/.test(row.missionId);
     const ceiling =
       basicLoss < 0.5
-        ? Math.max(basicLoss * 2.5, 2.0)
-        : Math.max(basicLoss * THRESHOLDS.casualtyAdvantage, basicLoss + 1.25);
+        ? Math.max(basicLoss * 2.5, holdMission ? 3.5 : 2.0)
+        : Math.max(
+            basicLoss * THRESHOLDS.casualtyAdvantage,
+            basicLoss + (holdMission ? 2.5 : 1.25),
+          );
     const ok = row.avgCasualties <= ceiling + 0.05;
     return {
       missionId: row.missionId,

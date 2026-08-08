@@ -317,13 +317,41 @@ export const tacticalAgent: Agent = {
       }
     }
 
-    // 阻击关：站在据点上不离开，但射程内照常开火
+    // 阻击关：先占住据点，据点上优先自救；非据点单位不要去追击散兵
     if (state.missionKind === "hold") {
-      const onPost = state.objectives.some(
-        (o) => o.kind === "hold" && o.owner === "player" && o.x === unit.x && o.y === unit.y,
-      );
-      if (onPost) {
-        const options = attackOptions(state, unit);
+      const posts = state.objectives.filter((o) => o.kind === "hold" && o.owner === "player");
+      const onPost = posts.some((o) => o.x === unit.x && o.y === unit.y);
+      if (!onPost && unit.mpLeft > 0) {
+        const vacant = posts.filter((post) => {
+          const occ = unitAt(state, post.x, post.y);
+          return !occ || occ.id === unit.id;
+        });
+        const goal = nearest(unit, vacant.length > 0 ? vacant : posts);
+        if (goal && (unit.x !== goal.x || unit.y !== goal.y)) {
+          let best: { x: number; y: number; dist: number } | null = null;
+          for (const tile of stoppableTiles(state, unit)) {
+            if (tile.cost === 0) continue;
+            const dist = manhattan(tile, goal);
+            if (!best || dist < best.dist) best = { x: tile.x, y: tile.y, dist };
+          }
+          if (best && best.dist < manhattan(unit, goal)) {
+            return { kind: "move", unitId: unit.id, to: { x: best.x, y: best.y } };
+          }
+        }
+      }
+      if (onPost || posts.some((post) => manhattan(unit, post) <= 1)) {
+        const hpRatio = unit.hp / unit.maxHp;
+        if ((state.inventory.medkit ?? 0) > 0 && hpRatio < 0.6 && unit.hp < unit.maxHp - 15) {
+          return { kind: "useItem", unitId: unit.id, item: "medkit" };
+        }
+        if ((state.inventory.bandage ?? 0) > 0 && hpRatio < 0.75 && unit.hp < unit.maxHp - 8) {
+          return { kind: "useItem", unitId: unit.id, item: "bandage" };
+        }
+        const options = attackOptions(state, unit).filter((option) => {
+          if (unit.keyUnit && canBeCountered(state, unit, option.target)) return false;
+          if (hpRatio < 0.35 && !option.lethal) return false;
+          return true;
+        });
         if (options.length > 0) {
           const best = options.reduce((chosen, candidate) => {
             if (candidate.lethal !== chosen.lethal) return candidate.lethal ? candidate : chosen;
@@ -333,6 +361,7 @@ export const tacticalAgent: Agent = {
         }
         return { kind: "wait", unitId: unit.id };
       }
+      return { kind: "wait", unitId: unit.id };
     }
 
     if (state.missionKind === "withdraw" && unit.mpLeft > 0) {
@@ -364,7 +393,7 @@ export const tacticalAgent: Agent = {
     const hurt = unit.hp / unit.maxHp < (unit.keyUnit ? 0.7 : WEIGHTS.retreatHpRatio);
     const exposed =
       dangerAt(state, danger, unit) > unit.hp * (unit.keyUnit ? 0.25 : WEIGHTS.retreatDangerRatio);
-    if ((hurt && exposed || (unit.keyUnit && hurt)) && unit.mpLeft > 0 && state.missionKind !== "hold") {
+    if ((hurt && exposed || (unit.keyUnit && hurt)) && unit.mpLeft > 0) {
       const retreat = planRetreat(state, unit, danger);
       if (retreat && (!combat || retreat.score > combat.score - (unit.keyUnit ? 30 : 0))) {
         return retreat.action;
