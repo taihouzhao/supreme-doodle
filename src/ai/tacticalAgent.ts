@@ -312,7 +312,7 @@ export const tacticalAgent: Agent = {
       return { kind: "capture", unitId: unit.id };
     }
 
-    // 后勤：优先补充重伤/高疲劳友军，再接近伤员
+    // 后勤：优先补充重伤/高疲劳友军；阻击关不追到火线送死，改靠后补给
     if (unit.type === "logistics") {
       const needy = resupplyTargets(state, unit)
         .slice()
@@ -323,8 +323,19 @@ export const tacticalAgent: Agent = {
             a.id.localeCompare(b.id),
         );
       if (needy[0]) return { kind: "resupply", unitId: unit.id, targetId: needy[0].id };
+      const holdMission = state.missionKind === "hold";
       const wounded = livingUnits(state, unit.faction)
-        .filter((ally) => ally.id !== unit.id && (ally.hp < ally.maxHp * 0.75 || ally.fatigue >= 25))
+        .filter((ally) => {
+          if (ally.id === unit.id) return false;
+          const hurt =
+            ally.hp < ally.maxHp * (holdMission ? 0.55 : 0.75) ||
+            ally.fatigue >= (holdMission ? 40 : 25);
+          if (!hurt) return false;
+          // 阻击关：只接近仍靠近己方据点的伤员，避免后勤冲进南侧突击走廊
+          if (!holdMission) return true;
+          const posts = state.objectives.filter((o) => o.kind === "hold");
+          return posts.some((post) => manhattan(ally, post) <= 2);
+        })
         .sort(
           (a, b) =>
             a.hp / a.maxHp - b.hp / b.maxHp ||
@@ -340,6 +351,22 @@ export const tacticalAgent: Agent = {
         }
         if (best && best.dist < manhattan(unit, wounded)) {
           return { kind: "move", unitId: unit.id, to: { x: best.x, y: best.y } };
+        }
+      }
+      // 阻击关无伤员可补时，撤回己方据点后方待机
+      if (holdMission && unit.mpLeft > 0) {
+        const posts = state.objectives.filter((o) => o.kind === "hold");
+        const anchor = nearest(unit, posts);
+        if (anchor && manhattan(unit, anchor) > 2) {
+          let best: { x: number; y: number; dist: number } | null = null;
+          for (const tile of stoppableTiles(state, unit)) {
+            if (tile.cost === 0) continue;
+            const dist = manhattan(tile, anchor);
+            if (!best || dist < best.dist) best = { x: tile.x, y: tile.y, dist };
+          }
+          if (best && best.dist < manhattan(unit, anchor)) {
+            return { kind: "move", unitId: unit.id, to: { x: best.x, y: best.y } };
+          }
         }
       }
       return { kind: "wait", unitId: unit.id };
@@ -402,6 +429,10 @@ export const tacticalAgent: Agent = {
           if (unit.keyUnit && canBeCountered(state, unit, option.target)) return false;
           // 满血守军可以利用工事主动压低突击梯队；低血量单位只补刀，避免无谓换血。
           if (hpRatio < 0.35 && !option.lethal) return false;
+          // 中残血时避免无反击换血，保全阻击关存活门槛。
+          if (hpRatio < 0.55 && canBeCountered(state, unit, option.target) && !option.lethal) {
+            return false;
+          }
           return true;
         });
         if (options.length > 0) {

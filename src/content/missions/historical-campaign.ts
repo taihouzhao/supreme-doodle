@@ -708,17 +708,18 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     equipmentEra: "late" as const,
     weaponRewards: [],
     enemies: [
-      { type: "rifle", x: 8, y: 12, name: "美7师突击连", equipment: "M1加兰德步枪", exp: 115 },
-      { type: "rifle", x: 11, y: 12, name: "韩2师突击连", equipment: "M1加兰德步枪", exp: 100 },
-      { type: "mg", x: 9, y: 12, name: "联合国军火力组", equipment: "勃朗宁M1919机枪", exp: 115 },
-      { type: "artillery", x: 15, y: 13, name: "联合国军炮兵组", equipment: "M2A1 105毫米榴弹炮", exp: 100 },
-      { type: "rifle", x: 10, y: 9, name: "坑道口突击队", equipment: "M1加兰德步枪", exp: 105 },
-    
+      { type: "rifle", x: 8, y: 11, name: "美7师突击连", equipment: "M1加兰德步枪", exp: 115 },
+      { type: "rifle", x: 11, y: 11, name: "韩2师突击连", equipment: "M1加兰德步枪", exp: 100 },
+      { type: "mg", x: 9, y: 11, name: "联合国军火力组", equipment: "勃朗宁M1919机枪", exp: 110 },
+      // 以近距迫击炮为主威胁；保留一门退后炮兵体现师属火力，但降低经验避免无解种子
+      { type: "mortar", x: 10, y: 10, name: "联合国军迫击炮组", equipment: "M1型81毫米迫击炮", exp: 100 },
+      { type: "artillery", x: 17, y: 13, name: "联合国军炮兵组", equipment: "M2A1 105毫米榴弹炮", exp: 80 },
+      { type: "rifle", x: 10, y: 9, name: "坑道口突击队", equipment: "M1加兰德步枪", exp: 100 },
     ],
     variantSlots: [],
     waves: [
-      { window: [3, 4], units: [{ type: "rifle", x: 9, y: 12, name: "轮番突击", equipment: "M1加兰德步枪", exp: 90 }] },
-      { window: [6, 7], units: [{ type: "rifle", x: 10, y: 12, name: "二梯队", equipment: "M1加兰德步枪", exp: 80 }] },
+      { window: [3, 4], units: [{ type: "rifle", x: 9, y: 11, name: "轮番突击", equipment: "M1加兰德步枪", exp: 90 }] },
+      { window: [7, 8], units: [{ type: "rifle", x: 10, y: 11, name: "二梯队", equipment: "M1加兰德步枪", exp: 85 }] },
     ],
     objectives: [
       { id: "hill-5979", name: "597.9高地", kind: "hold", x: 7, y: 4, owner: "enemy" },
@@ -733,9 +734,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 10, y: 2, name: "五圣山纵深" },
     ],
     scripted: [
-      { kind: "barrage", turns: [3, 7], damage: 4, note: "上甘岭炮火准备" },
+      { kind: "barrage", turns: [4, 8], damage: 3, note: "上甘岭炮火准备" },
     ],
-    victory: { holdUntilEnd: true, minPostsHeld: 1, minSurvivors: 3 },
+    victory: { holdUntilEnd: true, minPostsHeld: 2, minSurvivors: 3 },
   },
   {
     id: "m11-pork-chop",
