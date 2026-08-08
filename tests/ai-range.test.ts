@@ -64,7 +64,8 @@ describe("AI 射程规划", () => {
   it("候选格射程直接继承核心的最小射程与武器修正", () => {
     const { state, player } = duel("mortar", "mortar82", 2);
     // 82毫米迫击炮保留兵种最小射程，并把武器最大射程 +1 计入规划。
-    expect(attackRangeFrom(state, player, { x: 1, y: 5 })).toEqual({ min: 2, max: 5 });
+    // 兵种最大射程 3 + 82 毫米武器 +1 → 4
+    expect(attackRangeFrom(state, player, { x: 1, y: 5 })).toEqual({ min: 2, max: 4 });
   });
 });
 
@@ -81,7 +82,12 @@ describe("AI 撤离路线", () => {
     unit.x = 12;
     unit.y = 2;
 
-    expect(routeCost(state, unit, unit, { x: 12, y: 0 })).toBe(5);
+    // 雪地高地抬高直路代价，AI 应改选侧向撤离格
+    const direct = routeCost(state, unit, unit, { x: 12, y: 0 });
+    const side = routeCost(state, unit, unit, { x: 11, y: 0 });
+    expect(direct).not.toBeNull();
+    expect(side).not.toBeNull();
+    expect(direct!).toBeGreaterThan(side!);
     expect(evacGoal(state, unit)).toEqual({ x: 11, y: 0 });
   });
 });

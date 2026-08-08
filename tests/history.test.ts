@@ -41,7 +41,7 @@ describe("历史战役内容", () => {
       expect(mission.mapNote).toBeTruthy();
       expect(mission.commanders?.length).toBeGreaterThanOrEqual(2);
       expect(mission.weather?.options.length).toBeGreaterThan(0);
-      expect(Object.keys(mission.playerEquipment ?? {}).length).toBe(4);
+      expect(Object.keys(mission.playerEquipment ?? {}).length).toBe(6);
       expect(mission.places?.length ?? 0).toBeGreaterThan(0);
       expect(mission.scripted?.length ?? 0).toBeGreaterThan(0);
     }
@@ -176,7 +176,7 @@ describe("历史战役内容", () => {
     const keyUnits = CHAPTER_ONE.startingRoster.filter((unit) => unit.keyUnit);
     expect(keyUnits).toHaveLength(1);
     expect(keyUnits[0]?.commander).toBe("高大全");
-    expect(CHAPTER_ONE.startingRoster).toHaveLength(4);
+    expect(CHAPTER_ONE.startingRoster).toHaveLength(5);
   });
 
   it("每关都有剧情将领客串", () => {

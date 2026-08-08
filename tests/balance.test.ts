@@ -51,8 +51,8 @@ describe("能力梯度", () => {
   it("基础策略十二关平均任务胜率处于偏难可玩带", () => {
     const basic = result.campaigns.find((row) => row.agentId === "basic");
     expect(basic).toBeTruthy();
-    expect(basic!.avgCompletionRate).toBeGreaterThanOrEqual(0.15);
-    expect(basic!.avgCompletionRate).toBeLessThanOrEqual(0.42);
+    expect(basic!.avgCompletionRate).toBeGreaterThanOrEqual(0.2);
+    expect(basic!.avgCompletionRate).toBeLessThanOrEqual(0.55);
   });
 
   it("不存在所有策略都无法完成核心目标的种子", () => {

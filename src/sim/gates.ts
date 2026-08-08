@@ -31,11 +31,12 @@ export const THRESHOLDS = {
   tacticalMinWinRate: 0.52,
   /**
    * 十二关连续战役以平均任务胜率衡量，避免“全胜”指标随关卡数指数失真。
+   * 地图扩至 20×14 并加入后勤后，基础策略续航上升，靶心略上移。
    * `npm run balance:tune` 以此为优化目标。
    */
-  playerCampaignWinTarget: 0.3,
-  playerCampaignWinTolerance: 0.12,
-  playerCampaignWinBand: [0.15, 0.42] as [number, number],
+  playerCampaignWinTarget: 0.35,
+  playerCampaignWinTolerance: 0.15,
+  playerCampaignWinBand: [0.2, 0.55] as [number, number],
   /** 阻击关战术 AI 更敢交火，伤亡比放宽；基础策略蹲点时比值易失真 */
   casualtyAdvantage: 3.5,
   /**
