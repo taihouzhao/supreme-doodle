@@ -151,7 +151,7 @@ const baseUrl = `http://127.0.0.1:${address.port}/`;
 const browser = await puppeteer.launch({
   args: chromium.args,
   executablePath: await chromiumExecutable(),
-  headless: true,
+  headless: "shell",
 });
 
 try {
