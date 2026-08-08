@@ -75,6 +75,23 @@ async function resolveChrome() {
       // continue
     }
   }
+  for (const macPath of [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  ]) {
+    try {
+      await access(macPath);
+      return macPath;
+    } catch {
+      // continue
+    }
+  }
+  if (process.platform === "darwin") {
+    throw new Error(
+      "No Chrome/Chromium found on macOS. Install Google Chrome or set PUPPETEER_EXECUTABLE_PATH.",
+    );
+  }
   const executable = join(CHROMIUM_CACHE, "chromium");
   try {
     await access(executable);
@@ -171,7 +188,7 @@ assert.ok(address && typeof address !== "string");
 const baseUrl = `http://127.0.0.1:${address.port}/`;
 
 const executablePath = await resolveChrome();
-const launchArgs = executablePath.includes("chrome")
+const launchArgs = /chrome/i.test(executablePath)
   ? ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"]
   : chromium.args;
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { readFile, mkdir } from "node:fs/promises";
+import { access, readFile, mkdir } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -46,6 +46,18 @@ async function resolveChrome() {
     try {
       const { stdout } = await execFileAsync("which", [candidate]);
       if (stdout.trim()) return stdout.trim();
+    } catch {
+      // continue
+    }
+  }
+  for (const macPath of [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Google Chrome Dev.app/Contents/MacOS/Google Chrome Dev",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+  ]) {
+    try {
+      await access(macPath);
+      return macPath;
     } catch {
       // continue
     }
