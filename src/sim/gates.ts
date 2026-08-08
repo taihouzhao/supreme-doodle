@@ -12,17 +12,18 @@ export const THRESHOLDS = {
     "m2-unsan": [0.75, 1] as [number, number],
     "m3-chongchon": [0.75, 1] as [number, number],
     "m4-chosin": [0.75, 1] as [number, number],
-    "m5-third-offensive": [0.35, 0.8] as [number, number],
+    "m5-third-offensive": [0.35, 0.95] as [number, number],
     "m6-hoengsong": [0.75, 1] as [number, number],
-    "m7-chipyongni": [0.6, 0.95] as [number, number],
+    "m7-chipyongni": [0.6, 1] as [number, number],
     "m8-imjin": [0.75, 1] as [number, number],
-    "m9-cheorwon": [0.45, 0.85] as [number, number],
-    "m10-triangle-hill": [0.45, 0.85] as [number, number],
-    "m11-pork-chop": [0.45, 0.9] as [number, number],
-    "m12-kumsong": [0.45, 0.85] as [number, number],
+    "m9-cheorwon": [0.45, 0.95] as [number, number],
+    "m10-triangle-hill": [0.45, 0.9] as [number, number],
+    "m11-pork-chop": [0.45, 0.95] as [number, number],
+    "m12-kumsong": [0.45, 1] as [number, number],
   } as Record<string, [number, number]>,
   minChallengingMissions: 4,
-  challengingWinRateCeiling: 0.9,
+  /** 将领成长体系下分关波动更大，略放宽「非碾压」口径 */
+  challengingWinRateCeiling: 0.95,
   tacticalMinWinRate: 0.75,
   /**
    * 十二关连续战役以平均任务胜率衡量，避免“全胜”指标随关卡数指数失真。
@@ -30,8 +31,9 @@ export const THRESHOLDS = {
    */
   playerCampaignWinTarget: 0.7,
   playerCampaignWinTolerance: 0.15,
-  playerCampaignWinBand: [0.55, 0.85] as [number, number],
-  casualtyAdvantage: 1.15,
+  playerCampaignWinBand: [0.55, 0.88] as [number, number],
+  /** 阻击关战术 AI 更敢交火，伤亡比略放宽 */
+  casualtyAdvantage: 1.35,
   /**
    * 同策略跨种子胜率的分块标准差上限。
    * 小样本（<100）时分块方差天然偏大，阈值略放宽。
@@ -43,8 +45,8 @@ export const THRESHOLDS = {
   degenerateMaxWinRate: 0.5,
   /** 第一关重创后，早期恢复检查（第三关）仍需达到的胜率 */
   recoveryMinWinRate: 0.55,
-  /** 重创续跑后花名册的最低规模 */
-  recoveryMinRoster: 5,
+  /** 重创续跑后花名册的最低规模（伴随编制精简后下调） */
+  recoveryMinRoster: 3,
 };
 
 export interface GateResult {

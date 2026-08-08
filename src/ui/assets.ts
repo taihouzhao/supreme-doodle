@@ -35,8 +35,12 @@ export const UNIT_ICON: Record<UnitTypeId, Record<Faction, string>> = {
 
 export const ITEM_ICON: Record<ItemId, string> = {
   medkit: `/assets/items/medkit.png${V}`,
+  bandage: `/assets/items/medkit.png${V}`,
+  ration: `/assets/items/medkit.png${V}`,
   at_charge: `/assets/items/at-charge.png${V}`,
+  satchel: `/assets/items/at-charge.png${V}`,
   arty_support: `/assets/items/arty-support.png${V}`,
+  field_manual: `/assets/items/arty-support.png${V}`,
 };
 
 export const UI_ICON = {

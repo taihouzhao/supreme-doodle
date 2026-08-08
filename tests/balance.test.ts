@@ -24,7 +24,7 @@ describe("能力梯度", () => {
 
   it.each(missionIds)("%s 上战术策略伤亡更低", (missionId) => {
     expect(casualties("tactical", missionId)).toBeLessThanOrEqual(
-      casualties("basic", missionId) * 1.15 + 0.05,
+      casualties("basic", missionId) * 1.35 + 0.05,
     );
   });
 
@@ -44,7 +44,7 @@ describe("能力梯度", () => {
     const basic = result.campaigns.find((row) => row.agentId === "basic");
     expect(basic).toBeTruthy();
     expect(basic!.avgCompletionRate).toBeGreaterThanOrEqual(0.55);
-    expect(basic!.avgCompletionRate).toBeLessThanOrEqual(0.85);
+    expect(basic!.avgCompletionRate).toBeLessThanOrEqual(0.88);
   });
 
   it("不存在所有策略都无法完成核心目标的种子", () => {

@@ -1,7 +1,9 @@
 import { BALANCE } from "../content/balance";
 import { ITEMS } from "../content/items";
 import { WEATHER_EFFECT } from "../content/terrain";
-import { MATCHUP, UNIT_TYPES, VETERANCY, veterancyLevel } from "../content/units";
+import { MATCHUP, PROGRESS, UNIT_TYPES } from "../content/units";
+import { WEAPONS } from "../content/weapons";
+import { effectiveMaxHp, effectiveStats } from "./commander";
 import { adjacentAllies, manhattan, tileAt } from "./grid";
 import { nextRange } from "./rng";
 import type { DamageBreakdown, GameState, Unit } from "./types";
@@ -9,14 +11,22 @@ import type { DamageBreakdown, GameState, Unit } from "./types";
 export const JITTER = BALANCE.jitter;
 export const COUNTER_RATIO = BALANCE.counterRatio;
 
-export function effectiveMaxHp(type: Unit["type"], exp: number): number {
-  return UNIT_TYPES[type].maxHp + VETERANCY.maxHpPerLevel * veterancyLevel(exp);
+/** @deprecated 使用带完整 unit 的 effectiveMaxHp */
+export function effectiveMaxHpLegacy(type: Unit["type"], exp: number): number {
+  return UNIT_TYPES[type].maxHp + Math.round(levelish(exp) * 6);
 }
 
-export function refreshMaxHp(unit: Unit): void {
-  const next = effectiveMaxHp(unit.type, unit.exp);
+function levelish(exp: number): number {
+  return Math.max(0, Math.floor(exp / 120));
+}
+
+export function refreshMaxHp(unit: Unit, state?: GameState): void {
+  const next = effectiveMaxHp(unit, state?.inventory);
   if (next !== unit.maxHp) {
+    const ratio = unit.maxHp > 0 ? unit.hp / unit.maxHp : 1;
     unit.maxHp = next;
+    unit.hp = Math.max(1, Math.min(next, Math.round(next * ratio)));
+  } else {
     unit.hp = Math.min(unit.hp, next);
   }
 }
@@ -29,7 +39,7 @@ export interface DamageResult {
 
 /**
  * 伤害为连续值，没有命中判定、没有暴击、没有秒杀。
- * 抖动被限制在一个窄区间，保证单次随机不能决定胜负。
+ * 将领武力/智力、武器、等级与兵种底盘共同决定输出。
  */
 export function damageComponents(
   state: GameState,
@@ -41,23 +51,45 @@ export function damageComponents(
   const attackerTile = tileAt(state, attacker.x, attacker.y);
   const defenderTile = tileAt(state, defender.x, defender.y);
   const distance = manhattan(attacker, defender);
+  const atkStats = effectiveStats(attacker, state.inventory);
+  const defStats = effectiveStats(defender, state.inventory);
+  const atkWeapon = WEAPONS[attacker.weapon];
+  const defWeapon = WEAPONS[defender.weapon];
+
+  const primaryStat = attackerDef.indirect ? atkStats.intellect : atkStats.might;
+  const commander = 1 + (primaryStat - 40) * 0.005;
+  const weapon = 1 + (atkWeapon?.attackBonus ?? 0) * 0.7;
+  const levelAtk = 1 + PROGRESS.attackPerLevel * Math.max(0, attacker.level - 1);
 
   const base = attackerDef.attack * BALANCE.factionDamage[attacker.faction];
   const matchup = MATCHUP[attacker.type][defender.type];
-  const veterancy = 1 + VETERANCY.attackPerLevel * veterancyLevel(attacker.exp);
-  const fatigue = 1 - BALANCE.fatigue.attackPenalty * (attacker.fatigue / BALANCE.fatigue.max);
+  const veterancy = levelAtk;
+  const fatigue =
+    1 -
+    BALANCE.fatigue.attackPenalty *
+      (attacker.fatigue / BALANCE.fatigue.max) *
+      (1 - Math.max(0, atkStats.stamina - 40) * 0.004);
+  const leadScale = 1 + Math.max(0, atkStats.leadership - 40) * 0.004;
   const flank =
-    1 + Math.min(BALANCE.flank.cap, adjacentAllies(state, attacker) * BALANCE.flank.perAlly);
-  // 曲射削弱掩体，但不会把「开阔地扣防御」这类负值也一并削弱
-  const rawDefense =
+    1 +
+    Math.min(BALANCE.flank.cap, adjacentAllies(state, attacker) * BALANCE.flank.perAlly) *
+      leadScale;
+
+  let rawDefense =
     attackerDef.indirect && defenderTile.defense > 0
       ? defenderTile.defense / 2
       : defenderTile.defense;
+  if (attackerDef.indirect) {
+    // 智力进一步压低掩体收益
+    rawDefense *= 1 - Math.max(0, atkStats.intellect - 40) * 0.004;
+  }
   const terrain = 1 - rawDefense;
-  const defenderVeterancy = 1 - VETERANCY.defensePerLevel * veterancyLevel(defender.exp);
+  const defenderVeterancy =
+    (1 - PROGRESS.defensePerLevel * Math.max(0, defender.level - 1)) *
+    (1 - Math.max(0, defStats.stamina - 40) * 0.003) *
+    (1 - (defWeapon?.defenseBonus ?? 0));
   const keyGuard = defender.keyUnit ? BALANCE.keyUnitDamageTaken : 1;
-  const weather =
-    distance > 1 ? 1 + WEATHER_EFFECT[state.weather].rangedDamage : 1;
+  const weather = distance > 1 ? 1 + WEATHER_EFFECT[state.weather].rangedDamage : 1;
   const setup = !attacker.movedThisTurn ? 1 + attackerDef.setupBonus : 1;
   const highGround = 1 + attackerTile.attackBonus;
 
@@ -67,6 +99,8 @@ export function damageComponents(
       base *
         matchup *
         veterancy *
+        commander *
+        weapon *
         fatigue *
         flank *
         terrain *
@@ -83,6 +117,8 @@ export function damageComponents(
     base,
     matchup,
     veterancy,
+    commander,
+    weapon,
     fatigue,
     flank,
     terrain,
@@ -141,8 +177,15 @@ export function canCounter(state: GameState, attacker: Unit, defender: Unit): bo
   return distance >= def.minRange && distance <= def.maxRange + bonus;
 }
 
-export function itemDamage(item: keyof typeof ITEMS, target: Unit): number {
+export function itemDamage(item: keyof typeof ITEMS, target: Unit, user?: Unit, state?: GameState): number {
   const def = ITEMS[item];
   if (def.antiArmorOnly && !UNIT_TYPES[target.type].vehicle) return 0;
-  return def.damage;
+  let damage = def.damage;
+  if (user && state) {
+    const intellect = effectiveStats(user, state.inventory).intellect;
+    damage = Math.round(damage * (1 + Math.max(0, intellect - 40) * 0.005));
+  }
+  return damage;
 }
+
+export { effectiveMaxHp };

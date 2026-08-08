@@ -50,6 +50,13 @@ describe("历史战役内容", () => {
     const keyUnits = CHAPTER_ONE.startingRoster.filter((unit) => unit.keyUnit);
     expect(keyUnits).toHaveLength(1);
     expect(keyUnits[0]?.commander).toBe("高大全");
+    expect(CHAPTER_ONE.startingRoster).toHaveLength(4);
+  });
+
+  it("每关都有剧情将领客串", () => {
+    for (const mission of MISSION_LIST) {
+      expect(mission.storyAllies?.length ?? 0).toBeGreaterThan(0);
+    }
   });
 
   it("标志性气候与历史结局不被改写", () => {

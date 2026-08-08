@@ -4,6 +4,7 @@ import { findPath, reachableTiles } from "../src/core/grid";
 import { createMissionState } from "../src/core/mission";
 import { deriveSeed } from "../src/core/rng";
 import type { GameState, Unit } from "../src/core/types";
+import { fullInventory, testRosterUnit } from "./helpers/roster";
 
 function scenario(): GameState {
   const mission = getMission("m2-unsan");
@@ -11,12 +12,12 @@ function scenario(): GameState {
     mission,
     seed: deriveSeed(1, mission.id),
     roster: [
-      { id: "r0", name: "步兵", type: "rifle", hp: 100, maxHp: 100, exp: 0, fatigue: 0, missionsSurvived: 0, keyUnit: true },
-      { id: "r1", name: "机枪", type: "mg", hp: 90, maxHp: 90, exp: 0, fatigue: 0, missionsSurvived: 0, keyUnit: false },
-      { id: "r2", name: "迫击炮", type: "mortar", hp: 70, maxHp: 70, exp: 0, fatigue: 0, missionsSurvived: 0, keyUnit: false },
-      { id: "r3", name: "坦克", type: "tank", hp: 140, maxHp: 140, exp: 0, fatigue: 0, missionsSurvived: 0, keyUnit: false },
+      testRosterUnit("r0", "试步兵", "rifle", { keyUnit: true }),
+      testRosterUnit("r1", "试机枪", "mg"),
+      testRosterUnit("r2", "试迫击炮", "mortar"),
+      testRosterUnit("r3", "试坦克", "tank"),
     ],
-    inventory: { medkit: 1, at_charge: 1, arty_support: 1 },
+    inventory: fullInventory({ medkit: 1, at_charge: 1, arty_support: 1 }),
   });
 }
 

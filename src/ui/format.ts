@@ -27,11 +27,13 @@ export interface Factor {
 export function breakdownFactors(breakdown: DamageBreakdown): Factor[] {
   const entries: [string, number][] = [
     ["兵种克制", breakdown.matchup],
-    ["经验", breakdown.veterancy],
+    ["等级", breakdown.veterancy],
+    ["将领", breakdown.commander],
+    ["武器", breakdown.weapon],
     ["疲劳", breakdown.fatigue],
     ["夹击", breakdown.flank],
     ["目标地形", breakdown.terrain],
-    ["目标经验", breakdown.defenderVeterancy],
+    ["目标防护", breakdown.defenderVeterancy],
     ["天气", breakdown.weather],
     ["架设", breakdown.setup],
     ["居高临下", breakdown.highGround],
@@ -61,6 +63,8 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     }
     case "itemPicked":
       return `${unitLabel(state, event.unitId)} 拾取了${ITEMS[event.item].name}`;
+    case "weaponPicked":
+      return `${unitLabel(state, event.unitId)} 缴获了武器`;
     case "reinforced":
       return `联合军增援抵达（${event.unitIds.length} 个单位）`;
     case "evacuated":

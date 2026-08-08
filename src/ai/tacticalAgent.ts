@@ -1,5 +1,5 @@
 import { ITEMS } from "../content/items";
-import { UNIT_TYPES, veterancyLevel } from "../content/units";
+import { UNIT_TYPES } from "../content/units";
 import { COUNTER_RATIO, estimateDamageFrom, itemDamage } from "../core/combat";
 import { livingUnits, manhattan, orthogonalNeighbours, tileAt, unitAt } from "../core/grid";
 import type { ReachableTile } from "../core/grid";
@@ -26,7 +26,7 @@ const WEIGHTS = {
   danger: 0.5,
   moveCost: 0.1,
   idlePenalty: 15,
-  breakthroughPull: 4,
+  breakthroughPull: 10,
   holdPull: 3,
   garrison: 45,
   withdrawPull: 7,
@@ -53,7 +53,7 @@ function alliesAround(state: GameState, unit: Unit, tile: Vec2): number {
 function deathRisk(unit: Unit, projectedDamage: number): number {
   const keyWeight = unit.keyUnit ? 3.5 : 1;
   if (projectedDamage < unit.hp) return projectedDamage * 0.35 * keyWeight;
-  const veteranWeight = 1 + veterancyLevel(unit.exp) * 0.8;
+  const veteranWeight = 1 + Math.min(10, unit.level) * 0.12;
   return (80 + (projectedDamage - unit.hp)) * veteranWeight * keyWeight + (unit.keyUnit ? 120 : 0);
 }
 
@@ -293,6 +293,28 @@ export const tacticalAgent: Agent = {
 
     if (standingObjective(state, unit)) {
       return { kind: "capture", unitId: unit.id };
+    }
+
+    // 突破关后半段：能占领的部队优先压向未占目标，避免清场后超时
+    if (
+      state.missionKind === "breakthrough" &&
+      UNIT_TYPES[unit.type].canCapture &&
+      unit.mpLeft > 0 &&
+      state.turn >= Math.ceil(state.maxTurns * 0.45)
+    ) {
+      const pending = state.objectives.filter((o) => o.kind === "capture" && o.owner !== "player");
+      const goal = nearest(unit, pending);
+      if (goal && (unit.x !== goal.x || unit.y !== goal.y)) {
+        let best: { x: number; y: number; dist: number } | null = null;
+        for (const tile of stoppableTiles(state, unit)) {
+          if (tile.cost === 0) continue;
+          const dist = manhattan(tile, goal);
+          if (!best || dist < best.dist) best = { x: tile.x, y: tile.y, dist };
+        }
+        if (best && best.dist < manhattan(unit, goal)) {
+          return { kind: "move", unitId: unit.id, to: { x: best.x, y: best.y } };
+        }
+      }
     }
 
     // 阻击关：站在据点上不离开，但射程内照常开火

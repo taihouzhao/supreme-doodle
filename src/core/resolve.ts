@@ -1,6 +1,8 @@
 import { BALANCE } from "../content/balance";
 import { ITEMS } from "../content/items";
 import { UNIT_TYPES, VETERANCY } from "../content/units";
+import { WEAPONS } from "../content/weapons";
+import { syncLevelFromExp } from "./commander";
 import { COUNTER_RATIO, canCounter, computeDamage, itemDamage, refreshMaxHp } from "./combat";
 import { canAttack, livingUnits, manhattan, orthogonalNeighbours, pathCost, unitAt } from "./grid";
 import { isEvacTile } from "./mission";
@@ -12,9 +14,10 @@ function addFatigue(unit: Unit, amount: number): void {
   unit.fatigue = Math.max(FATIGUE.min, Math.min(FATIGUE.max, unit.fatigue + amount));
 }
 
-function grantExp(unit: Unit, amount: number): void {
+function grantExp(unit: Unit, amount: number, state?: GameState): void {
   unit.exp += amount;
-  refreshMaxHp(unit);
+  syncLevelFromExp(unit);
+  refreshMaxHp(unit, state);
 }
 
 export function routUnit(state: GameState, unit: Unit, events: GameEvent[]): void {
@@ -51,6 +54,20 @@ export function performMove(state: GameState, unit: Unit, to: Vec2, events: Game
       events.push({ type: "itemPicked", unitId: unit.id, item: picked.item });
     }
 
+    const weaponIndex = state.fieldWeapons.findIndex((i) => i.x === to.x && i.y === to.y);
+    const weaponDrop = state.fieldWeapons[weaponIndex];
+    if (weaponDrop) {
+      state.fieldWeapons.splice(weaponIndex, 1);
+      state.pendingWeapons.push(weaponDrop.weapon);
+      const def = WEAPONS[weaponDrop.weapon];
+      if (def.forTypes.includes(unit.type) && def.score > WEAPONS[unit.weapon].score) {
+        unit.weapon = weaponDrop.weapon;
+        unit.equipment = def.name;
+        refreshMaxHp(unit, state);
+      }
+      events.push({ type: "weaponPicked", unitId: unit.id, weapon: weaponDrop.weapon });
+    }
+
     if (isEvacTile(state, to.x, to.y)) {
       unit.evacuated = true;
       unit.hasActed = true;
@@ -74,7 +91,7 @@ export function performAttack(
   const main = computeDamage(state, attacker, defender, state.rng);
   state.rng = main.rng;
   defender.hp -= main.damage;
-  grantExp(attacker, main.damage * VETERANCY.expPerDamage);
+  grantExp(attacker, main.damage * VETERANCY.expPerDamage, state);
   if (attacker.faction === "player") state.stats.damageDealt += main.damage;
   else state.stats.damageTaken += main.damage;
 
@@ -84,7 +101,7 @@ export function performAttack(
     state.rng = counter.rng;
     counterDamage = Math.max(1, Math.round(counter.damage * COUNTER_RATIO));
     attacker.hp -= counterDamage;
-    grantExp(defender, counterDamage * VETERANCY.expPerDamage);
+    grantExp(defender, counterDamage * VETERANCY.expPerDamage, state);
     if (defender.faction === "player") state.stats.damageDealt += counterDamage;
     else state.stats.damageTaken += counterDamage;
   }
@@ -100,11 +117,11 @@ export function performAttack(
 
   if (defender.hp <= 0) {
     routUnit(state, defender, events);
-    grantExp(attacker, VETERANCY.expPerRout);
+    grantExp(attacker, VETERANCY.expPerRout, state);
   }
   if (attacker.hp <= 0) {
     routUnit(state, attacker, events);
-    grantExp(defender, VETERANCY.expPerRout);
+    grantExp(defender, VETERANCY.expPerRout, state);
   }
 
   addFatigue(attacker, FATIGUE.perAttack);
@@ -154,15 +171,26 @@ export function performItem(
   const targetIds: string[] = [];
 
   if (def.targeting === "self") {
-    heal = Math.min(def.heal, unit.maxHp - unit.hp);
-    if (heal <= 0) return false;
-    unit.hp += heal;
+    const canHeal = def.heal > 0 && unit.hp < unit.maxHp;
+    const canFatigue = (def.fatigueRelief ?? 0) > 0 && unit.fatigue > 0;
+    const canExp = (def.expGain ?? 0) > 0;
+    if (!canHeal && !canFatigue && !canExp) return false;
+    if (canHeal) {
+      heal = Math.min(def.heal, unit.maxHp - unit.hp);
+      unit.hp += heal;
+    }
+    if (canFatigue) {
+      addFatigue(unit, -(def.fatigueRelief ?? 0));
+    }
+    if (canExp) {
+      grantExp(unit, def.expGain ?? 0, state);
+    }
     targetIds.push(unit.id);
   } else if (def.targeting === "target") {
     const target = state.units.find((u) => u.id === usage.targetId);
     if (!target || !target.alive || target.faction === unit.faction) return false;
     if (manhattan(unit, target) > def.range) return false;
-    const dealt = itemDamage(usage.item, target);
+    const dealt = itemDamage(usage.item, target, unit, state);
     if (dealt <= 0) return false;
     target.hp -= dealt;
     damage += dealt;
@@ -173,11 +201,14 @@ export function performItem(
     if (!center) return false;
     if (manhattan(unit, center) > def.range) return false;
     const tiles = def.splash ? [center, ...orthogonalNeighbours(center)] : [center];
+    const intellectScale =
+      1 + Math.max(0, unit.stats.intellect - 40) * 0.005;
     for (const tile of tiles) {
       const victim = unitAt(state, tile.x, tile.y);
       if (!victim || victim.faction === unit.faction) continue;
-      victim.hp -= def.damage;
-      damage += def.damage;
+      const dealt = Math.round(def.damage * intellectScale);
+      victim.hp -= dealt;
+      damage += dealt;
       targetIds.push(victim.id);
       if (victim.hp <= 0) routUnit(state, victim, events);
     }

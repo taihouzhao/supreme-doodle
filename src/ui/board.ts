@@ -1,5 +1,4 @@
 import { TERRAIN } from "../content/terrain";
-import { veterancyLevel } from "../content/units";
 import type { Faction, GameState, Objective, TerrainId, Unit, UnitTypeId, Vec2 } from "../core/types";
 import { ITEM_ICON, TERRAIN_ICON, UI_ICON, UNIT_ICON } from "./assets";
 import { imageCache } from "./imageCache";
@@ -315,6 +314,9 @@ export class Board {
 
     for (const item of state.fieldItems) {
       this.drawFieldItem(item.x, item.y);
+    }
+    for (const weapon of state.fieldWeapons) {
+      this.drawFieldItem(weapon.x, weapon.y);
     }
 
     this.drawOverlay(state);
@@ -765,11 +767,11 @@ export class Board {
     ctx.fillStyle = ratio > 0.55 ? "#5aa469" : ratio > 0.28 ? "#d9a326" : "#c8503c";
     ctx.fillRect(barX, barY, barWidth * ratio, barHeight);
 
-    const level = veterancyLevel(unit.exp);
-    for (let i = 0; i < level; i += 1) {
+    const pips = Math.min(5, Math.max(1, Math.ceil(unit.level / 4)));
+    for (let i = 0; i < pips; i += 1) {
       ctx.beginPath();
       ctx.arc(cx - tile * 0.22 + i * tile * 0.16, cy - radius * 0.85, tile * 0.055, 0, Math.PI * 2);
-      ctx.fillStyle = "#f5d76e";
+      ctx.fillStyle = unit.commanderKind === "story" ? "#9ec5e8" : "#f5d76e";
       ctx.fill();
       ctx.strokeStyle = "rgba(40, 32, 10, 0.7)";
       ctx.lineWidth = 1;

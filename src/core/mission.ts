@@ -1,13 +1,24 @@
 import { BALANCE } from "../content/balance";
 import { ITEM_IDS } from "../content/items";
+import { designation } from "../content/naming";
 import { TERRAIN_CHARS } from "../content/terrain";
 import { UNIT_TYPES } from "../content/units";
+import { WEAPONS, defaultWeaponFor } from "../content/weapons";
 import type { MissionConfig } from "../content/missions/schema";
-import { effectiveMaxHp } from "./combat";
+import {
+  agilityMoveBonus,
+  effectiveMaxHp,
+  effectiveStats,
+  makeEnemyCommander,
+  makeStoryCommander,
+} from "./commander";
 import { livingUnits, tileAt, unitAt } from "./grid";
 import { Rng, deriveSeed } from "./rng";
 import type {
+  CommanderKind,
+  CommanderStats,
   FieldItem,
+  FieldWeapon,
   GameEvent,
   GameState,
   ItemId,
@@ -15,6 +26,7 @@ import type {
   TerrainId,
   Unit,
   Vec2,
+  WeaponId,
 } from "./types";
 
 export interface RosterUnit {
@@ -28,6 +40,12 @@ export interface RosterUnit {
   missionsSurvived: number;
   /** 跨关稳定的主角标记；不会因为兵种或经验排序漂移。 */
   keyUnit: boolean;
+  commanderKind: Extract<CommanderKind, "companion">;
+  commanderName: string;
+  level: number;
+  rank: string;
+  stats: CommanderStats;
+  weapon: WeaponId;
 }
 
 export interface MissionSetup {
@@ -61,6 +79,12 @@ function makeUnit(params: {
   type: Unit["type"];
   name: string;
   equipment?: string;
+  weapon: WeaponId;
+  commanderKind: CommanderKind;
+  commanderName: string;
+  level: number;
+  rank: string;
+  stats: CommanderStats;
   x: number;
   y: number;
   exp: number;
@@ -68,21 +92,23 @@ function makeUnit(params: {
   fatigue?: number;
   keyUnit?: boolean;
 }): Unit {
-  const keyBonus = params.keyUnit ? 60 : 0;
-  const baseMax = effectiveMaxHp(params.type, params.exp);
-  const maxHp = baseMax + keyBonus;
-  const rawHp = params.hp ?? baseMax;
-  return {
+  const draft: Unit = {
     id: params.id,
     rosterId: params.rosterId,
     faction: params.faction,
     type: params.type,
     name: params.name,
-    equipment: params.equipment ?? UNIT_TYPES[params.type].name,
+    equipment: params.equipment ?? WEAPONS[params.weapon]?.name ?? UNIT_TYPES[params.type].name,
+    weapon: params.weapon,
+    commanderKind: params.commanderKind,
+    commanderName: params.commanderName,
+    level: params.level,
+    rank: params.rank,
+    stats: params.stats,
     x: params.x,
     y: params.y,
-    hp: Math.min(rawHp + keyBonus, maxHp),
-    maxHp,
+    hp: 1,
+    maxHp: 1,
     exp: params.exp,
     fatigue: params.fatigue ?? 0,
     mpLeft: 0,
@@ -92,6 +118,10 @@ function makeUnit(params: {
     evacuated: false,
     keyUnit: params.keyUnit ?? false,
   };
+  const maxHp = effectiveMaxHp(draft);
+  draft.maxHp = maxHp;
+  draft.hp = Math.min(params.hp ?? maxHp, maxHp);
+  return draft;
 }
 
 export function createMissionState(setup: MissionSetup): GameState {
@@ -111,20 +141,28 @@ export function createMissionState(setup: MissionSetup): GameState {
   }
 
   const units: Unit[] = [];
-
+  const era = mission.equipmentEra ?? "early";
   const keyRosterId = roster.find((unit) => unit.keyUnit)?.id;
+  let spawnIndex = 0;
 
-  roster.forEach((rosterUnit, index) => {
-    const spawn = mission.playerSpawns[index];
+  roster.forEach((rosterUnit) => {
+    const spawn = mission.playerSpawns[spawnIndex];
     if (!spawn) return;
+    spawnIndex += 1;
     units.push(
       makeUnit({
-        id: `p${index}`,
+        id: `p${units.length}`,
         rosterId: rosterUnit.id,
         faction: "player",
         type: rosterUnit.type,
         name: rosterUnit.name,
-        equipment: mission.playerEquipment?.[rosterUnit.type],
+        equipment: mission.playerEquipment?.[rosterUnit.type] ?? WEAPONS[rosterUnit.weapon].name,
+        weapon: rosterUnit.weapon,
+        commanderKind: rosterUnit.commanderKind,
+        commanderName: rosterUnit.commanderName,
+        level: rosterUnit.level,
+        rank: rosterUnit.rank,
+        stats: rosterUnit.stats,
         x: spawn.x,
         y: spawn.y,
         exp: rosterUnit.exp,
@@ -135,18 +173,43 @@ export function createMissionState(setup: MissionSetup): GameState {
     );
   });
 
+  for (const ally of mission.storyAllies ?? []) {
+    const spawn = mission.playerSpawns[spawnIndex];
+    if (!spawn) break;
+    spawnIndex += 1;
+    const weapon = ally.weapon ?? defaultWeaponFor(ally.type, era);
+    const profile = makeStoryCommander(ally.commander, ally.type, ally.level, weapon, ally.stats);
+    units.push(
+      makeUnit({
+        id: `s${units.length}`,
+        rosterId: null,
+        faction: "player",
+        type: ally.type,
+        name: designation(ally.commander, ally.type),
+        equipment: ally.equipment ?? WEAPONS[weapon].name,
+        ...profile,
+        x: spawn.x,
+        y: spawn.y,
+        keyUnit: false,
+      }),
+    );
+  }
+
   enemySpecs.forEach((spec, index) => {
+    const name = spec.name ?? UNIT_TYPES[spec.type].name;
+    const weapon = spec.weapon ?? defaultWeaponFor(spec.type, "enemy");
+    const profile = makeEnemyCommander(spec.type, spec.exp ?? 0, weapon, name);
     units.push(
       makeUnit({
         id: `e${index}`,
         rosterId: null,
         faction: "enemy",
         type: spec.type,
-        name: spec.name ?? UNIT_TYPES[spec.type].name,
-        equipment: spec.equipment,
+        name,
+        equipment: spec.equipment ?? WEAPONS[weapon].name,
+        ...profile,
         x: spec.x,
         y: spec.y,
-        exp: spec.exp ?? 0,
         hp: spec.hp,
       }),
     );
@@ -154,26 +217,37 @@ export function createMissionState(setup: MissionSetup): GameState {
 
   const pending = mission.waves.map((wave, waveIndex) => {
     const turn = waveRng.int(wave.window[0], wave.window[1]);
-    const waveUnits = wave.units.map((spec, unitIndex) =>
-      makeUnit({
+    const waveUnits = wave.units.map((spec, unitIndex) => {
+      const name = spec.name ?? UNIT_TYPES[spec.type].name;
+      const weapon = spec.weapon ?? defaultWeaponFor(spec.type, "enemy");
+      const profile = makeEnemyCommander(spec.type, spec.exp ?? 0, weapon, name);
+      return makeUnit({
         id: `w${waveIndex}_${unitIndex}`,
         rosterId: null,
         faction: "enemy",
         type: spec.type,
-        name: spec.name ?? UNIT_TYPES[spec.type].name,
-        equipment: spec.equipment,
+        name,
+        equipment: spec.equipment ?? WEAPONS[weapon].name,
+        ...profile,
         x: spec.x,
         y: spec.y,
-        exp: spec.exp ?? 0,
         hp: spec.hp,
-      }),
-    );
+      });
+    });
     return { turn, units: waveUnits };
   });
 
   const fieldItems: FieldItem[] = mission.itemDrops.map((drop, index) => ({
     id: `item${index}`,
     item: itemRng.pick(drop.options),
+    x: drop.x,
+    y: drop.y,
+  }));
+
+  const weaponRng = new Rng(deriveSeed(seed, "weapons"));
+  const fieldWeapons: FieldWeapon[] = (mission.weaponDrops ?? []).map((drop, index) => ({
+    id: `wpn${index}`,
+    weapon: weaponRng.pick(drop.options),
     x: drop.x,
     y: drop.y,
   }));
@@ -201,6 +275,8 @@ export function createMissionState(setup: MissionSetup): GameState {
     units,
     objectives,
     fieldItems,
+    fieldWeapons,
+    pendingWeapons: [],
     evacZone: mission.evacZone.map((v) => ({ ...v })),
     inventory: { ...emptyInventory(), ...inventory },
     weather: mission.weather
@@ -232,8 +308,12 @@ export function emptyInventory(): Record<ItemId, number> {
   return inventory;
 }
 
-export function movementBudget(unit: Unit, weather: GameState["weather"]): number {
-  const base = UNIT_TYPES[unit.type].move;
+export function movementBudget(
+  unit: Unit,
+  weather: GameState["weather"],
+  inventory?: GameState["inventory"],
+): number {
+  const base = UNIT_TYPES[unit.type].move + agilityMoveBonus(effectiveStats(unit, inventory));
   const fatiguePenalty =
     1 - BALANCE.fatigue.movePenalty * (unit.fatigue / BALANCE.fatigue.max);
   const weatherPenalty = weather === "rain" || weather === "snow" ? 1 : 0;
@@ -244,7 +324,7 @@ export function beginPhase(state: GameState, faction: Unit["faction"]): void {
   state.phase = faction;
   for (const unit of state.units) {
     if (unit.faction !== faction || !unit.alive || unit.evacuated) continue;
-    unit.mpLeft = movementBudget(unit, state.weather);
+    unit.mpLeft = movementBudget(unit, state.weather, state.inventory);
     unit.movedThisTurn = false;
     unit.hasActed = false;
   }
@@ -262,7 +342,7 @@ export function arriveWaves(state: GameState, events: GameEvent[]): void {
       if (!spot) continue;
       unit.x = spot.x;
       unit.y = spot.y;
-      unit.mpLeft = movementBudget(unit, state.weather);
+      unit.mpLeft = movementBudget(unit, state.weather, state.inventory);
       state.units.push(unit);
       arrived.push(unit.id);
     }

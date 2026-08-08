@@ -156,7 +156,12 @@ export function legalActions(state: GameState): Action[] {
         if ((state.inventory[item] ?? 0) <= 0) continue;
         const def = ITEMS[item];
         if (def.targeting === "self") {
-          if (unit.hp < unit.maxHp) actions.push({ kind: "useItem", unitId: unit.id, item });
+          const canHeal = def.heal > 0 && unit.hp < unit.maxHp;
+          const canFatigue = (def.fatigueRelief ?? 0) > 0 && unit.fatigue > 0;
+          const canExp = (def.expGain ?? 0) > 0;
+          if (canHeal || canFatigue || canExp) {
+            actions.push({ kind: "useItem", unitId: unit.id, item });
+          }
         } else if (def.targeting === "target") {
           for (const enemy of livingUnits(state, "enemy")) {
             if (manhattan(unit, enemy) > def.range) continue;

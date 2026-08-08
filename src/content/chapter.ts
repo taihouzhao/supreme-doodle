@@ -1,14 +1,25 @@
-import type { ItemId, UnitTypeId } from "../core/types";
+import type { CommanderStats, ItemId, UnitTypeId, WeaponId } from "../core/types";
 import { designation } from "./naming";
 import { MISSION_LIST } from "./missions";
 import type { MissionConfig } from "./missions/schema";
-
+import {
+  BASE_STATS,
+  PROGRESS,
+  addStats,
+  statsAtLevel,
+  type CommanderKind,
+} from "./progress";
 export interface StartingUnitSpec {
   /** 主将名：全军唯一，一将一支部队 */
   commander: string;
   type: UnitTypeId;
-  exp: number;
+  /** 起始等级（1 起） */
+  level: number;
+  /** 底板属性（未含等级成长） */
+  baseStats?: Partial<CommanderStats>;
+  weapon?: WeaponId;
   keyUnit?: boolean;
+  kind?: Extract<CommanderKind, "companion">;
 }
 
 export interface ChapterConfig {
@@ -21,11 +32,14 @@ export interface ChapterConfig {
     portrait: string;
   };
   missions: MissionConfig[];
+  /** 伴随将领：跨关成长，开局即在编制内 */
   startingRoster: StartingUnitSpec[];
   /** 补充兵可用的主将名池（按顺序取尚未在花名册中的） */
   reserveCommanders: string[];
   startingInventory: Record<ItemId, number>;
-  /** 每关开始时补足到的最低编制 */
+  /** 开局军械库 */
+  startingArmory: WeaponId[];
+  /** 每关开始时补足到的最低编制（仅伴随将领） */
   minRoster: number;
   /** 单关最多补充的新兵数 */
   maxReplacementsPerMission: number;
@@ -40,7 +54,8 @@ export interface ChapterConfig {
 }
 
 /**
- * 历史战役篇：主角与直属部队均为虚构，历史将领只作为战役背景出现。
+ * 历史战役篇：主角与直属伴随部队均为虚构；
+ * 各关另有剧情将领客串出战，不跨关继承。
  */
 export const CHAPTER_ONE: ChapterConfig = {
   id: "chapter-one",
@@ -48,19 +63,40 @@ export const CHAPTER_ONE: ChapterConfig = {
   protagonist: {
     name: "高大全",
     title: "志司直属加强营指挥员",
-    bio: "虚构人物。出身东北野战军，擅长夜战穿插和山地防御；作为志愿军司令部直属机动指挥员，被派往不同军团协同关键战斗。",
+    bio: "虚构人物。出身东北野战军，擅长夜战穿插和山地防御；作为志愿军司令部直属机动指挥员，被派往不同军团协同关键战斗。直属班底精干，每战另有当地协同部队临时配属。",
     portrait: "gao-daquan",
   },
   missions: MISSION_LIST,
   startingRoster: [
-    { commander: "高大全", type: "rifle", exp: 180, keyUnit: true },
-    { commander: "王铁山", type: "rifle", exp: 55 },
-    { commander: "赵长河", type: "rifle", exp: 35 },
-    { commander: "何满仓", type: "rifle", exp: 20 },
-    { commander: "刘黑牛", type: "mg", exp: 80 },
-    { commander: "陈守义", type: "mg", exp: 45 },
-    { commander: "孙有田", type: "mortar", exp: 65 },
-    { commander: "周文虎", type: "mortar", exp: 30 },
+    {
+      commander: "高大全",
+      type: "rifle",
+      level: 2,
+      keyUnit: true,
+      baseStats: { leadership: 48, intellect: 44, might: 45, stamina: 46, agility: 42 },
+      weapon: "zhongzheng",
+    },
+    {
+      commander: "王铁山",
+      type: "rifle",
+      level: 1,
+      baseStats: { leadership: 40, intellect: 36, might: 42, stamina: 44, agility: 40 },
+      weapon: "type38",
+    },
+    {
+      commander: "刘黑牛",
+      type: "mg",
+      level: 1,
+      baseStats: { leadership: 42, intellect: 38, might: 40, stamina: 40, agility: 36 },
+      weapon: "zb26",
+    },
+    {
+      commander: "孙有田",
+      type: "mortar",
+      level: 1,
+      baseStats: { leadership: 38, intellect: 44, might: 38, stamina: 38, agility: 38 },
+      weapon: "mortar60",
+    },
   ],
   reserveCommanders: [
     "谢大勇",
@@ -73,20 +109,23 @@ export const CHAPTER_ONE: ChapterConfig = {
     "丁海峰",
     "孔庆元",
     "许长胜",
-    "关万里",
-    "田守信",
-    "郭明山",
-    "沈大江",
-    "章克难",
-    "贾四海",
   ],
-  startingInventory: { medkit: 2, at_charge: 1, arty_support: 0 },
-  minRoster: 8,
-  maxReplacementsPerMission: 4,
-  permanentLossChance: { won: 0.22, lost: 0.4 },
-  returningUnit: { hp: 35, expPenalty: 0.3 },
-  restRecovery: { hp: 0.5, fatigue: 0.6 },
-  resupply: { medkit: 1, at_charge: 1, arty_support: 1 },
+  startingInventory: {
+    medkit: 1,
+    bandage: 2,
+    ration: 1,
+    at_charge: 1,
+    satchel: 0,
+    arty_support: 0,
+    field_manual: 1,
+  },
+  startingArmory: ["type38", "zhongzheng", "zb26", "mortar60"],
+  minRoster: 4,
+  maxReplacementsPerMission: 2,
+  permanentLossChance: { won: 0.18, lost: 0.35 },
+  returningUnit: { hp: 40, expPenalty: 0.25 },
+  restRecovery: { hp: 0.55, fatigue: 0.65 },
+  resupply: { medkit: 1, bandage: 1, ration: 1, at_charge: 1, arty_support: 1 },
 };
 
 export function rosterUnitName(spec: StartingUnitSpec): string {
@@ -99,6 +138,15 @@ export function commanderFromUnitName(name: string): string {
     if (name.endsWith(label)) return name.slice(0, -label.length);
   }
   return name;
+}
+
+export function companionSeedExp(level: number): number {
+  return PROGRESS.expForLevel(level);
+}
+
+export function buildCompanionStats(spec: StartingUnitSpec): CommanderStats {
+  const base = addStats(BASE_STATS, spec.baseStats ?? {});
+  return statsAtLevel(base, spec.type, spec.level, spec.commander.length);
 }
 
 export const CHAPTERS: Record<string, ChapterConfig> = {

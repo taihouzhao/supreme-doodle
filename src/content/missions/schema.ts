@@ -1,4 +1,13 @@
-import type { Faction, ItemId, MissionKind, UnitTypeId, Vec2, Weather } from "../../core/types";
+import type {
+  CommanderStats,
+  Faction,
+  ItemId,
+  MissionKind,
+  UnitTypeId,
+  Vec2,
+  WeaponId,
+  Weather,
+} from "../../core/types";
 
 export interface HistoricalCommander {
   id: string;
@@ -24,6 +33,17 @@ export interface EnemySpec {
   hp?: number;
   name?: string;
   equipment?: string;
+  weapon?: WeaponId;
+}
+
+/** 剧情将领：本关客串出战，不进入跨关花名册。 */
+export interface StoryAllySpec {
+  commander: string;
+  type: UnitTypeId;
+  level: number;
+  weapon?: WeaponId;
+  stats?: Partial<CommanderStats>;
+  equipment?: string;
 }
 
 /** 受约束随机：只允许在预算内替换敌军编成 */
@@ -42,6 +62,12 @@ export interface ItemDropSpec {
   x: number;
   y: number;
   options: ItemId[];
+}
+
+export interface WeaponDropSpec {
+  x: number;
+  y: number;
+  options: WeaponId[];
 }
 
 export interface ObjectiveSpec {
@@ -86,15 +112,22 @@ export interface MissionConfig {
   mapNote?: string;
   weather?: WeatherSpec;
   playerEquipment?: Partial<Record<UnitTypeId, string>>;
+  /** 装备时代，影响默认武器 */
+  equipmentEra?: "early" | "late";
   maxTurns: number;
   map: string[];
   playerSpawns: Vec2[];
+  /** 本关临时配属的剧情将领 */
+  storyAllies?: StoryAllySpec[];
   enemies: EnemySpec[];
   variantSlots: VariantSlot[];
   waves: WaveSpec[];
   objectives: ObjectiveSpec[];
   evacZone: Vec2[];
   itemDrops: ItemDropSpec[];
+  weaponDrops?: WeaponDropSpec[];
+  /** 通关后写入军械库的武器 */
+  weaponRewards?: WeaponId[];
   /** 旧关卡兼容；新关卡统一使用 weather。 */
   rainChance?: number;
   victory: VictoryRule;

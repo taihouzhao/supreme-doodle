@@ -1,7 +1,8 @@
 import { ITEMS } from "../content/items";
 import { CHAPTER_ONE } from "../content/chapter";
 import { TERRAIN } from "../content/terrain";
-import { UNIT_TYPES, veterancyName } from "../content/units";
+import { UNIT_TYPES } from "../content/units";
+import { WEAPONS } from "../content/weapons";
 import { livingUnits, unitAt } from "../core/grid";
 import { isEvacTile } from "../core/mission";
 import type { GameState, ItemId, Unit, Weather } from "../core/types";
@@ -222,7 +223,7 @@ export class View {
         const active = unit.id === state.selectedUnitId ? " is-active" : "";
         const done = unit.hasActed ? " is-done" : "";
         const ratio = Math.max(0, Math.min(100, Math.round((unit.hp / unit.maxHp) * 100)));
-        const title = `${unit.name} · ${UNIT_TYPES[unit.type].name} · ${veterancyName(unit.exp)} · ${ratio}%`;
+        const title = `${unit.name} · ${unit.rank}Lv${unit.level}${unit.commanderKind === "story" ? "·剧情" : ""} · ${ratio}%`;
         return `<button class="token${active}${done}" data-action="select-unit" data-value="${unit.id}" title="${esc(title)}" aria-label="${esc(title)}">
           ${ico(UNIT_ICON[unit.type].player, "ico ico--token")}
           ${unit.keyUnit ? ico(UI_ICON.keyUnit, "ico ico--token-key") : ""}
@@ -335,8 +336,8 @@ export class View {
         <h2 class="card__title">${ico(UNIT_ICON[unit.type][unit.faction], "ico ico--sm")}${esc(unit.name)}${unit.keyUnit ? ` ${ico(UI_ICON.keyUnit, "ico ico--xs")}` : ""}</h2>
         <span class="tag ${isMine ? "tag--player" : "tag--enemy"}">${esc(factionLabel(unit.faction))}</span>
       </header>
-      <p class="card__sub">${esc(def.name)} · ${esc(veterancyName(unit.exp))} · ${esc(terrain)} · ${unit.hp}/${unit.maxHp} · 移 ${unit.mpLeft}/${def.move}</p>
-      <p class="card__equipment">${esc(unit.equipment)}</p>
+      <p class="card__sub">${esc(def.name)} · ${esc(unit.rank)} Lv.${unit.level}${unit.commanderKind === "story" ? " · 剧情" : unit.commanderKind === "companion" ? " · 伴随" : ""} · ${esc(terrain)} · ${unit.hp}/${unit.maxHp}</p>
+      <p class="card__equipment">${esc(unit.equipment)} · 统${unit.stats.leadership} 智${unit.stats.intellect} 武${unit.stats.might} 耐${unit.stats.stamina} 敏${unit.stats.agility}</p>
       ${actions}
     </section>`;
   }
@@ -396,12 +397,21 @@ export class View {
           <ul class="sheet__goals">
             ${goals.map((goal) => `<li>${ico(UI_ICON.objPending, "ico ico--sm")}${esc(goal)}</li>`).join("")}
           </ul>
-          <h3>出战部队与代表装备</h3>
+          <h3>伴随将领</h3>
           <ul class="sheet__roster">
             ${state.campaign.roster
               .map(
                 (unit) =>
-                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}${unit.keyUnit ? " · 主角" : ""}</span><span>${esc(mission.playerEquipment?.[unit.type] ?? UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} · ${unit.hp}/${unit.maxHp}</span></li>`,
+                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}${unit.keyUnit ? " · 主角" : " · 伴随"}</span><span>${esc(unit.rank)} Lv.${unit.level} · ${esc(WEAPONS[unit.weapon].name)} · 武${unit.stats.might}</span></li>`,
+              )
+              .join("")}
+          </ul>
+          <h3>本关剧情将领</h3>
+          <ul class="sheet__roster">
+            ${(mission.storyAllies ?? [])
+              .map(
+                (ally) =>
+                  `<li>${ico(UNIT_ICON[ally.type].player, "ico ico--sm")}<span>${esc(ally.commander)}${esc(UNIT_TYPES[ally.type].name)} · 剧情</span><span>Lv.${ally.level} · 本关配属</span></li>`,
               )
               .join("")}
           </ul>
@@ -424,12 +434,13 @@ export class View {
             <li><span>撤离</span><strong>${outcome.evacuated}</strong></li>
             <li><span>永久损失</span><strong>${outcome.permanentLosses.length}</strong></li>
             <li><span>归队</span><strong>${outcome.returningUnits.length}</strong></li>
-            <li><span>现役老兵</span><strong>${outcome.veteransAfter}</strong></li>
+            <li><span>少尉以上</span><strong>${outcome.veteransAfter}</strong></li>
+            <li><span>缴获武器</span><strong>${outcome.weaponsGained.length}</strong></li>
           </ul>
           <p class="sheet__note">${
             outcome.permanentLosses.length > 0
-              ? "被击溃的部队里有一部分永远回不来了。撤下来的单位则完整保留。"
-              : "这一仗没有永久损失。"
+              ? "被击溃的伴随部队里有一部分永远回不来了。剧情将领本关结算后离开编制。"
+              : "这一仗没有永久损失。剧情将领本关结束后离开编制。"
           }</p>
           <div class="sheet__actions">
             <button class="btn btn--primary" data-action="proceed">继续</button>
@@ -441,20 +452,20 @@ export class View {
       case "chapterEnd": {
         const history = state.campaign.history;
         const won = history.filter((h) => h.status === "won").length;
-        const veterans = state.campaign.roster.filter((u) => u.exp >= 150);
+        const veterans = state.campaign.roster.filter((u) => u.level >= 6);
         return `<div class="sheet">
           <p class="sheet__eyebrow">章节结束</p>
           <h1>通过 ${won}/${history.length} 场</h1>
-          <h3>幸存部队</h3>
+          <h3>幸存伴随将领</h3>
           <ul class="sheet__roster">
             ${state.campaign.roster
               .map(
                 (unit) =>
-                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}</span><span>${esc(UNIT_TYPES[unit.type].name)} · ${esc(veterancyName(unit.exp))} · 参战 ${unit.missionsSurvived} 次</span></li>`,
+                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}</span><span>${esc(unit.rank)} Lv.${unit.level} · 参战 ${unit.missionsSurvived} 次</span></li>`,
               )
               .join("")}
           </ul>
-          <p class="sheet__note">其中 ${veterans.length} 支是老兵或精锐——他们是这一章真正的产出。</p>
+          <p class="sheet__note">其中 ${veterans.length} 人已晋升至少尉以上——他们是这一章真正的产出。</p>
           <div class="sheet__actions">
             <button class="btn btn--primary" data-action="new-campaign">再打一遍</button>
             <button class="btn" data-action="download-replay">导出回放</button>
