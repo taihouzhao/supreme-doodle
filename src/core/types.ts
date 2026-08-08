@@ -143,6 +143,8 @@ export interface Unit {
   rank: string;
   /** 叙事中的固定职务/单位身份；与战斗等级分离。 */
   duty?: string;
+  /** 1 级绝对底板（不含等级成长）；归队/降级时重算五维 */
+  baseStats?: CommanderStats;
   /** 已含成长、不含武器/物资被动的将领五维 */
   stats: CommanderStats;
   x: number;

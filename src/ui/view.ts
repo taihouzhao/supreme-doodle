@@ -83,8 +83,11 @@ function combatSummary(battle: GameState, unit: Unit): StatCell[] {
   const terrain = TERRAIN[battle.tiles[unit.y * battle.width + unit.x]!];
 
   const primary = def.indirect ? stats.intellect : stats.might;
+  // 武器进攻已并入 effectiveStats；统率常驻微幅与战斗公式一致
   const attack = Math.round(
-    def.attack * (1 + (primary - 40) * 0.005) * (1 + weapon.attackBonus) *
+    def.attack *
+      (1 + (primary - 40) * 0.005) *
+      (1 + Math.max(0, stats.leadership - 40) * 0.001) *
       (1 + (unit.level - 1) * PROGRESS.attackPerLevel),
   );
   const defence = Math.round(
@@ -621,7 +624,6 @@ export class View {
       current.stats.leadership ? `统+${current.stats.leadership}` : "",
       current.stats.stamina ? `耐+${current.stats.stamina}` : "",
       current.stats.agility ? `敏+${current.stats.agility}` : "",
-      current.attackBonus ? `攻+${Math.round(current.attackBonus * 100)}%` : "",
       current.rangeBonus ? `射程+${current.rangeBonus}` : "",
       current.defenseBonus ? `减伤+${Math.round(current.defenseBonus * 100)}%` : "",
     ]

@@ -54,12 +54,14 @@ export function damageComponents(
   const distance = manhattan(attacker, defender);
   const atkStats = effectiveStats(attacker, state.inventory);
   const defStats = effectiveStats(defender, state.inventory);
-  const atkWeapon = WEAPONS[attacker.weapon];
   const defWeapon = WEAPONS[defender.weapon];
 
   const primaryStat = attackerDef.indirect ? atkStats.intellect : atkStats.might;
-  const commander = 1 + (primaryStat - 40) * 0.005;
-  const weapon = 1 + (atkWeapon?.attackBonus ?? 0) * 0.7;
+  // 统率常驻微幅（仅高于中性点）；夹击仍额外吃统率缩放
+  const leadAtk = 1 + Math.max(0, atkStats.leadership - 40) * 0.001;
+  const commander = (1 + (primaryStat - 40) * 0.005) * leadAtk;
+  // 武器进攻已并入五维 stats；breakdown.weapon 恒为 1
+  const weapon = 1;
   const levelAtk = 1 + PROGRESS.attackPerLevel * Math.max(0, attacker.level - 1);
 
   const base = attackerDef.attack * BALANCE.factionDamage[attacker.faction];
