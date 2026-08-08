@@ -3,6 +3,7 @@ import type { Action } from "../core/types";
 
 const SAVE_KEY = "korea-tactics/save/v2";
 const REPLAY_KEY = "korea-tactics/replays/v1";
+const FX_SPEED_KEY = "korea-tactics/fx-speed/v1";
 
 export interface SaveData {
   campaign: CampaignState;
@@ -49,6 +50,16 @@ export function clearSave(): void {
   } catch {
     // 忽略
   }
+}
+
+/** 交战动画倍速，1 为默认节奏 */
+export function loadFxSpeed(): number {
+  const value = safeRead<number>(FX_SPEED_KEY);
+  return value === 2 || value === 3 ? value : 1;
+}
+
+export function writeFxSpeed(speed: number): void {
+  safeWrite(FX_SPEED_KEY, speed);
 }
 
 export function loadReplays(): ReplayRecord[] {

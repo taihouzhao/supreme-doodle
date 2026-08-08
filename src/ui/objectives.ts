@@ -1,5 +1,5 @@
 import type { MissionConfig } from "../content/missions/schema";
-import { requiredEvacuations } from "../core/mission";
+import { requiredEvacuations, victoryProgress } from "../core/mission";
 import type { GameState } from "../core/types";
 
 export interface ObjectiveLine {
@@ -33,7 +33,6 @@ export function objectiveLines(battle: GameState, mission: MissionConfig | null)
     return lines;
   }
 
-  const holdTurns = victory?.holdTurns ?? 0;
   for (const objective of battle.objectives) {
     const owned = objective.owner === "player";
     if (battle.missionKind === "breakthrough") {
@@ -53,16 +52,34 @@ export function objectiveLines(battle: GameState, mission: MissionConfig | null)
     }
   }
 
-  if (battle.missionKind === "breakthrough" && holdTurns > 0) {
-    const allOwned =
-      battle.objectives.length > 0 && battle.objectives.every((o) => o.owner === "player");
+  if (!victory) return lines;
+
+  // 与规则同源的收尾条件，说明「已占领却还没结束」的原因
+  const progress = victoryProgress(battle, victory);
+  if (battle.missionKind === "breakthrough" && progress.holdTurns > 1) {
     lines.push({
       id: "hold-streak",
       name: "坚守计时",
-      done: allOwned && battle.captureStreak >= holdTurns,
-      detail: allOwned
-        ? `${battle.captureStreak}/${holdTurns} 回合`
+      done: progress.coreMet && progress.streak >= progress.holdTurns,
+      detail: progress.coreMet
+        ? `${progress.streak}/${progress.holdTurns} 回合`
         : "需先占领全部目标",
+    });
+  }
+  if (battle.missionKind === "hold") {
+    lines.push({
+      id: "hold-clock",
+      name: "坚守进度",
+      done: battle.turn > battle.maxTurns,
+      detail: `第 ${Math.min(battle.turn, battle.maxTurns)}/${battle.maxTurns} 回合`,
+    });
+  }
+  if (progress.blocking) {
+    lines.push({
+      id: "victory-blocker",
+      name: "尚未达成",
+      done: false,
+      detail: progress.blocking,
     });
   }
 
@@ -73,13 +90,16 @@ export function briefVictoryLines(mission: MissionConfig): string[] {
   const lines: string[] = [];
   const v = mission.victory;
   if (mission.kind === "breakthrough") {
+    const holdTurns = v.holdTurns ?? 1;
     for (const objective of mission.objectives) {
-      lines.push(`占领并守住「${objective.name}」${v.holdTurns ? `（连续 ${v.holdTurns} 回合）` : ""}`);
+      lines.push(
+        `占领「${objective.name}」${holdTurns > 1 ? `并连续守住 ${holdTurns} 回合` : "（占领即达成）"}`,
+      );
     }
     if (v.minSurvivors) lines.push(`至少保留 ${v.minSurvivors} 支志愿军单位`);
   } else if (mission.kind === "hold") {
     for (const objective of mission.objectives) {
-      lines.push(`坚守「${objective.name}」至回合结束`);
+      lines.push(`坚守「${objective.name}」至第 ${mission.maxTurns} 回合`);
     }
     if (v.minPostsHeld) lines.push(`结束时至少持有 ${v.minPostsHeld} 处据点`);
     if (v.minSurvivors) lines.push(`至少保留 ${v.minSurvivors} 支志愿军单位`);

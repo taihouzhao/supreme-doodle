@@ -5,6 +5,7 @@ import { MATCHUP, PROGRESS, UNIT_TYPES } from "../content/units";
 import { WEAPONS } from "../content/weapons";
 import { effectiveMaxHp, effectiveStats } from "./commander";
 import { adjacentAllies, manhattan, tileAt } from "./grid";
+import { nightAssaultBonus, supplyPenalty } from "./mission";
 import { nextRange } from "./rng";
 import type { DamageBreakdown, GameState, Unit } from "./types";
 
@@ -92,6 +93,8 @@ export function damageComponents(
   const weather = distance > 1 ? 1 + WEATHER_EFFECT[state.weather].rangedDamage : 1;
   const setup = !attacker.movedThisTurn ? 1 + attackerDef.setupBonus : 1;
   const highGround = 1 + attackerTile.attackBonus;
+  const scripted =
+    nightAssaultBonus(state, attacker, distance) * supplyPenalty(state, attacker);
 
   const total = Math.max(
     BALANCE.minDamage,
@@ -109,6 +112,7 @@ export function damageComponents(
         weather *
         setup *
         highGround *
+        scripted *
         jitter,
     ),
   );
@@ -126,6 +130,7 @@ export function damageComponents(
     weather,
     setup,
     highGround,
+    scripted,
     jitter,
     total,
   };

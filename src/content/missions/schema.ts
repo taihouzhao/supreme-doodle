@@ -3,6 +3,8 @@ import type {
   Faction,
   ItemId,
   MissionKind,
+  PlaceLabel,
+  ScriptedRule,
   UnitTypeId,
   Vec2,
   WeaponId,
@@ -98,6 +100,19 @@ export interface VictoryRule {
   requireKeyUnit?: boolean;
 }
 
+/** 地图上的地名标注，只做展示，让战场读起来像那段战史 */
+export type PlaceLabelSpec = PlaceLabel;
+
+/**
+ * 史实脚本事件。用少量可结算的规则表现各关的历史特征，
+ * 而不是只靠简报文字描述：
+ * - nightAssault 夜袭近战加成
+ * - barrage 敌方炮火准备
+ * - coldAttrition 严寒冻伤减员
+ * - supplyWindow 携行弹药耗尽后的攻击衰减（礼拜攻势）
+ */
+export type ScriptedEventSpec = ScriptedRule;
+
 export interface MissionConfig {
   id: string;
   name: string;
@@ -128,6 +143,10 @@ export interface MissionConfig {
   weaponDrops?: WeaponDropSpec[];
   /** 通关后写入军械库的武器 */
   weaponRewards?: WeaponId[];
+  /** 地图上标注的真实地名 */
+  places?: PlaceLabelSpec[];
+  /** 史实脚本事件 */
+  scripted?: ScriptedEventSpec[];
   /** 旧关卡兼容；新关卡统一使用 weather。 */
   rainChance?: number;
   victory: VictoryRule;

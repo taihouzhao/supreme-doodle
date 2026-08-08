@@ -5,9 +5,16 @@ import { UNIT_TYPES, veterancyLevel } from "../src/content/units";
 import { damageComponents, estimateDamage } from "../src/core/combat";
 import { applyAction, legalActions } from "../src/core/engine";
 import { canAttack, reachableTiles, tileAt } from "../src/core/grid";
-import { createMissionState, movementBudget, requiredEvacuations } from "../src/core/mission";
+import {
+  createMissionState,
+  evaluateVictory,
+  movementBudget,
+  requiredEvacuations,
+  victoryProgress,
+} from "../src/core/mission";
+import { performAttack } from "../src/core/resolve";
 import { deriveSeed } from "../src/core/rng";
-import type { GameState, Unit } from "../src/core/types";
+import type { GameEvent, GameState, Unit } from "../src/core/types";
 import { fullInventory, testRosterUnit } from "./helpers/roster";
 
 function scenario(): GameState {
@@ -131,5 +138,107 @@ describe("规则动作", () => {
   it("合法动作列表不为空", () => {
     const state = scenario();
     expect(legalActions(state).length).toBeGreaterThan(0);
+  });
+});
+
+describe("击溃推进", () => {
+  it("打掉紧贴的敌人后推进到对方格子", () => {
+    const state = scenario();
+    const attacker = put(state, "p0", 6, 6);
+    const defender = put(state, "e0", 6, 5);
+    defender.hp = 1;
+    const events: GameEvent[] = [];
+    expect(performAttack(state, attacker, defender, events)).toBe(true);
+    expect(defender.alive).toBe(false);
+    expect({ x: attacker.x, y: attacker.y }).toEqual({ x: 6, y: 5 });
+    const advance = events.find((e) => e.type === "moved");
+    expect(advance).toBeTruthy();
+  });
+
+  it("远距离击溃不会推进", () => {
+    const state = scenario();
+    const attacker = put(state, "p2", 6, 7);
+    const defender = put(state, "e0", 6, 5);
+    defender.hp = 1;
+    const events: GameEvent[] = [];
+    expect(performAttack(state, attacker, defender, events)).toBe(true);
+    expect(defender.alive).toBe(false);
+    expect({ x: attacker.x, y: attacker.y }).toEqual({ x: 6, y: 7 });
+    expect(events.some((e) => e.type === "moved")).toBe(false);
+  });
+
+  it("目标格不可通行时留在原地", () => {
+    const state = scenario();
+    state.tiles = state.tiles.map(() => "plain");
+    const attacker = put(state, "p3", 6, 6);
+    const defender = put(state, "e0", 6, 5);
+    state.tiles[5 * state.width + 6] = "forest";
+    defender.hp = 1;
+    const events: GameEvent[] = [];
+    expect(performAttack(state, attacker, defender, events)).toBe(true);
+    expect(defender.alive).toBe(false);
+    expect({ x: attacker.x, y: attacker.y }).toEqual({ x: 6, y: 6 });
+  });
+});
+
+describe("胜利判定", () => {
+  function ownAll(state: GameState): void {
+    for (const objective of state.objectives) objective.owner = "player";
+  }
+
+  it("单回合要求的关卡，占领当场即判定胜利", () => {
+    const state = scenario();
+    const rule = getMission("m2-unsan").victory;
+    expect(rule.holdTurns ?? 1).toBe(1);
+    ownAll(state);
+    const verdict = evaluateVictory(state, rule, false);
+    expect(verdict.status).toBe("won");
+    expect(victoryProgress(state, rule).blocking).toBeNull();
+  });
+
+  it("需要连续坚守的关卡，占领后仍要顶住一个回合", () => {
+    const mission = getMission("m5-third-offensive");
+    const state = createMissionState({
+      mission,
+      seed: deriveSeed(1, mission.id),
+      roster: [
+        testRosterUnit("r0", "试步兵", "rifle", { keyUnit: true }),
+        testRosterUnit("r1", "试机枪", "mg"),
+        testRosterUnit("r2", "试迫击炮", "mortar"),
+      ],
+      inventory: fullInventory(),
+    });
+    ownAll(state);
+    state.captureStreak = 0;
+    expect(evaluateVictory(state, mission.victory, true).status).toBe("playing");
+    expect(victoryProgress(state, mission.victory).blocking).toContain("坚守");
+    state.captureStreak = mission.victory.holdTurns ?? 2;
+    expect(evaluateVictory(state, mission.victory, true).status).toBe("won");
+  });
+
+  it("存活不足时说明原因而不是静默继续", () => {
+    const state = scenario();
+    const rule = getMission("m2-unsan").victory;
+    ownAll(state);
+    const players = state.units.filter((u) => u.faction === "player");
+    for (const unit of players.slice(1)) unit.alive = false;
+    expect(evaluateVictory(state, rule, true).status).toBe("playing");
+    expect(victoryProgress(state, rule).blocking).toContain("存活不足");
+  });
+
+  it("阻击关会给出坚守回合进度", () => {
+    const mission = getMission("m9-cheorwon");
+    const state = createMissionState({
+      mission,
+      seed: deriveSeed(2, mission.id),
+      roster: [
+        testRosterUnit("r0", "试步兵", "rifle", { keyUnit: true }),
+        testRosterUnit("r1", "试机枪", "mg"),
+      ],
+      inventory: fullInventory(),
+    });
+    const progress = victoryProgress(state, mission.victory);
+    expect(progress.coreMet).toBe(true);
+    expect(progress.blocking).toContain("坚守");
   });
 });

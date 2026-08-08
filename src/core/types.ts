@@ -183,6 +183,20 @@ export interface MissionStats {
   damageTaken: number;
 }
 
+/** 地图地名标注 */
+export interface PlaceLabel {
+  x: number;
+  y: number;
+  name: string;
+}
+
+/** 史实脚本规则：把各关的历史特征做成可结算的规则 */
+export type ScriptedRule =
+  | { kind: "nightAssault"; turns: [number, number]; attackBonus: number; note: string }
+  | { kind: "barrage"; turns: number[]; damage: number; note: string }
+  | { kind: "coldAttrition"; fromTurn: number; damage: number; note: string }
+  | { kind: "supplyWindow"; untilTurn: number; penalty: number; note: string };
+
 export interface GameState {
   missionId: string;
   missionKind: MissionKind;
@@ -210,6 +224,10 @@ export interface GameState {
   deployedCount: number;
   status: MissionStatus;
   stats: MissionStats;
+  /** 地图上的真实地名 */
+  places: PlaceLabel[];
+  /** 本关生效的史实脚本 */
+  scripted: ScriptedRule[];
   /** 胜负原因，供界面与报告使用 */
   resultReason: string;
 }
@@ -235,6 +253,8 @@ export interface DamageBreakdown {
   weather: number;
   setup: number;
   highGround: number;
+  /** 史实脚本修正（夜袭 / 弹药耗尽） */
+  scripted: number;
   jitter: number;
   total: number;
 }
@@ -250,12 +270,14 @@ export type GameEvent =
       counterDamage: number;
     }
   | { type: "routed"; unitId: string; faction: Faction }
+  | { type: "levelUp"; unitId: string; from: number; to: number; rank: string }
   | { type: "captured"; objectiveId: string; by: Faction }
   | { type: "itemUsed"; unitId: string; item: ItemId; targetIds: string[]; damage: number; heal: number }
   | { type: "itemPicked"; unitId: string; item: ItemId }
   | { type: "weaponPicked"; unitId: string; weapon: WeaponId }
   | { type: "reinforced"; unitIds: string[] }
   | { type: "healed"; unitId: string; amount: number }
+  | { type: "scripted"; kind: ScriptedRule["kind"]; note: string; unitIds: string[]; damage: number }
   | { type: "evacuated"; unitId: string }
   | { type: "phaseChanged"; phase: Faction; turn: number }
   | { type: "missionEnded"; status: MissionStatus; reason: string };

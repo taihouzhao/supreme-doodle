@@ -175,6 +175,28 @@ body {
   gap: 0.18rem;
 }
 
+.hud-top__speed,
+.hud-top__skip {
+  border: 1px solid rgba(245, 215, 110, 0.45);
+  border-radius: 999px;
+  padding: 0.05rem 0.42rem;
+  background: rgba(20, 24, 18, 0.5);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+
+.hud-top__speed:hover,
+.hud-top__skip:hover {
+  border-color: #f5d76e;
+  background: rgba(245, 215, 110, 0.18);
+}
+
+.hud-top__skip {
+  border-color: rgba(200, 62, 48, 0.6);
+}
+
 .hud-top__end {
   flex-shrink: 0;
   padding: 0.4rem 0.7rem;
@@ -522,9 +544,117 @@ body {
   margin-top: 0.45rem;
 }
 
+/* 派生数值：一眼看到打多少、抗多少、能走多远 */
+.card__combat {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.25rem;
+  margin-top: 0.45rem;
+}
+
+.card__combat .stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.05rem;
+  padding: 0.22rem 0.1rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(24, 28, 22, 0.35);
+}
+
+.card__combat .stat span {
+  font-size: 0.6rem;
+  color: var(--ink-soft);
+}
+
+.card__combat .stat b {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* 固定物资格：空位保留占位，避免布局跳动 */
+.slots {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.22rem;
+  margin-top: 0.5rem;
+}
+
+.slot {
+  position: relative;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(24, 28, 22, 0.45);
+  cursor: pointer;
+}
+
+.slot--empty {
+  border-style: dashed;
+  opacity: 0.42;
+  cursor: default;
+}
+
+.slot:hover:not(:disabled) {
+  border-color: var(--gold);
+}
+
+.slot:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.slot.is-active {
+  border-color: var(--gold);
+  background: rgba(245, 215, 110, 0.22);
+  box-shadow: 0 0 0 1px var(--gold) inset;
+}
+
+.slot__ico {
+  width: 74%;
+  height: 74%;
+  object-fit: contain;
+}
+
+.slot__count {
+  position: absolute;
+  top: -0.18rem;
+  right: -0.18rem;
+  min-width: 0.95rem;
+  padding: 0 0.16rem;
+  border-radius: 99px;
+  background: #2f3a2c;
+  border: 1px solid var(--line);
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+}
+
+.slot__effect {
+  position: absolute;
+  bottom: -0.1rem;
+  left: 0;
+  right: 0;
+  font-size: 0.5rem;
+  line-height: 1;
+  text-align: center;
+  color: var(--gold);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.card__note {
+  color: var(--ink-soft);
+}
+
 .meter {
   display: grid;
-  grid-template-columns: 1.1rem 1fr 1.4rem;
+  grid-template-columns: 2.1rem 1fr 1.4rem;
   gap: 0.25rem;
   align-items: center;
   font-size: 0.65rem;
@@ -979,14 +1109,21 @@ body {
   height: 164px;
 }
 
-.brief-facts {
+.brief-facts,
+.result-compare {
   display: grid;
   grid-template-columns: 1fr 1.4fr 1.6fr;
   gap: 0.55rem;
   margin-top: 0.9rem;
 }
 
-.brief-facts article {
+.result-compare {
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 0.85rem;
+}
+
+.brief-facts article,
+.result-compare article {
   display: flex;
   flex-direction: column;
   gap: 0.18rem;
@@ -999,7 +1136,8 @@ body {
   line-height: 1.45;
 }
 
-.brief-facts strong {
+.brief-facts strong,
+.result-compare strong {
   color: var(--gold);
   font-size: 0.7rem;
   letter-spacing: 0.08em;
@@ -1168,6 +1306,80 @@ body {
   color: var(--ink-soft);
 }
 
+.sheet__hint {
+  margin: 0.2rem 0 0.5rem;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+/* ---------- 军械库配装 ---------- */
+
+.armory {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.armory__row {
+  display: grid;
+  grid-template-columns: auto minmax(7rem, 1fr) minmax(11rem, 1.2fr);
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(24, 28, 22, 0.35);
+}
+
+.armory__who {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.armory__who strong {
+  font-size: 0.82rem;
+}
+
+.armory__who small,
+.armory__pick small {
+  font-size: 0.68rem;
+  color: var(--ink-soft);
+}
+
+.armory__pick {
+  display: flex;
+  flex-direction: column;
+  gap: 0.16rem;
+}
+
+.armory__pick select {
+  width: 100%;
+  padding: 0.24rem 0.35rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #1b201a;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.76rem;
+}
+
+.armory__pick select:focus {
+  outline: none;
+  border-color: var(--gold);
+}
+
+@media (max-width: 620px) {
+  .armory__row {
+    grid-template-columns: auto 1fr;
+  }
+
+  .armory__pick {
+    grid-column: 1 / -1;
+  }
+}
+
 /* ---------- 窄屏微调 ---------- */
 
 @media (max-width: 860px) {
@@ -1207,7 +1419,8 @@ body {
     height: 110px;
   }
 
-  .brief-facts {
+  .brief-facts,
+  .result-compare {
     grid-template-columns: 1fr;
   }
 

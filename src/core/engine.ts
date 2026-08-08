@@ -7,6 +7,7 @@ import {
   arriveWaves,
   beginPhase,
   evaluateVictory,
+  runScripted,
   runUpkeep,
   updateCaptureStreak,
 } from "./mission";
@@ -61,6 +62,8 @@ function advanceTurn(state: GameState, events: GameEvent[]): void {
 
   state.turn += 1;
   arriveWaves(state, events);
+  runScripted(state, events);
+  if (settleStatus(state, events, true)) return;
   beginPhase(state, "player");
   events.push({ type: "phaseChanged", phase: "player", turn: state.turn });
   settleStatus(state, events, true);

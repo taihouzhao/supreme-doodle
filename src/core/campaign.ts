@@ -7,7 +7,7 @@ import {
 } from "../content/chapter";
 import type { MissionConfig } from "../content/missions/schema";
 import { levelFromExp, rankName, veterancyLevel } from "../content/units";
-import { WEAPONS, bestWeapon, defaultWeaponFor } from "../content/weapons";
+import { WEAPONS, bestWeapon, defaultWeaponFor, weaponFits } from "../content/weapons";
 import { effectiveMaxHp } from "./commander";
 import { createMissionState, emptyInventory, type RosterUnit } from "./mission";
 import { deriveSeed, nextRandom } from "./rng";
@@ -117,12 +117,47 @@ export function currentMission(campaign: CampaignState): MissionConfig | null {
   return chapter.missions[campaign.missionIndex] ?? null;
 }
 
+/** 自动换装只兜底：玩家手动挑过的武器（且仍然适配）保持不动 */
 function autoEquip(roster: RosterUnit[], armory: WeaponId[]): void {
   for (const unit of roster) {
-    unit.weapon = bestWeapon(unit.type, [...armory, unit.weapon], unit.weapon);
+    const keepManual = unit.manualWeapon && weaponFits(unit.weapon, unit.type);
+    if (!keepManual) {
+      unit.weapon = bestWeapon(unit.type, [...armory, unit.weapon], unit.weapon);
+      unit.manualWeapon = false;
+    }
     unit.maxHp = effectiveMaxHp(unit);
     unit.hp = Math.min(unit.hp, unit.maxHp);
   }
+}
+
+/** 军械库里这位将领可以换的武器（含当前装备），按评分从高到低 */
+export function equippableWeapons(campaign: CampaignState, unitId: string): WeaponId[] {
+  const unit = campaign.roster.find((u) => u.id === unitId);
+  if (!unit) return [];
+  const pool = new Set<WeaponId>([unit.weapon, ...campaign.armory]);
+  return [...pool]
+    .filter((id) => weaponFits(id, unit.type))
+    .sort((a, b) => WEAPONS[b].score - WEAPONS[a].score);
+}
+
+/** 手动换装：只在出击前可用，落在花名册上跨关保留 */
+export function equipWeapon(
+  campaign: CampaignState,
+  unitId: string,
+  weapon: WeaponId,
+): CampaignState {
+  const index = campaign.roster.findIndex((u) => u.id === unitId);
+  const unit = campaign.roster[index];
+  if (!unit) return campaign;
+  if (!weaponFits(weapon, unit.type)) return campaign;
+  if (weapon !== unit.weapon && !campaign.armory.includes(weapon)) return campaign;
+
+  const roster = [...campaign.roster];
+  const updated: RosterUnit = { ...unit, weapon, manualWeapon: true };
+  updated.maxHp = effectiveMaxHp(updated);
+  updated.hp = Math.min(updated.hp, updated.maxHp);
+  roster[index] = updated;
+  return { ...campaign, roster };
 }
 
 /** 补充新兵，保证前一关重创后仍有可行解；每位主将仍只带一支部队 */

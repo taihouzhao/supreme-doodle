@@ -37,6 +37,7 @@ export function breakdownFactors(breakdown: DamageBreakdown): Factor[] {
     ["天气", breakdown.weather],
     ["架设", breakdown.setup],
     ["居高临下", breakdown.highGround],
+    ["战史加成", breakdown.scripted],
   ];
   return entries
     .filter(([, value]) => Math.abs(value - 1) > 0.001)
@@ -51,6 +52,8 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     }
     case "routed":
       return `${unitLabel(state, event.unitId)} 被击溃`;
+    case "levelUp":
+      return `${unitLabel(state, event.unitId)} 晋升 ${event.rank}（Lv.${event.from}→${event.to}）`;
     case "captured": {
       const objective = state.objectives.find((o) => o.id === event.objectiveId);
       const name = objective?.name ?? event.objectiveId;
@@ -69,6 +72,8 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
       return `联合军增援抵达（${event.unitIds.length} 个单位）`;
     case "evacuated":
       return `${unitLabel(state, event.unitId)} 已撤离，完整保留`;
+    case "scripted":
+      return `${event.note}（${event.unitIds.length} 个单位受影响）`;
     case "missionEnded":
       return `任务结束：${event.reason}`;
     default:

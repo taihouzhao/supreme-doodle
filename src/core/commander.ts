@@ -59,18 +59,21 @@ export function agilityMoveBonus(stats: CommanderStats): number {
   return Math.floor((stats.agility - 40) / 18);
 }
 
-export function syncLevelFromExp(unit: Unit): void {
+/** 同步等级；发生晋升时返回前后等级，供上层播提示 */
+export function syncLevelFromExp(unit: Unit): { from: number; to: number } | null {
   const nextLevel = levelFromExp(unit.exp);
   if (nextLevel <= unit.level) {
     unit.level = Math.max(unit.level, nextLevel);
     unit.rank = rankName(unit.level);
-    return;
+    return null;
   }
+  const from = unit.level;
   const gained = (nextLevel - unit.level) * PROGRESS.pointsPerLevel;
   const salt = unit.commanderName.length + unit.level;
   unit.stats = addStats(unit.stats, allocatePoints(GROWTH_WEIGHTS[unit.type], gained, salt));
   unit.level = nextLevel;
   unit.rank = rankName(unit.level);
+  return { from, to: nextLevel };
 }
 
 export function makeEnemyCommander(

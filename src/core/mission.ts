@@ -46,6 +46,8 @@ export interface RosterUnit {
   rank: string;
   stats: CommanderStats;
   weapon: WeaponId;
+  /** 玩家在军械库里手动指定过武器；自动换装不再覆盖 */
+  manualWeapon?: boolean;
 }
 
 export interface MissionSetup {
@@ -287,6 +289,8 @@ export function createMissionState(setup: MissionSetup): GameState {
     pending,
     captureStreak: 0,
     deployedCount: units.filter((u) => u.faction === "player").length,
+    places: (mission.places ?? []).map((place) => ({ ...place })),
+    scripted: (mission.scripted ?? []).map((rule) => ({ ...rule })),
     status: "playing",
     stats: {
       playerRouted: 0,
@@ -388,6 +392,88 @@ export function runUpkeep(state: GameState, faction: Unit["faction"], events: Ga
   }
 }
 
+/**
+ * 回合开始时结算史实脚本：炮火准备与严寒消耗。
+ * 夜袭与补给窗口是伤害修正，由 combat 直接读取。
+ */
+export function runScripted(state: GameState, events: GameEvent[]): void {
+  for (const rule of state.scripted) {
+    if (rule.kind === "barrage") {
+      if (!rule.turns.includes(state.turn)) continue;
+      const hit: string[] = [];
+      for (const unit of livingUnits(state, "player")) {
+        const cover = tileAt(state, unit.x, unit.y).defense;
+        const damage = Math.max(1, Math.round(rule.damage * (1 - Math.max(0, cover))));
+        unit.hp -= damage;
+        hit.push(unit.id);
+        if (unit.hp <= 0) routByScript(state, unit, events);
+      }
+      if (hit.length > 0) {
+        events.push({
+          type: "scripted",
+          kind: rule.kind,
+          note: rule.note,
+          unitIds: hit,
+          damage: rule.damage,
+        });
+      }
+    } else if (rule.kind === "coldAttrition") {
+      if (state.turn < rule.fromTurn) continue;
+      const hit: string[] = [];
+      // 严寒不分敌我，双方都在冻伤减员
+      for (const unit of livingUnits(state)) {
+        const shelter = tileAt(state, unit.x, unit.y).regen > 0 ? 0.5 : 1;
+        const damage = Math.max(1, Math.round(rule.damage * shelter));
+        if (unit.hp <= damage) {
+          // 冻伤不直接打死单位，只压到残血，避免无操作败北
+          unit.hp = Math.max(1, unit.hp);
+          continue;
+        }
+        unit.hp -= damage;
+        hit.push(unit.id);
+      }
+      if (hit.length > 0) {
+        events.push({
+          type: "scripted",
+          kind: rule.kind,
+          note: rule.note,
+          unitIds: hit,
+          damage: rule.damage,
+        });
+      }
+    }
+  }
+}
+
+function routByScript(state: GameState, unit: Unit, events: GameEvent[]): void {
+  unit.alive = false;
+  unit.hp = 0;
+  if (unit.faction === "player") state.stats.playerRouted += 1;
+  else state.stats.enemyRouted += 1;
+  events.push({ type: "routed", unitId: unit.id, faction: unit.faction });
+}
+
+/** 夜袭加成：早期志愿军的夜间近战优势 */
+export function nightAssaultBonus(state: GameState, unit: Unit, distance: number): number {
+  if (unit.faction !== "player" || distance > 1) return 1;
+  for (const rule of state.scripted) {
+    if (rule.kind !== "nightAssault") continue;
+    const [from, to] = rule.turns;
+    if (state.turn >= from && state.turn <= to) return 1 + rule.attackBonus;
+  }
+  return 1;
+}
+
+/** 补给窗口：携行弹药打完之后攻击衰减 */
+export function supplyPenalty(state: GameState, unit: Unit): number {
+  if (unit.faction !== "player") return 1;
+  for (const rule of state.scripted) {
+    if (rule.kind !== "supplyWindow") continue;
+    if (state.turn > rule.untilTurn) return 1 - rule.penalty;
+  }
+  return 1;
+}
+
 /** 回合结束时统计「全部目标是否仍在手里」的连续回合数 */
 export function updateCaptureStreak(state: GameState, rule: MissionConfig["victory"]): void {
   const required = rule.requiredCaptures ?? 0;
@@ -436,9 +522,96 @@ export function coreObjectiveMet(state: GameState, rule: MissionConfig["victory"
   return held >= (rule.minPostsHeld ?? 1);
 }
 
+export interface VictoryProgress {
+  /** 核心目标（占领数 / 据点数）是否已达成 */
+  coreMet: boolean;
+  /** 距离胜利还缺什么；已经满足时为 null */
+  blocking: string | null;
+  captured: number;
+  required: number;
+  holdTurns: number;
+  streak: number;
+  survivors: number;
+  minSurvivors: number;
+}
+
 /**
- * @param atTurnEnd 是否处于回合结束结算点。占领类胜利必须守住敌方的反扑，
- *                  因此只在回合结束判定；撤离与全灭为即时判定。
+ * 供界面展示「为什么还没结束」。与 `evaluateVictory` 读同一批计数，
+ * 避免 HUD 说「已占领」而规则仍判定未完成。
+ */
+export function victoryProgress(state: GameState, rule: MissionConfig["victory"]): VictoryProgress {
+  const survivors = livingUnits(state, "player").length;
+  const minSurvivors = rule.minSurvivors ?? 0;
+  const holdTurns = rule.holdTurns ?? 1;
+
+  if (state.missionKind === "breakthrough") {
+    const captured = state.objectives.filter(
+      (o) => o.kind === "capture" && o.owner === "player",
+    ).length;
+    const required = rule.requiredCaptures ?? 0;
+    const coreMet = captured >= required;
+    let blocking: string | null = null;
+    if (!coreMet) blocking = `还需占领 ${required - captured} 处目标`;
+    else if (holdTurns > 1 && state.captureStreak < holdTurns)
+      blocking = `还需坚守 ${holdTurns - state.captureStreak} 回合`;
+    else if (survivors < minSurvivors) blocking = `存活不足 ${survivors}/${minSurvivors}`;
+    return {
+      coreMet,
+      blocking,
+      captured,
+      required,
+      holdTurns,
+      streak: state.captureStreak,
+      survivors,
+      minSurvivors,
+    };
+  }
+
+  if (state.missionKind === "hold") {
+    const posts = state.objectives.filter((o) => o.kind === "hold");
+    const held = posts.filter((o) => o.owner === "player").length;
+    const required = rule.minPostsHeld ?? 1;
+    const coreMet = held >= required;
+    const turnsLeft = Math.max(0, state.maxTurns - state.turn + 1);
+    let blocking: string | null = null;
+    if (!coreMet) blocking = `据点失守，需夺回 ${required - held} 处`;
+    else if (turnsLeft > 0) blocking = `还需坚守 ${turnsLeft} 回合`;
+    else if (survivors < Math.max(1, minSurvivors))
+      blocking = `存活不足 ${survivors}/${Math.max(1, minSurvivors)}`;
+    return {
+      coreMet,
+      blocking,
+      captured: held,
+      required,
+      holdTurns: state.maxTurns,
+      streak: Math.min(state.turn, state.maxTurns),
+      survivors,
+      minSurvivors,
+    };
+  }
+
+  const evacuated = state.stats.playerEvacuated;
+  const required = requiredEvacuations(state, rule);
+  const keyEvacuated = state.units.some((u) => u.keyUnit && u.evacuated);
+  const coreMet = evacuated >= required && (!rule.requireKeyUnit || keyEvacuated);
+  let blocking: string | null = null;
+  if (evacuated < required) blocking = `还需撤离 ${required - evacuated} 个单位`;
+  else if (rule.requireKeyUnit && !keyEvacuated) blocking = "主力尚未撤离";
+  return {
+    coreMet,
+    blocking,
+    captured: evacuated,
+    required,
+    holdTurns: 0,
+    streak: 0,
+    survivors,
+    minSurvivors,
+  };
+}
+
+/**
+ * @param atTurnEnd 是否处于回合结束结算点。需要连续坚守多回合的关卡只在回合结束判定，
+ *                  这样敌方还有一次反扑机会；单回合要求与撤离、全灭为即时判定。
  */
 export function evaluateVictory(
   state: GameState,
@@ -491,10 +664,13 @@ export function evaluateVictory(
     ).length;
     const required = rule.requiredCaptures ?? 0;
     const holdTurns = rule.holdTurns ?? 1;
+    // 只要求「占领当回合」时立即结算，避免占下目标后还要空转一整回合
+    const needsStreak = holdTurns > 1;
+    const streakMet = !needsStreak || state.captureStreak >= holdTurns;
     if (
-      atTurnEnd &&
+      (atTurnEnd || !needsStreak) &&
       captured >= required &&
-      state.captureStreak >= holdTurns &&
+      streakMet &&
       playerAlive.length >= (rule.minSurvivors ?? 0)
     ) {
       return { status: "won", reason: `守住全部目标，${playerAlive.length} 个单位可继续作战` };
@@ -515,20 +691,26 @@ export function evaluateVictory(
   }
 
   // hold
+  const posts = state.objectives.filter((o) => o.kind === "hold");
+  const held = posts.filter((o) => o.owner === "player").length;
+  const requiredPosts = rule.minPostsHeld ?? 1;
+  const minSurvivors = Math.max(1, rule.minSurvivors ?? 1);
   if (timeUp) {
-    const posts = state.objectives.filter((o) => o.kind === "hold");
-    const held = posts.filter((o) => o.owner === "player").length;
-    const required = rule.minPostsHeld ?? 1;
-    if (held >= required && playerAlive.length >= (rule.minSurvivors ?? 1)) {
+    if (held >= requiredPosts && playerAlive.length >= minSurvivors) {
       return { status: "won", reason: `坚守到最后，保住 ${held}/${posts.length} 个据点` };
     }
-    if (held < required) {
+    if (held < requiredPosts) {
       return { status: "lost", reason: `据点失守，仅剩 ${held}/${posts.length}` };
     }
     return { status: "lost", reason: `伤亡过大，仅剩 ${playerAlive.length} 个单位` };
   }
   if (enemyAlive.length === 0 && state.pending.length === 0) {
-    return { status: "won", reason: "击退了全部进攻" };
+    if (held >= requiredPosts && playerAlive.length >= minSurvivors) {
+      return { status: "won", reason: "击退了全部进攻" };
+    }
+    // holdUntilEnd 关卡允许在剩余回合里夺回阵地，而不是当场判负
+    if (rule.holdUntilEnd) return { status: "playing", reason: "" };
+    return { status: "lost", reason: `据点失守，仅剩 ${held}/${posts.length}` };
   }
   return { status: "playing", reason: "" };
 }
