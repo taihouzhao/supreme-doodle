@@ -10,7 +10,16 @@ import { effectiveStats } from "../core/commander";
 import { attackRange, livingUnits, unitAt } from "../core/grid";
 import { isEvacTile, movementBudget, type RosterUnit } from "../core/mission";
 import type { GameState, ItemId, Unit, WeaponId, Weather } from "../core/types";
-import { COMMANDER_PORTRAIT, ITEM_ICON, TERRAIN_ICON, UI_ICON, UNIT_ICON, WEAPON_ICON, rankInsignia } from "./assets";
+import {
+  COMMANDER_PORTRAIT,
+  ITEM_ICON,
+  TERRAIN_ICON,
+  UI_ICON,
+  WEAPON_ICON,
+  rankInsignia,
+  unitIdentityPortrait,
+  unitPortrait,
+} from "./assets";
 import { Board, terrainName } from "./board";
 import { breakdownFactors } from "./format";
 import { briefVictoryLines, objectiveLines } from "./objectives";
@@ -454,7 +463,7 @@ export class View {
           : terrain.name;
 
     const titleIcon = occupant
-      ? UNIT_ICON[occupant.type][occupant.faction]
+      ? unitPortrait(occupant)
       : objective
         ? objective.owner === "player"
           ? UI_ICON.objDone
@@ -503,10 +512,7 @@ export class View {
     const next = level >= PROGRESS.maxLevel ? floor : PROGRESS.expForLevel(level + 1);
     const xpPct =
       next <= floor ? 100 : Math.max(0, Math.min(100, Math.round(((unit.exp - floor) / (next - floor)) * 100)));
-    const portrait =
-      unit.commanderName === "高大全"
-        ? COMMANDER_PORTRAIT["gao-daquan"]
-        : UNIT_ICON[unit.type][unit.faction];
+    const portrait = unitPortrait(unit);
     const kind =
       unit.commanderKind === "story" ? "剧情" : unit.commanderKind === "companion" ? "伴随" : "敌军";
     const duty = unit.duty ?? (unit.keyUnit ? CHAPTER_ONE.protagonist.title : `${kind}作战分队`);
@@ -724,8 +730,8 @@ export class View {
           <ul class="sheet__roster">
             ${(mission.storyAllies ?? [])
               .map(
-                (ally) =>
-                  `<li>${ico(UNIT_ICON[ally.type].player, "ico ico--sm")}<span>${esc(ally.commander)}${esc(UNIT_TYPES[ally.type].name)} · 剧情</span><span>Lv.${ally.level} · 本关配属</span></li>`,
+                (ally, index) =>
+                  `<li>${ico(unitIdentityPortrait("pva", state.campaign.roster.length + index), "ico ico--sm")}<span>${esc(ally.commander)}${esc(UNIT_TYPES[ally.type].name)} · 剧情</span><span>Lv.${ally.level} · 本关配属</span></li>`,
               )
               .join("")}
           </ul>
@@ -792,8 +798,8 @@ export class View {
           <ul class="sheet__roster">
             ${state.campaign.roster
               .map(
-                (unit) =>
-                  `<li>${ico(UNIT_ICON[unit.type].player, "ico ico--sm")}<span>${esc(unit.name)}</span><span>${esc(unit.duty ?? "直属作战分队")} · 战斗 Lv.${unit.level} · 参战 ${unit.missionsSurvived} 次</span></li>`,
+                (unit, index) =>
+                  `<li>${ico(unit.keyUnit ? COMMANDER_PORTRAIT["gao-daquan"]! : unitIdentityPortrait("pva", index), "ico ico--sm")}<span>${esc(unit.name)}</span><span>${esc(unit.duty ?? "直属作战分队")} · 战斗 Lv.${unit.level} · 参战 ${unit.missionsSurvived} 次</span></li>`,
               )
               .join("")}
           </ul>

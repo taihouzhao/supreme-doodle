@@ -52,6 +52,9 @@ export type MissionStatus = "playing" | "won" | "lost";
 /** companion=伴随成长；story=剧情客串（不跨关继承）；enemy=敌军合成 */
 export type CommanderKind = "companion" | "story" | "enemy";
 
+/** 普通战斗单位的历史阵营肖像池；具体人物由 portraitIndex 稳定区分。 */
+export type UnitPortraitGroup = "pva" | "rok" | "us" | "uk" | "fr";
+
 export interface CommanderStats {
   leadership: number;
   intellect: number;
@@ -133,6 +136,9 @@ export interface Unit {
   weapon: WeaponId;
   commanderKind: CommanderKind;
   commanderName: string;
+  /** 地图与详情卡共用的稳定人物身份；旧存档缺省时由 UI 做兼容回退。 */
+  portraitGroup?: UnitPortraitGroup;
+  portraitIndex?: number;
   level: number;
   rank: string;
   /** 叙事中的固定职务/单位身份；与战斗等级分离。 */

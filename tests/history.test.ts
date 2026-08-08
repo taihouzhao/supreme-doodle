@@ -1,17 +1,22 @@
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CHAPTER_ONE } from "../src/content/chapter";
 import { MISSION_LIST } from "../src/content/missions";
 import { WEAPONS, WEAPON_HISTORY, weaponFits, weaponForEquipment } from "../src/content/weapons";
+import { createCampaign, startMission } from "../src/core/campaign";
 import {
   COMMANDER_PORTRAIT,
   RANK_INSIGNIA,
   TERRAIN_ICON,
   TERRAIN_ICON_SNOW,
   UNIT_ICON,
+  UNIT_IDENTITY_PORTRAIT,
   UNIT_ROLE_ICON,
   WEAPON_ICON,
+  unitPortrait,
 } from "../src/ui/assets";
 
 function publicAssetExists(url: string): boolean {
@@ -76,6 +81,30 @@ describe("历史战役内容", () => {
       expect(publicAssetExists(pair.player)).toBe(true);
       expect(publicAssetExists(pair.enemy)).toBe(true);
       expect(publicAssetExists(UNIT_ROLE_ICON[type as keyof typeof UNIT_ROLE_ICON])).toBe(true);
+    }
+  });
+
+  it("五个历史阵营各有八张不同的普通单位肖像", () => {
+    const hashes = new Set<string>();
+    for (const pool of Object.values(UNIT_IDENTITY_PORTRAIT)) {
+      expect(pool).toHaveLength(8);
+      for (const portrait of pool) {
+        expect(publicAssetExists(portrait)).toBe(true);
+        const relative = portrait.split("?")[0]!.replace(/^\/assets\//, "assets/");
+        hashes.add(createHash("sha256").update(readFileSync(join(process.cwd(), "public", relative))).digest("hex"));
+      }
+    }
+    expect(hashes.size).toBe(40);
+  });
+
+  it("每一关的在场与增援单位都解析到不同肖像", () => {
+    for (let missionIndex = 0; missionIndex < MISSION_LIST.length; missionIndex += 1) {
+      const campaign = createCampaign("chapter-one", 17 + missionIndex);
+      campaign.missionIndex = missionIndex;
+      const { state } = startMission(campaign);
+      const units = [...state.units, ...state.pending.flatMap((wave) => wave.units)];
+      const portraits = units.map(unitPortrait);
+      expect(new Set(portraits).size, MISSION_LIST[missionIndex]!.id).toBe(units.length);
     }
   });
 

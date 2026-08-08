@@ -30,6 +30,7 @@
 ## 资产生成与复核
 
 - 人物、兵种与地形母版仅作为本地生成源保存在 `public/assets/masters/`，不进入版本库或线上静态产物；游戏使用已切分、已复核的派生贴图。
+- 普通战斗单位按志愿军、韩军、美军、英军、法军分为五套身份池，每套 8 张不同人物肖像；同一关内不得有两个单位解析到相同肖像。地图、格子检查与详情卡必须共用同一身份映射。
 - 常态/雪地地形可在本地放入 `terrain-atlas-normal-v2.png`、`terrain-atlas-snow-v2.png`，再用 `scripts/slice-terrain-atlases.sh` 切出 16 张对应贴图。
 - 军衔、兵种和武器图标由 `scripts/generate-equipment-assets.mjs` 确定性生成，便于复核与修改。
 - 任何新历史人物必须同时补：portrait、战时职务、战时军衔/职务制说明、徽记 id；缺一项不得用首字 fallback 作为完成状态。

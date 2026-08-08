@@ -25,6 +25,7 @@ import type {
   Objective,
   TerrainId,
   Unit,
+  UnitPortraitGroup,
   Vec2,
   WeaponId,
 } from "./types";
@@ -85,6 +86,8 @@ function makeUnit(params: {
   weapon: WeaponId;
   commanderKind: CommanderKind;
   commanderName: string;
+  portraitGroup?: UnitPortraitGroup;
+  portraitIndex?: number;
   level: number;
   rank: string;
   duty?: string;
@@ -106,6 +109,8 @@ function makeUnit(params: {
     weapon: params.weapon,
     commanderKind: params.commanderKind,
     commanderName: params.commanderName,
+    portraitGroup: params.portraitGroup,
+    portraitIndex: params.portraitIndex,
     level: params.level,
     rank: params.rank,
     duty: params.duty,
@@ -138,6 +143,29 @@ export function createMissionState(setup: MissionSetup): GameState {
   const weatherRng = new Rng(deriveSeed(seed, "weather"));
   const itemRng = new Rng(deriveSeed(seed, "items"));
 
+  const portraitCounters: Record<UnitPortraitGroup, number> = {
+    pva: 0,
+    rok: 0,
+    us: 0,
+    uk: 0,
+    fr: 0,
+  };
+  const nextPortrait = (group: UnitPortraitGroup): number => {
+    const index = portraitCounters[group]++;
+    if (index >= 8) {
+      throw new Error(`${mission.id} 的 ${group} 单位超过 8 个独立肖像槽`);
+    }
+    return index;
+  };
+  const enemyPortraitGroup = (name: string): UnitPortraitGroup => {
+    if (mission.id === "m1-onjong" || mission.id === "m12-kumsong" || /韩军|韩\d|韩国/.test(name)) {
+      return "rok";
+    }
+    if (mission.id === "m8-imjin") return "uk";
+    if (/法军|法国/.test(name)) return "fr";
+    return "us";
+  };
+
   const enemySpecs = mission.enemies.map((spec) => ({ ...spec }));
   for (const slot of mission.variantSlots) {
     const target = enemySpecs[slot.index];
@@ -166,6 +194,8 @@ export function createMissionState(setup: MissionSetup): GameState {
         weapon: rosterUnit.weapon,
         commanderKind: rosterUnit.commanderKind,
         commanderName: rosterUnit.commanderName,
+        portraitGroup: "pva",
+        portraitIndex: nextPortrait("pva"),
         level: rosterUnit.level,
         rank: rosterUnit.rank,
         duty: rosterUnit.duty,
@@ -195,6 +225,8 @@ export function createMissionState(setup: MissionSetup): GameState {
         name: designation(ally.commander, ally.type),
         equipment: ally.equipment ?? WEAPONS[weapon].name,
         ...profile,
+        portraitGroup: "pva",
+        portraitIndex: nextPortrait("pva"),
         duty: `临时配属${UNIT_TYPES[ally.type].name}分队`,
         x: spawn.x,
         y: spawn.y,
@@ -207,6 +239,7 @@ export function createMissionState(setup: MissionSetup): GameState {
     const name = spec.name ?? UNIT_TYPES[spec.type].name;
     const weapon = spec.weapon ?? weaponForEquipment(spec.type, spec.equipment, "enemy");
     const profile = makeEnemyCommander(spec.type, spec.exp ?? 0, weapon, name);
+    const portraitGroup = enemyPortraitGroup(name);
     units.push(
       makeUnit({
         id: `e${index}`,
@@ -216,6 +249,8 @@ export function createMissionState(setup: MissionSetup): GameState {
         name,
         equipment: spec.equipment ?? WEAPONS[weapon].name,
         ...profile,
+        portraitGroup,
+        portraitIndex: nextPortrait(portraitGroup),
         duty: "敌军作战分队",
         x: spec.x,
         y: spec.y,
@@ -230,6 +265,7 @@ export function createMissionState(setup: MissionSetup): GameState {
       const name = spec.name ?? UNIT_TYPES[spec.type].name;
       const weapon = spec.weapon ?? weaponForEquipment(spec.type, spec.equipment, "enemy");
       const profile = makeEnemyCommander(spec.type, spec.exp ?? 0, weapon, name);
+      const portraitGroup = enemyPortraitGroup(name);
       return makeUnit({
         id: `w${waveIndex}_${unitIndex}`,
         rosterId: null,
@@ -238,6 +274,8 @@ export function createMissionState(setup: MissionSetup): GameState {
         name,
         equipment: spec.equipment ?? WEAPONS[weapon].name,
         ...profile,
+        portraitGroup,
+        portraitIndex: nextPortrait(portraitGroup),
         duty: "敌军增援分队",
         x: spec.x,
         y: spec.y,

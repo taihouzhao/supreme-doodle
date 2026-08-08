@@ -1,7 +1,16 @@
-import type { Faction, ItemId, TerrainId, UnitTypeId, WeaponId, Weather } from "../core/types";
+import type {
+  Faction,
+  ItemId,
+  TerrainId,
+  Unit,
+  UnitPortraitGroup,
+  UnitTypeId,
+  WeaponId,
+  Weather,
+} from "../core/types";
 
 /** Cache-bust when swapping generated art without renaming. */
-const V = "?v=6";
+const V = "?v=7";
 
 /** Static art under /assets (served from public/). */
 
@@ -153,6 +162,49 @@ export const COMMANDER_PORTRAIT: Record<string, string> = {
   "maxwell-taylor": `/assets/commanders/maxwell-taylor.png${V}`,
 };
 
+const identityPool = (group: UnitPortraitGroup): string[] =>
+  Array.from(
+    { length: 8 },
+    (_, index) => `/assets/unit-identities/${group}-${String(index + 1).padStart(2, "0")}.png${V}`,
+  );
+
+/** 单关最多 8 名同一历史阵营普通单位；每个槽都是不同人物。 */
+export const UNIT_IDENTITY_PORTRAIT: Record<UnitPortraitGroup, string[]> = {
+  pva: identityPool("pva"),
+  rok: identityPool("rok"),
+  us: identityPool("us"),
+  uk: identityPool("uk"),
+  fr: identityPool("fr"),
+};
+
+export function unitIdentityPortrait(group: UnitPortraitGroup, index: number): string {
+  const pool = UNIT_IDENTITY_PORTRAIT[group];
+  return pool[((index % pool.length) + pool.length) % pool.length]!;
+}
+
+function fallbackPortraitIndex(unit: Pick<Unit, "id" | "commanderName">): number {
+  let hash = 2166136261;
+  for (const char of `${unit.id}:${unit.commanderName}`) {
+    hash ^= char.codePointAt(0) ?? 0;
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/** 地图、格子检查与详情卡必须调用同一个函数，保证人物身份不会漂移。 */
+export function unitPortrait(
+  unit: Pick<
+    Unit,
+    "id" | "faction" | "commanderName" | "keyUnit" | "portraitGroup" | "portraitIndex"
+  >,
+): string {
+  if (unit.keyUnit || unit.commanderName === "高大全") {
+    return COMMANDER_PORTRAIT["gao-daquan"]!;
+  }
+  const group = unit.portraitGroup ?? (unit.faction === "player" ? "pva" : "us");
+  return unitIdentityPortrait(group, unit.portraitIndex ?? fallbackPortraitIndex(unit));
+}
+
 /** Every asset URL used by the game (for preload). */
 export function allAssetUrls(): string[] {
   return [
@@ -165,5 +217,6 @@ export function allAssetUrls(): string[] {
     ...Object.values(ITEM_ICON),
     ...Object.values(UI_ICON),
     ...Object.values(COMMANDER_PORTRAIT),
+    ...Object.values(UNIT_IDENTITY_PORTRAIT).flat(),
   ];
 }

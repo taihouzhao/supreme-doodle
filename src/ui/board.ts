@@ -1,6 +1,6 @@
 import { TERRAIN } from "../content/terrain";
 import type { Faction, GameState, Objective, TerrainId, Unit, UnitTypeId, Vec2 } from "../core/types";
-import { COMMANDER_PORTRAIT, ITEM_ICON, UI_ICON, UNIT_ICON, UNIT_ROLE_ICON, terrainIcon } from "./assets";
+import { ITEM_ICON, UI_ICON, UNIT_ROLE_ICON, terrainIcon, unitPortrait } from "./assets";
 import { imageCache } from "./imageCache";
 import type { VisualFrame } from "./presentation";
 import { FACTION_STYLE, HIGHLIGHT, TERRAIN_STYLE } from "./theme";
@@ -920,9 +920,7 @@ export class Board {
     ctx.beginPath();
     ctx.arc(cx, cy, radius * 0.86, 0, Math.PI * 2);
     ctx.clip();
-    const portrait = unit.keyUnit
-      ? COMMANDER_PORTRAIT["gao-daquan"]!
-      : UNIT_ICON[unit.type][unit.faction];
+    const portrait = unitPortrait(unit);
     const iconDrawn = this.drawImage(
       portrait,
       cx - iconSize / 2,
