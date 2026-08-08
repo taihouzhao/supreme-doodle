@@ -146,11 +146,12 @@ export function enemyBaseStats(): CommanderStats {
 /**
  * 关卡波段敌军经验缩放。
  * M1–9 保持作者原值；阵地战 M10–12 温和抬升，使后期更常见 L2–L3。
+ * 系数经模拟门槛打磨（过猛会出现无解种子）。
  */
 export function scaleEnemyExp(missionId: string, rawExp: number): number {
   const n = Number((missionId.match(/m(\d+)/i) ?? [])[1] ?? "1");
   if (n <= 9) return Math.max(0, rawExp);
-  return Math.round(rawExp * 1.25 + 15);
+  return Math.round(rawExp * 1.18 + 10);
 }
 
 /** 敌军用经验合成等级与属性，保持旧关卡 `exp` 字段可用。 */
