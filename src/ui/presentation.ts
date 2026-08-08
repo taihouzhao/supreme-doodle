@@ -7,6 +7,10 @@ export interface VisualFrame {
   unitPositions: Record<string, { x: number; y: number }>;
   /** 覆盖显示用的当前生命 */
   hpDisplay: Record<string, number>;
+  /** 结算后已死亡但仍需绘制的单位（交战动画期间） */
+  lingerUnits: Record<string, { hp: number; alpha: number }>;
+  /** 溃散飘字 */
+  routBurst: { unitId: string; text: string; alpha: number } | null;
   impact: { x: number; y: number; text: string; alpha: number } | null;
   impactUnitId: string | null;
   strikeLine: { fromId: string; toId: string; alpha: number } | null;
@@ -31,6 +35,8 @@ type AttackClip = {
   defenderHpTo: number;
   attackerHpFrom: number;
   attackerHpTo: number;
+  defenderDies: boolean;
+  attackerDies: boolean;
   duration: number;
 };
 
@@ -41,6 +47,8 @@ function idleFrame(): VisualFrame {
     busy: false,
     unitPositions: {},
     hpDisplay: {},
+    lingerUnits: {},
+    routBurst: null,
     impact: null,
     impactUnitId: null,
     strikeLine: null,
@@ -57,9 +65,9 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
-function hpBeforeDamage(currentHp: number, damage: number, alive: boolean): number {
+function hpBeforeDamage(currentHp: number, damage: number): number {
   if (damage <= 0) return currentHp;
-  return alive ? currentHp + damage : Math.max(damage, currentHp + damage);
+  return Math.max(damage, currentHp + damage);
 }
 
 /**
@@ -82,12 +90,16 @@ export function clipsFromEvents(state: GameState, events: GameEvent[]): FxClip[]
       const attacker = state.units.find((u) => u.id === event.attackerId);
       const defender = state.units.find((u) => u.id === event.defenderId);
       if (!attacker || !defender) continue;
-      const defenderHpTo = defender.alive ? defender.hp : 0;
-      const attackerHpTo = attacker.alive ? attacker.hp : 0;
-      const defenderHpFrom = hpBeforeDamage(defenderHpTo, event.damage, defender.alive);
-      const attackerHpFrom = hpBeforeDamage(attackerHpTo, event.counterDamage, attacker.alive);
+      const defenderDies = !defender.alive;
+      const attackerDies = !attacker.alive;
+      const defenderHpTo = defenderDies ? 0 : defender.hp;
+      const attackerHpTo = attackerDies ? 0 : attacker.hp;
+      const defenderHpFrom = hpBeforeDamage(defenderHpTo, event.damage);
+      const attackerHpFrom = hpBeforeDamage(attackerHpTo, event.counterDamage);
       const hasCounter = event.counterDamage > 0;
-      const duration = Math.min(1800, (hasCounter ? 1600 : 1100) * scale);
+      // 有击溃时多留溃散展示阶段
+      const deathPad = defenderDies || attackerDies ? 1.35 : 1;
+      const duration = Math.min(2200, (hasCounter ? 1600 : 1100) * scale * deathPad);
       clips.push({
         kind: "attack",
         attackerId: event.attackerId,
@@ -98,6 +110,8 @@ export function clipsFromEvents(state: GameState, events: GameEvent[]): FxClip[]
         defenderHpTo,
         attackerHpFrom,
         attackerHpTo,
+        defenderDies,
+        attackerDies,
         duration,
       });
       index += 1;
@@ -193,36 +207,56 @@ export class Presentation {
 
   private applyAttack(clip: AttackClip, t: number): void {
     const hasCounter = clip.counterDamage > 0;
-    const phaseA = 0.18;
-    const phaseB = hasCounter ? 0.62 : 1;
+    const hasDeath = clip.defenderDies || clip.attackerDies;
+    // 时间轴：闪光 → 主伤害掉血 → 反击掉血 → 溃散淡出
+    const phaseFlash = 0.12;
+    const phaseMainEnd = hasCounter ? 0.48 : hasDeath ? 0.55 : 0.85;
+    const phaseCounterEnd = hasCounter ? (hasDeath ? 0.72 : 0.92) : phaseMainEnd;
+    const phaseRoutStart = hasDeath ? phaseCounterEnd : 1;
 
     this.frame.busy = true;
-    this.frame.flashUnitId = t < phaseA ? clip.attackerId : null;
+    this.frame.flashUnitId = t < phaseFlash ? clip.attackerId : null;
     this.frame.hpDisplay = {};
+    this.frame.lingerUnits = {};
+    this.frame.routBurst = null;
 
-    if (t < phaseB) {
+    // 死亡单位全程留影，直到溃散阶段淡出
+    const lingerAlpha = (dies: boolean, done: boolean) => {
+      if (!dies) return 1;
+      if (t < phaseRoutStart) return 1;
+      if (done) return 0;
+      return Math.max(0, 1 - (t - phaseRoutStart) / Math.max(0.001, 1 - phaseRoutStart));
+    };
+
+    if (t < phaseMainEnd) {
       this.frame.strikeLine = {
         fromId: clip.attackerId,
         toId: clip.defenderId,
-        alpha: t < phaseA ? t / phaseA : Math.max(0, 1 - (t - phaseA) / Math.max(0.001, phaseB - phaseA)),
+        alpha:
+          t < phaseFlash
+            ? t / phaseFlash
+            : Math.max(0, 1 - (t - phaseFlash) / Math.max(0.001, phaseMainEnd - phaseFlash)),
+      };
+    } else if (t < phaseCounterEnd && hasCounter) {
+      this.frame.strikeLine = {
+        fromId: clip.defenderId,
+        toId: clip.attackerId,
+        alpha: Math.max(
+          0,
+          1 - (t - phaseMainEnd) / Math.max(0.001, phaseCounterEnd - phaseMainEnd),
+        ),
       };
     } else {
-      this.frame.strikeLine = hasCounter
-        ? {
-            fromId: clip.defenderId,
-            toId: clip.attackerId,
-            alpha: Math.max(0, 1 - (t - phaseB) / Math.max(0.001, 1 - phaseB)),
-          }
-        : null;
+      this.frame.strikeLine = null;
     }
 
-    if (t >= phaseA && t < phaseB) {
-      const local = (t - phaseA) / Math.max(0.001, phaseB - phaseA);
-      this.frame.hpDisplay[clip.defenderId] = lerp(
-        clip.defenderHpFrom,
-        clip.defenderHpTo,
-        easeInOut(local),
-      );
+    if (t >= phaseFlash && t < phaseMainEnd) {
+      const local = (t - phaseFlash) / Math.max(0.001, phaseMainEnd - phaseFlash);
+      const hp = lerp(clip.defenderHpFrom, clip.defenderHpTo, easeInOut(local));
+      this.frame.hpDisplay[clip.defenderId] = hp;
+      if (clip.defenderDies) {
+        this.frame.lingerUnits[clip.defenderId] = { hp, alpha: 1 };
+      }
       this.frame.impact = {
         x: 0,
         y: 0,
@@ -230,14 +264,20 @@ export class Presentation {
         alpha: local < 0.75 ? 1 : 1 - (local - 0.75) / 0.25,
       };
       this.frame.impactUnitId = clip.defenderId;
-    } else if (t >= phaseB && hasCounter) {
-      const local = (t - phaseB) / Math.max(0.001, 1 - phaseB);
+    } else if (t >= phaseMainEnd && t < phaseCounterEnd && hasCounter) {
+      const local = (t - phaseMainEnd) / Math.max(0.001, phaseCounterEnd - phaseMainEnd);
       this.frame.hpDisplay[clip.defenderId] = clip.defenderHpTo;
-      this.frame.hpDisplay[clip.attackerId] = lerp(
-        clip.attackerHpFrom,
-        clip.attackerHpTo,
-        easeInOut(local),
-      );
+      if (clip.defenderDies) {
+        this.frame.lingerUnits[clip.defenderId] = {
+          hp: 0,
+          alpha: lingerAlpha(true, false),
+        };
+      }
+      const hp = lerp(clip.attackerHpFrom, clip.attackerHpTo, easeInOut(local));
+      this.frame.hpDisplay[clip.attackerId] = hp;
+      if (clip.attackerDies) {
+        this.frame.lingerUnits[clip.attackerId] = { hp, alpha: 1 };
+      }
       this.frame.impact = {
         x: 0,
         y: 0,
@@ -250,6 +290,29 @@ export class Presentation {
       if (hasCounter) this.frame.hpDisplay[clip.attackerId] = clip.attackerHpTo;
       this.frame.impact = null;
       this.frame.impactUnitId = null;
+
+      if (clip.defenderDies) {
+        const alpha = lingerAlpha(true, t >= 1);
+        this.frame.lingerUnits[clip.defenderId] = { hp: 0, alpha };
+        if (t >= phaseRoutStart) {
+          this.frame.routBurst = {
+            unitId: clip.defenderId,
+            text: "溃散",
+            alpha: Math.min(1, (t - phaseRoutStart) / 0.15) * alpha,
+          };
+        }
+      }
+      if (clip.attackerDies) {
+        const alpha = lingerAlpha(true, t >= 1);
+        this.frame.lingerUnits[clip.attackerId] = { hp: 0, alpha };
+        if (t >= phaseRoutStart && !this.frame.routBurst) {
+          this.frame.routBurst = {
+            unitId: clip.attackerId,
+            text: "溃散",
+            alpha: Math.min(1, (t - phaseRoutStart) / 0.15) * alpha,
+          };
+        }
+      }
     }
   }
 }

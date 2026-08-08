@@ -10,7 +10,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     id: "medkit",
     name: "医疗包",
     targeting: "self",
-    description: "回复 40 生命；持有时全军耐力体感更稳",
+    description: "回复 40 点生命；持有时全军耐力略增",
     heal: 40,
     damage: 0,
     antiArmorOnly: false,

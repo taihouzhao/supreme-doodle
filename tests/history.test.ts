@@ -23,6 +23,12 @@ describe("历史战役内容", () => {
     }
   });
 
+  it("地图含不可通行峭壁或要塞等复杂地形", () => {
+    const joined = MISSION_LIST.map((m) => m.map.join("")).join("");
+    expect(joined.includes("#") || joined.includes("B")).toBe(true);
+    expect(joined.includes("F")).toBe(true);
+  });
+
   it("地图、出生点、目标和撤离区全部在边界内", () => {
     for (const mission of MISSION_LIST) {
       const height = mission.map.length;

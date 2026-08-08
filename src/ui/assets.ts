@@ -11,7 +11,9 @@ export const TERRAIN_ICON: Record<TerrainId, string> = {
   forest: `/assets/terrain/forest.png${V}`,
   hill: `/assets/terrain/hill.png${V}`,
   village: `/assets/terrain/village.png${V}`,
+  fort: `/assets/terrain/village.png${V}`,
   river: `/assets/terrain/river.png${V}`,
+  cliff: `/assets/terrain/hill.png${V}`,
 };
 
 export const UNIT_ICON: Record<UnitTypeId, Record<Faction, string>> = {

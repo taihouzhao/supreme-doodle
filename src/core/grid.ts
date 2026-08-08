@@ -1,5 +1,6 @@
 import { TERRAIN } from "../content/terrain";
 import { UNIT_TYPES } from "../content/units";
+import { WEAPONS } from "../content/weapons";
 import type { GameState, TerrainDef, Unit, Vec2 } from "./types";
 
 export function inBounds(state: GameState, x: number, y: number): boolean {
@@ -29,6 +30,7 @@ export function livingUnits(state: GameState, faction?: Unit["faction"]): Unit[]
 export function canEnter(state: GameState, unit: Unit, x: number, y: number): boolean {
   if (!inBounds(state, x, y)) return false;
   const terrain = tileAt(state, x, y);
+  if (!terrain.passable) return false;
   if (UNIT_TYPES[unit.type].vehicle && !terrain.vehiclePassable) return false;
   return true;
 }
@@ -155,7 +157,25 @@ export function findPath(
 export function attackRange(state: GameState, unit: Unit): { min: number; max: number } {
   const def = UNIT_TYPES[unit.type];
   const terrain = tileAt(state, unit.x, unit.y);
-  return { min: def.minRange, max: def.maxRange + terrain.rangeBonus };
+  const weaponBonus = WEAPONS[unit.weapon]?.rangeBonus ?? 0;
+  return {
+    min: Math.max(1, def.minRange + (WEAPONS[unit.weapon]?.minRangeBonus ?? 0)),
+    max: def.maxRange + terrain.rangeBonus + weaponBonus,
+  };
+}
+
+/** 当前站位上的全部攻击半径格子（含空地），供 UI 红圈叠加。 */
+export function attackRangeTiles(state: GameState, unit: Unit): Vec2[] {
+  const { min, max } = attackRange(state, unit);
+  const tiles: Vec2[] = [];
+  for (let y = Math.max(0, unit.y - max); y <= Math.min(state.height - 1, unit.y + max); y += 1) {
+    for (let x = Math.max(0, unit.x - max); x <= Math.min(state.width - 1, unit.x + max); x += 1) {
+      if (x === unit.x && y === unit.y) continue;
+      const distance = Math.abs(x - unit.x) + Math.abs(y - unit.y);
+      if (distance >= min && distance <= max) tiles.push({ x, y });
+    }
+  }
+  return tiles;
 }
 
 export function canAttack(state: GameState, attacker: Unit, defender: Unit): boolean {

@@ -8,7 +8,7 @@ export const BALANCE = {
   /** 反击伤害比例 */
   counterRatio: 0.4,
   /** 阵营伤害系数，用来整体调节难度 */
-  factionDamage: { player: 1, enemy: 1.24 },
+  factionDamage: { player: 1, enemy: 1.28 },
   /** 主力承伤减免，配合「主力阵亡即败」规则 */
   keyUnitDamageTaken: 0.55,
   /** 相邻友军带来的集火加成 */

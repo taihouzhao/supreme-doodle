@@ -6,7 +6,9 @@ export const TERRAIN_STYLE: Record<TerrainId, { fill: string; edge: string }> = 
   forest: { fill: "#8fae87", edge: "#6f8f68" },
   hill: { fill: "#c2a97f", edge: "#9d855c" },
   village: { fill: "#dcbf9a", edge: "#b9966e" },
+  fort: { fill: "#c9a88a", edge: "#8a6a4e" },
   river: { fill: "#8fb4c9", edge: "#6a93aa" },
+  cliff: { fill: "#7a7468", edge: "#4e4940" },
 };
 
 export const FACTION_STYLE = {
@@ -35,4 +37,5 @@ export const HIGHLIGHT = {
   evac: "rgba(47, 111, 94, 0.3)",
   trail: "rgba(58, 122, 196, 0.45)",
   inspect: "rgba(245, 215, 110, 0.35)",
+  objectiveFocus: "rgba(245, 215, 110, 0.42)",
 };

@@ -2,7 +2,15 @@ export type Faction = "player" | "enemy";
 
 export type UnitTypeId = "rifle" | "mg" | "mortar" | "tank";
 
-export type TerrainId = "road" | "plain" | "forest" | "hill" | "village" | "river";
+export type TerrainId =
+  | "road"
+  | "plain"
+  | "forest"
+  | "hill"
+  | "village"
+  | "river"
+  | "fort"
+  | "cliff";
 
 export type ItemId =
   | "medkit"
@@ -80,6 +88,8 @@ export interface TerrainDef {
   defense: number;
   /** 车辆是否可进入 */
   vehiclePassable: boolean;
+  /** 步兵/车辆是否可进入；峭壁等为 false */
+  passable: boolean;
   /** 回合结束恢复的生命 */
   regen: number;
   /** 站立单位获得的射程加成 */

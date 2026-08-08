@@ -10,7 +10,14 @@ import {
   type MissionOutcome,
 } from "../core/campaign";
 import { applyAction, IllegalActionError } from "../core/engine";
-import { attackableTargets, livingUnits, manhattan, reachableTiles, unitAt } from "../core/grid";
+import {
+  attackRangeTiles,
+  attackableTargets,
+  livingUnits,
+  manhattan,
+  reachableTiles,
+  unitAt,
+} from "../core/grid";
 import type { Action, DamageBreakdown, GameState, ItemId, Unit, Vec2 } from "../core/types";
 import { describeEvent } from "./format";
 import { clipsFromEvents, Presentation } from "./presentation";
@@ -40,6 +47,8 @@ export interface SessionState {
   battle: GameState | null;
   selectedUnitId: string | null;
   inspectedTile: Vec2 | null;
+  highlightObjectiveId: string | null;
+  detailExpanded: boolean;
   pendingItem: ItemId | null;
   log: LogEntry[];
   lastStrike: LastStrike | null;
@@ -71,6 +80,8 @@ export class Session {
       battle: null,
       selectedUnitId: null,
       inspectedTile: null,
+      highlightObjectiveId: null,
+      detailExpanded: false,
       pendingItem: null,
       log: [],
       lastStrike: null,
@@ -117,9 +128,14 @@ export class Session {
     return next.slice(-60);
   }
 
+  private pendingRoutNotice: string | null = null;
+
   private onPresentationIdle(): void {
-    if (this.state.fxBusy) this.update({ fxBusy: false });
-    else {
+    const notice = this.pendingRoutNotice;
+    this.pendingRoutNotice = null;
+    if (this.state.fxBusy || notice) {
+      this.update({ fxBusy: false, notice: notice ?? this.state.notice });
+    } else {
       for (const listener of this.listeners) listener(this.state);
     }
     if (this.pendingConclude) {
@@ -203,7 +219,40 @@ export class Session {
       selectedUnitId: null,
       pendingItem: null,
       inspectedTile: null,
+      highlightObjectiveId: null,
+      detailExpanded: false,
       lastStrike: null,
+    });
+  }
+
+  toggleDetail(): void {
+    this.update({ detailExpanded: !this.state.detailExpanded });
+  }
+
+  focusObjective(objectiveId: string): void {
+    const battle = this.state.battle;
+    if (!battle) return;
+    const objective = battle.objectives.find((o) => o.id === objectiveId);
+    if (!objective) {
+      // 撤离类目标：跳到撤离带中心
+      if (objectiveId === "evac-quota" && battle.evacZone.length > 0) {
+        const cx =
+          battle.evacZone.reduce((s, z) => s + z.x, 0) / battle.evacZone.length;
+        const cy =
+          battle.evacZone.reduce((s, z) => s + z.y, 0) / battle.evacZone.length;
+        this.update({
+          highlightObjectiveId: objectiveId,
+          inspectedTile: { x: Math.round(cx), y: Math.round(cy) },
+          selectedUnitId: null,
+        });
+      }
+      return;
+    }
+    this.update({
+      highlightObjectiveId: objectiveId,
+      inspectedTile: { x: objective.x, y: objective.y },
+      selectedUnitId: null,
+      detailExpanded: false,
     });
   }
 
@@ -242,7 +291,29 @@ export class Session {
     return tiles;
   }
 
+  /** 攻击半径（含空地），叠加在移动蓝格上 */
   attackTiles(): Set<number> {
+    const battle = this.state.battle;
+    const unit = this.selectedUnit;
+    const tiles = new Set<number>();
+    if (
+      !battle ||
+      !unit ||
+      unit.faction !== "player" ||
+      unit.hasActed ||
+      this.state.pendingItem ||
+      this.state.fxBusy
+    ) {
+      return tiles;
+    }
+    for (const tile of attackRangeTiles(battle, unit)) {
+      tiles.add(tile.y * battle.width + tile.x);
+    }
+    return tiles;
+  }
+
+  /** 当前可点选攻击的敌方格子 */
+  attackTargets(): Set<number> {
     const battle = this.state.battle;
     const unit = this.selectedUnit;
     const tiles = new Set<number>();
@@ -369,6 +440,12 @@ export class Session {
 
     const selected = next.units.find((u) => u.id === this.state.selectedUnitId);
     const clips = clipsFromEvents(next, result.events);
+    const routNames = result.events
+      .filter((e): e is Extract<typeof e, { type: "routed" }> => e.type === "routed")
+      .map((e) => next.units.find((u) => u.id === e.unitId)?.name)
+      .filter((name): name is string => Boolean(name));
+    this.pendingRoutNotice =
+      routNames.length > 0 ? `${routNames.join("、")} 溃散撤离` : null;
 
     this.update({
       battle: next,
@@ -376,10 +453,11 @@ export class Session {
       log: this.pushLog(entries, next.turn),
       lastStrike: strike,
       pendingItem: null,
-      notice: null,
+      notice: clips.length > 0 ? null : this.pendingRoutNotice,
       selectedUnitId: selected && selected.alive && !selected.hasActed ? selected.id : null,
       fxBusy: clips.length > 0,
     });
+    if (clips.length === 0) this.pendingRoutNotice = null;
 
     if (next.status !== "playing") {
       this.pendingConclude = next;
