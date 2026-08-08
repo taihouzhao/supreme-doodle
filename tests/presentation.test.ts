@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { clipsFromEvents } from "../src/ui/presentation";
+import {
+  buildTimeline,
+  clipsFromEvents,
+  projectStickyAfterClips,
+} from "../src/ui/presentation";
 import type { DamageBreakdown, GameEvent, GameState, Unit } from "../src/core/types";
 import { fullInventory } from "./helpers/roster";
 
@@ -87,12 +91,17 @@ function stateWith(units: Unit[]): GameState {
   };
 }
 
-describe("clipsFromEvents 交战时间线", () => {
+describe("buildTimeline 交战时间线", () => {
   it("集火同一目标时，只有最后一击标记溃散，前几击只掉血", () => {
-    // 终局状态：目标已死、攻方已推进——这正是旧 bug 的诱因
-    const state = stateWith([
-      unit({ id: "a1", faction: "enemy", x: 5, y: 5, hp: 80, alive: true }),
+    const prev = stateWith([
+      unit({ id: "a1", faction: "enemy", x: 4, y: 5, hp: 80, alive: true }),
       unit({ id: "a2", faction: "enemy", x: 5, y: 4, hp: 80, alive: true }),
+      unit({ id: "t0", faction: "player", x: 5, y: 5, hp: 60, alive: true }),
+    ]);
+    // 终局：目标已死、a2 已推进到目标格
+    const final = stateWith([
+      unit({ id: "a1", faction: "enemy", x: 4, y: 5, hp: 80, alive: true }),
+      unit({ id: "a2", faction: "enemy", x: 5, y: 5, hp: 80, alive: true }),
       unit({ id: "t0", faction: "player", x: 5, y: 5, hp: 0, alive: false }),
     ]);
 
@@ -136,10 +145,14 @@ describe("clipsFromEvents 交战时间线", () => {
         from: { x: 5, y: 4 },
         to: { x: 5, y: 5 },
         cost: 0,
+        path: [
+          { x: 5, y: 4 },
+          { x: 5, y: 5 },
+        ],
       },
     ];
 
-    const clips = clipsFromEvents(state, events);
+    const { clips, seed } = buildTimeline(prev, events);
     const attacks = clips.filter((c) => c.kind === "attack");
     expect(attacks).toHaveLength(2);
     expect(attacks[0]).toMatchObject({
@@ -155,10 +168,87 @@ describe("clipsFromEvents 交战时间线", () => {
       attackerFrom: { x: 5, y: 4 },
     });
     expect(clips.map((c) => c.kind)).toEqual(["attack", "attack", "move"]);
+
+    // 第一击结束后：目标仍在场、血量 30，a2 仍在开火格（尚未推进）
+    const afterFirst = projectStickyAfterClips(seed, clips.slice(0, 1));
+    expect(afterFirst.hp.t0).toBe(30);
+    expect(afterFirst.present.t0).toBe(true);
+    expect(afterFirst.positions.a2).toEqual({ x: 5, y: 4 });
+
+    // 第二击结束后、推进前：目标已溃散，a2 仍钉在开火格
+    const afterKill = projectStickyAfterClips(seed, clips.slice(0, 2));
+    expect(afterKill.hp.t0).toBe(0);
+    expect(afterKill.present.t0).toBe(false);
+    expect(afterKill.positions.a2).toEqual({ x: 5, y: 4 });
+
+    // 推进后才到终局格
+    const afterAdvance = projectStickyAfterClips(seed, clips);
+    expect(afterAdvance.positions.a2).toEqual({ x: 5, y: 5 });
+    // 终局状态不得反向污染中间帧断言
+    expect(final.units.find((u) => u.id === "a2")!.x).toBe(5);
   });
 
-  it("晋升片段排在对应攻击之后", () => {
-    const state = stateWith([
+  it("多单位先后移动时，后动者不提前出现在终局格", () => {
+    const prev = stateWith([
+      unit({ id: "a", faction: "enemy", x: 1, y: 1, hp: 80, alive: true }),
+      unit({ id: "b", faction: "enemy", x: 8, y: 8, hp: 80, alive: true }),
+      unit({ id: "t", faction: "player", x: 3, y: 1, hp: 50, alive: true }),
+    ]);
+    const events: GameEvent[] = [
+      {
+        type: "moved",
+        unitId: "a",
+        from: { x: 1, y: 1 },
+        to: { x: 2, y: 1 },
+        cost: 2,
+        path: [
+          { x: 1, y: 1 },
+          { x: 2, y: 1 },
+        ],
+      },
+      {
+        type: "attacked",
+        attackerId: "a",
+        defenderId: "t",
+        damage: 20,
+        counterDamage: 0,
+        breakdown: blankBreakdown(20),
+        defenderHpFrom: 50,
+        defenderHpTo: 30,
+        attackerHpFrom: 80,
+        attackerHpTo: 80,
+        defenderRouted: false,
+        attackerRouted: false,
+        attackerFrom: { x: 2, y: 1 },
+        defenderFrom: { x: 3, y: 1 },
+      },
+      {
+        type: "moved",
+        unitId: "b",
+        from: { x: 8, y: 8 },
+        to: { x: 7, y: 8 },
+        cost: 2,
+        path: [
+          { x: 8, y: 8 },
+          { x: 7, y: 8 },
+        ],
+      },
+    ];
+
+    const { clips, seed } = buildTimeline(prev, events);
+    expect(seed.positions.b).toEqual({ x: 8, y: 8 });
+
+    const afterA = projectStickyAfterClips(seed, clips.slice(0, 2));
+    expect(afterA.positions.a).toEqual({ x: 2, y: 1 });
+    expect(afterA.positions.b).toEqual({ x: 8, y: 8 });
+    expect(afterA.hp.t).toBe(30);
+
+    const afterAll = projectStickyAfterClips(seed, clips);
+    expect(afterAll.positions.b).toEqual({ x: 7, y: 8 });
+  });
+
+  it("晋升片段排在对应攻击之后，且攻击者坐标钉在开火格", () => {
+    const prev = stateWith([
       unit({
         id: "p0",
         faction: "player",
@@ -166,10 +256,10 @@ describe("clipsFromEvents 交战时间线", () => {
         y: 3,
         hp: 90,
         alive: true,
-        rank: "下士",
-        level: 2,
+        rank: "列兵",
+        level: 1,
       }),
-      unit({ id: "e0", faction: "enemy", x: 3, y: 4, hp: 0, alive: false }),
+      unit({ id: "e0", faction: "enemy", x: 3, y: 4, hp: 40, alive: true }),
     ]);
     const events: GameEvent[] = [
       {
@@ -190,8 +280,56 @@ describe("clipsFromEvents 交战时间线", () => {
       },
       { type: "levelUp", unitId: "p0", from: 1, to: 2, rank: "下士" },
       { type: "routed", unitId: "e0", faction: "enemy" },
+      {
+        type: "moved",
+        unitId: "p0",
+        from: { x: 3, y: 3 },
+        to: { x: 3, y: 4 },
+        cost: 0,
+        path: [
+          { x: 3, y: 3 },
+          { x: 3, y: 4 },
+        ],
+      },
     ];
-    const clips = clipsFromEvents(state, events);
-    expect(clips.map((c) => c.kind)).toEqual(["attack", "promote"]);
+    const { clips, seed } = buildTimeline(prev, events);
+    expect(clips.map((c) => c.kind)).toEqual(["attack", "promote", "move"]);
+
+    const afterPromote = projectStickyAfterClips(seed, clips.slice(0, 2));
+    expect(afterPromote.positions.p0).toEqual({ x: 3, y: 3 });
+    expect(afterPromote.present.e0).toBe(false);
+
+    const afterAdvance = projectStickyAfterClips(seed, clips);
+    expect(afterAdvance.positions.p0).toEqual({ x: 3, y: 4 });
+  });
+
+  it("移动片段使用事件自带 path，不依赖终局寻路", () => {
+    const prev = stateWith([
+      unit({ id: "a", faction: "enemy", x: 0, y: 0, hp: 80, alive: true }),
+    ]);
+    const events: GameEvent[] = [
+      {
+        type: "moved",
+        unitId: "a",
+        from: { x: 0, y: 0 },
+        to: { x: 2, y: 0 },
+        cost: 4,
+        path: [
+          { x: 0, y: 0 },
+          { x: 1, y: 0 },
+          { x: 2, y: 0 },
+        ],
+      },
+    ];
+    const clips = clipsFromEvents(prev, events);
+    expect(clips[0]).toMatchObject({
+      kind: "move",
+      unitId: "a",
+      path: [
+        { x: 0, y: 0 },
+        { x: 1, y: 0 },
+        { x: 2, y: 0 },
+      ],
+    });
   });
 });

@@ -275,7 +275,15 @@ export interface DamageBreakdown {
 }
 
 export type GameEvent =
-  | { type: "moved"; unitId: string; from: Vec2; to: Vec2; cost: number }
+  | {
+      type: "moved";
+      unitId: string;
+      from: Vec2;
+      to: Vec2;
+      cost: number;
+      /** 移动当时占用下的路径；供表现层回放，避免终局占位导致寻路错乱 */
+      path: Vec2[];
+    }
   | {
       type: "attacked";
       attackerId: string;

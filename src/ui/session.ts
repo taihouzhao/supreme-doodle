@@ -32,7 +32,7 @@ import type {
 } from "../core/types";
 import { buildAttackPreview, type AttackPreview } from "./combatPreview";
 import { describeEvent } from "./format";
-import { clipsFromEvents, Presentation } from "./presentation";
+import { buildTimeline, Presentation } from "./presentation";
 import {
   appendReplay,
   clearSave,
@@ -64,6 +64,15 @@ export interface PendingAttack {
   defenderId: string;
 }
 
+/** 移动后尚未攻击/休整前，可整段撤回的快照 */
+export interface UndoableMove {
+  unitId: string;
+  /** 该单位本轮第一次移动之前的整盘状态 */
+  before: GameState;
+  /** 快照时的动作条长度，撤销时截断回放 */
+  actionsLength: number;
+}
+
 export interface SessionState {
   screen: Screen;
   campaign: CampaignState;
@@ -77,6 +86,8 @@ export interface SessionState {
   pendingAttack: PendingAttack | null;
   /** 尚有未行动单位时，结束回合需要第二次确认。 */
   endTurnArmed: boolean;
+  /** 移动可撤销：未执行攻击/休整/占领/道具前有效 */
+  undoableMove: UndoableMove | null;
   log: LogEntry[];
   lastStrike: LastStrike | null;
   outcome: MissionOutcome | null;
@@ -114,6 +125,7 @@ export class Session {
       pendingItem: null,
       pendingAttack: null,
       endTurnArmed: false,
+      undoableMove: null,
       log: [],
       lastStrike: null,
       outcome: null,
@@ -242,6 +254,7 @@ export class Session {
       pendingItem: null,
       pendingAttack: null,
       endTurnArmed: false,
+      undoableMove: null,
       lastStrike: null,
       outcome: null,
       actions: [],
@@ -260,12 +273,16 @@ export class Session {
 
   selectUnit(unitId: string | null): void {
     if (this.state.fxBusy) return;
+    // 换选其他单位视为接受当前移动，撤销窗口关闭
+    const undo = this.state.undoableMove;
+    const clearUndo = undo && undo.unitId !== unitId;
     const unit = this.state.battle?.units.find((u) => u.id === unitId);
     this.update({
       selectedUnitId: unitId,
       pendingItem: null,
       pendingAttack: null,
       endTurnArmed: false,
+      undoableMove: clearUndo ? null : this.state.undoableMove,
       inspectedTile: unit ? { x: unit.x, y: unit.y } : this.state.inspectedTile,
     });
   }
@@ -277,11 +294,45 @@ export class Session {
       pendingItem: null,
       pendingAttack: null,
       endTurnArmed: false,
+      undoableMove: null,
       inspectedTile: null,
       highlightObjectiveId: null,
       detailExpanded: false,
       lastStrike: null,
     });
+  }
+
+  /** 撤回本单位尚未锁定的移动，回到落点前的位置与物资状态 */
+  undoMove(): void {
+    if (this.state.fxBusy) return;
+    const undo = this.state.undoableMove;
+    if (!undo || !this.state.battle) return;
+    const restored = structuredClone(undo.before);
+    const unit = restored.units.find((u) => u.id === undo.unitId);
+    this.update({
+      battle: restored,
+      actions: this.state.actions.slice(0, undo.actionsLength),
+      undoableMove: null,
+      pendingItem: null,
+      pendingAttack: null,
+      endTurnArmed: false,
+      selectedUnitId: unit && unit.alive && !unit.hasActed ? unit.id : null,
+      inspectedTile: unit ? { x: unit.x, y: unit.y } : this.state.inspectedTile,
+      notice: unit ? `${unit.name} 已撤回移动` : null,
+    });
+  }
+
+  /** 当前选中单位是否仍可撤销移动 */
+  canUndoMove(): boolean {
+    const undo = this.state.undoableMove;
+    const unit = this.selectedUnit;
+    return Boolean(
+      undo &&
+        unit &&
+        undo.unitId === unit.id &&
+        !unit.hasActed &&
+        !this.state.fxBusy,
+    );
   }
 
   toggleDetail(): void {
@@ -371,12 +422,15 @@ export class Session {
     if (units.length === 0) return null;
     const current = units.findIndex((unit) => unit.id === this.state.selectedUnitId);
     const next = units[(current + 1 + units.length) % units.length]!;
+    const undo = this.state.undoableMove;
     this.update({
       selectedUnitId: next.id,
       inspectedTile: { x: next.x, y: next.y },
       pendingItem: null,
       pendingAttack: null,
       endTurnArmed: false,
+      // 换到其他单位即接受当前移动
+      undoableMove: undo && undo.unitId === next.id ? undo : null,
       notice: null,
     });
     return next;
@@ -503,22 +557,21 @@ export class Session {
     }
 
     if (occupant) {
-      this.update({
-        selectedUnitId: occupant.id,
-        pendingItem: null,
-        pendingAttack: null,
-        endTurnArmed: false,
-        inspectedTile: { x: pos.x, y: pos.y },
-      });
+      this.selectUnit(occupant.id);
       return;
     }
 
+    // 点空地：取消选中并关闭撤销窗口（移动结果保留）
     this.update({
       selectedUnitId: null,
       pendingItem: null,
       pendingAttack: null,
       endTurnArmed: false,
+      undoableMove: null,
       inspectedTile: { x: pos.x, y: pos.y },
+      highlightObjectiveId: null,
+      detailExpanded: false,
+      lastStrike: null,
     });
   }
 
@@ -526,6 +579,7 @@ export class Session {
     const battle = this.state.battle;
     if (!battle || battle.status !== "playing" || this.state.fxBusy) return;
 
+    const prev = battle;
     let result;
     try {
       result = applyAction(battle, action);
@@ -563,8 +617,36 @@ export class Session {
     }
 
     const selected = next.units.find((u) => u.id === this.state.selectedUnitId);
-    const clips = clipsFromEvents(next, result.events);
+    const timeline = buildTimeline(prev, result.events);
     this.pendingRoutNotice = combatNotice(next, result.events);
+
+    let undoableMove = this.state.undoableMove;
+    if (action.kind === "move") {
+      const movedUnit = next.units.find((u) => u.id === action.unitId);
+      // 撤离落地等已锁定行动：不可再撤
+      if (movedUnit && !movedUnit.hasActed && movedUnit.alive) {
+        if (!undoableMove || undoableMove.unitId !== action.unitId) {
+          undoableMove = {
+            unitId: action.unitId,
+            before: structuredClone(prev),
+            actionsLength: this.state.actions.length,
+          };
+        }
+        // 同一单位连续挪步：保留第一次移动前的快照
+      } else {
+        undoableMove = null;
+      }
+    } else {
+      // 攻击 / 休整 / 占领 / 道具 / 结束回合：锁定移动
+      undoableMove = null;
+    }
+
+    const stillSelected =
+      selected && selected.alive && !selected.hasActed ? selected.id : null;
+    const movedOnly =
+      action.kind === "move" && stillSelected && undoableMove?.unitId === stillSelected;
+    const moveTip = "还可攻击，或点「休整」结束；「撤销」可退回移动";
+    if (movedOnly) this.pendingRoutNotice = moveTip;
 
     this.update({
       battle: next,
@@ -574,18 +656,24 @@ export class Session {
       pendingItem: null,
       pendingAttack: null,
       endTurnArmed: false,
-      notice: clips.length > 0 ? null : this.pendingRoutNotice,
-      selectedUnitId: selected && selected.alive && !selected.hasActed ? selected.id : null,
-      fxBusy: clips.length > 0,
+      undoableMove,
+      notice:
+        timeline.clips.length > 0
+          ? null
+          : movedOnly
+            ? moveTip
+            : this.pendingRoutNotice,
+      selectedUnitId: stillSelected,
+      fxBusy: timeline.clips.length > 0,
     });
-    if (clips.length === 0) this.pendingRoutNotice = null;
+    if (timeline.clips.length === 0) this.pendingRoutNotice = null;
 
     if (next.status !== "playing") {
       this.pendingConclude = next;
     }
 
-    if (clips.length > 0) {
-      this.presentation.enqueue(clips);
+    if (timeline.clips.length > 0) {
+      this.presentation.enqueueTimeline(timeline);
     } else if (this.pendingConclude) {
       const finalState = this.pendingConclude;
       this.pendingConclude = null;

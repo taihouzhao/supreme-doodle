@@ -1,9 +1,8 @@
-import { findPath } from "../core/grid";
 import type { GameEvent, GameState, Vec2 } from "../core/types";
 
 export interface VisualFrame {
   busy: boolean;
-  /** 连续棋盘坐标（格心插值） */
+  /** 连续棋盘坐标（格心插值）；busy 时应覆盖所有仍需绘制的单位 */
   unitPositions: Record<string, { x: number; y: number }>;
   /** 覆盖显示用的当前生命 */
   hpDisplay: Record<string, number>;
@@ -54,6 +53,19 @@ type AttackClip = {
 
 export type FxClip = MoveClip | AttackClip | PromoteClip;
 
+/** 一批事件开播前的棋盘真相种子（动作执行前状态） */
+export interface TimelineSeed {
+  positions: Record<string, { x: number; y: number }>;
+  hp: Record<string, number>;
+  /** 开播时仍应绘制的单位（含稍后才会在时间线上溃散的） */
+  present: Record<string, boolean>;
+}
+
+export interface Timeline {
+  clips: FxClip[];
+  seed: TimelineSeed;
+}
+
 /**
  * 交战节奏。一次攻击约 3 秒，让瞄准、命中、掉血、反击、溃散各自看得清；
  * 想快进用 `Presentation.setSpeed` / `skip`。
@@ -95,23 +107,35 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+function seedFromState(state: GameState): TimelineSeed {
+  const positions: TimelineSeed["positions"] = {};
+  const hp: TimelineSeed["hp"] = {};
+  const present: TimelineSeed["present"] = {};
+  for (const unit of state.units) {
+    if (unit.evacuated) continue;
+    positions[unit.id] = { x: unit.x, y: unit.y };
+    hp[unit.id] = unit.hp;
+    present[unit.id] = unit.alive;
+  }
+  return { positions, hp, present };
+}
+
 /**
- * 把规则事件编成表现片段。
- * 交战血量与溃散只读 `attacked` 事件自身字段，绝不读结算后的终局 alive/hp，
- * 否则敌方集火同一目标时，第一击就会提前播溃散。
+ * 从动作前状态 + 有序事件编演出时间线。
+ * 粘性世界从 prev 起步；路径只用事件自带 path，绝不在终局占位上重新寻路。
  */
-export function clipsFromEvents(state: GameState, events: GameEvent[]): FxClip[] {
+export function buildTimeline(prev: GameState, events: GameEvent[]): Timeline {
+  const seed = seedFromState(prev);
   const clips: FxClip[] = [];
   let index = 0;
 
   for (const event of events) {
     const scale = index === 0 ? 1 : FX_TIMING.chainedScale;
-    const isRelocation =
-      event.type === "moved" && (event.from.x !== event.to.x || event.from.y !== event.to.y);
-    if (event.type === "moved" && isRelocation) {
-      const unit = state.units.find((u) => u.id === event.unitId);
-      if (!unit) continue;
-      const path = findPath(state, unit, event.to, event.from) ?? [event.from, event.to];
+    if (event.type === "moved") {
+      const relocated = event.from.x !== event.to.x || event.from.y !== event.to.y;
+      if (!relocated) continue;
+      const path =
+        event.path.length >= 2 ? event.path : [event.from, event.to];
       const duration =
         Math.min(
           FX_TIMING.moveMaxMs,
@@ -120,16 +144,27 @@ export function clipsFromEvents(state: GameState, events: GameEvent[]): FxClip[]
       clips.push({ kind: "move", unitId: event.unitId, path, duration });
       index += 1;
     } else if (event.type === "attacked") {
-      const attacker = state.units.find((u) => u.id === event.attackerId);
-      const defender = state.units.find((u) => u.id === event.defenderId);
-      if (!attacker || !defender) continue;
+      const hasCounter = event.counterDamage > 0;
       const defenderDies = event.defenderRouted;
       const attackerDies = event.attackerRouted;
-      const hasCounter = event.counterDamage > 0;
-      // 有击溃时多留溃散展示阶段
       const deathPad = defenderDies || attackerDies ? FX_TIMING.attackDeathPadMs : 0;
       const base = hasCounter ? FX_TIMING.attackCounterMs : FX_TIMING.attackBaseMs;
       const duration = Math.min(FX_TIMING.attackMaxMs, (base + deathPad) * scale);
+      // 确保目标在终局已死后，前几击仍能绘制
+      seed.present[event.defenderId] = true;
+      seed.present[event.attackerId] = true;
+      if (seed.hp[event.defenderId] === undefined) {
+        seed.hp[event.defenderId] = event.defenderHpFrom;
+      }
+      if (seed.hp[event.attackerId] === undefined) {
+        seed.hp[event.attackerId] = event.attackerHpFrom;
+      }
+      if (!seed.positions[event.defenderId]) {
+        seed.positions[event.defenderId] = { ...event.defenderFrom };
+      }
+      if (!seed.positions[event.attackerId]) {
+        seed.positions[event.attackerId] = { ...event.attackerFrom };
+      }
       clips.push({
         kind: "attack",
         attackerId: event.attackerId,
@@ -148,8 +183,10 @@ export function clipsFromEvents(state: GameState, events: GameEvent[]): FxClip[]
       });
       index += 1;
     } else if (event.type === "levelUp") {
-      const unit = state.units.find((u) => u.id === event.unitId);
-      if (!unit || unit.faction !== "player") continue;
+      const unit = prev.units.find((u) => u.id === event.unitId);
+      // 仅玩家晋升上屏；敌方静默
+      if (unit && unit.faction !== "player") continue;
+      // 终局里也可能已不在 prev（极少见）；有事件就播
       clips.push({
         kind: "promote",
         unitId: event.unitId,
@@ -160,7 +197,13 @@ export function clipsFromEvents(state: GameState, events: GameEvent[]): FxClip[]
     }
   }
 
-  return clips;
+  return { clips, seed };
+}
+
+/** @deprecated 使用 buildTimeline；保留兼容旧测试入口 */
+export function clipsFromEvents(state: GameState, events: GameEvent[]): FxClip[] {
+  // 旧接口没有 prev，只能用终局种子；路径仍优先读事件字段
+  return buildTimeline(state, events).clips;
 }
 
 export class Presentation {
@@ -170,6 +213,11 @@ export class Presentation {
   private speed = 1;
   private readonly onChange: () => void;
   private readonly onIdle: () => void;
+
+  /** 跨片段粘性棋盘真相：片段之间不回落到终局 battle */
+  private stickyPositions: Record<string, { x: number; y: number }> = {};
+  private stickyHp: Record<string, number> = {};
+  private stickyPresent: Record<string, boolean> = {};
 
   constructor(onChange: () => void, onIdle: () => void) {
     this.onChange = onChange;
@@ -191,6 +239,7 @@ export class Presentation {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.queue = [];
+    this.clearSticky();
     this.frame = idleFrame();
     this.onChange();
     this.onIdle();
@@ -204,28 +253,63 @@ export class Presentation {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.queue = [];
+    this.clearSticky();
     this.frame = idleFrame();
   }
 
-  enqueue(clips: FxClip[]): void {
+  enqueue(clips: FxClip[], seed?: TimelineSeed): void {
     if (clips.length === 0) {
       this.onIdle();
       return;
+    }
+    if (seed && !this.raf && this.queue.length === 0) {
+      this.stickyPositions = { ...seed.positions };
+      this.stickyHp = { ...seed.hp };
+      this.stickyPresent = { ...seed.present };
     }
     this.queue.push(...clips);
     if (!this.raf) this.kick();
   }
 
+  enqueueTimeline(timeline: Timeline): void {
+    this.enqueue(timeline.clips, timeline.seed);
+  }
+
+  private clearSticky(): void {
+    this.stickyPositions = {};
+    this.stickyHp = {};
+    this.stickyPresent = {};
+  }
+
+  /** 新片段开场：保留粘性姿态/血量，只清瞬时特效 */
+  private baseBusyFrame(): VisualFrame {
+    const lingerUnits: VisualFrame["lingerUnits"] = {};
+    for (const [id, on] of Object.entries(this.stickyPresent)) {
+      if (!on) continue;
+      // 终局已死但时间线尚未溃散的单位，靠 linger 强制绘制
+      const hp = this.stickyHp[id] ?? 0;
+      lingerUnits[id] = { hp, alpha: 1 };
+    }
+    return {
+      ...idleFrame(),
+      busy: true,
+      unitPositions: { ...this.stickyPositions },
+      hpDisplay: { ...this.stickyHp },
+      lingerUnits,
+    };
+  }
+
   private kick(): void {
     const clip = this.queue.shift();
     if (!clip) {
+      this.clearSticky();
       this.frame = idleFrame();
       this.raf = 0;
       this.onChange();
       this.onIdle();
       return;
     }
-    this.frame = { ...idleFrame(), busy: true };
+    this.frame = this.baseBusyFrame();
     const start = performance.now();
     const span = Math.max(1, clip.duration / this.speed);
     const tick = (now: number) => {
@@ -237,11 +321,40 @@ export class Presentation {
       if (t < 1) {
         this.raf = requestAnimationFrame(tick);
       } else {
+        this.commitClipEnd(clip);
         this.raf = 0;
         this.kick();
       }
     };
     this.raf = requestAnimationFrame(tick);
+  }
+
+  /** 片段结束时把姿态/血量写入粘性世界，供后续片段继承 */
+  private commitClipEnd(clip: FxClip): void {
+    if (clip.kind === "move") {
+      const end = clip.path[clip.path.length - 1];
+      if (end) this.stickyPositions[clip.unitId] = { x: end.x, y: end.y };
+      return;
+    }
+    if (clip.kind === "promote") return;
+    this.stickyPositions[clip.attackerId] = {
+      x: clip.attackerFrom.x,
+      y: clip.attackerFrom.y,
+    };
+    this.stickyPositions[clip.defenderId] = {
+      x: clip.defenderFrom.x,
+      y: clip.defenderFrom.y,
+    };
+    this.stickyHp[clip.defenderId] = clip.defenderHpTo;
+    this.stickyHp[clip.attackerId] = clip.attackerHpTo;
+    if (clip.defenderDies) {
+      this.stickyPresent[clip.defenderId] = false;
+      this.stickyHp[clip.defenderId] = 0;
+    }
+    if (clip.attackerDies) {
+      this.stickyPresent[clip.attackerId] = false;
+      this.stickyHp[clip.attackerId] = 0;
+    }
   }
 
   private applyMove(clip: MoveClip, t: number): void {
@@ -254,9 +367,21 @@ export class Presentation {
     const local = cursor - i;
     const a = path[i]!;
     const b = path[i + 1] ?? a;
-    this.frame.unitPositions = {
-      [clip.unitId]: { x: lerp(a.x, b.x, local), y: lerp(a.y, b.y, local) },
+
+    this.frame.unitPositions = { ...this.stickyPositions };
+    this.frame.unitPositions[clip.unitId] = {
+      x: lerp(a.x, b.x, local),
+      y: lerp(a.y, b.y, local),
     };
+    this.frame.hpDisplay = { ...this.stickyHp };
+    this.frame.lingerUnits = lingerFromSticky(this.stickyPresent, this.stickyHp);
+    this.frame.promoteBurst = null;
+    this.frame.routBurst = null;
+    this.frame.impact = null;
+    this.frame.impactUnitId = null;
+    this.frame.strikeLine = null;
+    this.frame.flashUnitId = null;
+
     const trail: VisualFrame["trail"] = [];
     for (let p = 0; p <= i; p += 1) {
       const tile = path[p]!;
@@ -266,9 +391,18 @@ export class Presentation {
     this.frame.busy = true;
   }
 
-  /** 晋升提示：先弹出放大，末段淡出 */
+  /** 晋升提示：钉在粘性坐标上，不暴露击溃推进后的终局格 */
   private applyPromote(clip: PromoteClip, t: number): void {
     this.frame.busy = true;
+    this.frame.unitPositions = { ...this.stickyPositions };
+    this.frame.hpDisplay = { ...this.stickyHp };
+    this.frame.lingerUnits = lingerFromSticky(this.stickyPresent, this.stickyHp);
+    this.frame.trail = [];
+    this.frame.strikeLine = null;
+    this.frame.impact = null;
+    this.frame.impactUnitId = null;
+    this.frame.flashUnitId = null;
+    this.frame.routBurst = null;
     const pop = t < 0.25 ? t / 0.25 : 1;
     this.frame.promoteBurst = {
       unitId: clip.unitId,
@@ -284,17 +418,23 @@ export class Presentation {
     const beats = attackBeats(hasCounter, hasDeath);
 
     this.frame.busy = true;
+    this.frame.unitPositions = { ...this.stickyPositions };
     // 整段交战钉在开火瞬间的格子上；击溃推进由后续 moved 片段播放
-    this.frame.unitPositions = {
-      [clip.attackerId]: { x: clip.attackerFrom.x, y: clip.attackerFrom.y },
-      [clip.defenderId]: { x: clip.defenderFrom.x, y: clip.defenderFrom.y },
+    this.frame.unitPositions[clip.attackerId] = {
+      x: clip.attackerFrom.x,
+      y: clip.attackerFrom.y,
     };
+    this.frame.unitPositions[clip.defenderId] = {
+      x: clip.defenderFrom.x,
+      y: clip.defenderFrom.y,
+    };
+    this.frame.hpDisplay = { ...this.stickyHp };
+    this.frame.lingerUnits = lingerFromSticky(this.stickyPresent, this.stickyHp);
+    this.frame.promoteBurst = null;
+    this.frame.trail = [];
     this.frame.flashUnitId = t >= beats.aimEnd && t < beats.flashEnd ? clip.attackerId : null;
-    this.frame.hpDisplay = {};
-    this.frame.lingerUnits = {};
     this.frame.routBurst = null;
 
-    // 死亡单位全程留影，直到溃散阶段淡出
     const lingerAlpha = (done: boolean) => {
       if (t < beats.routStart) return 1;
       if (done) return 0;
@@ -325,25 +465,32 @@ export class Presentation {
     }
 
     if (t < beats.flashEnd) {
-      // 瞄准与命中闪光：还没有掉血
       this.frame.hpDisplay[clip.defenderId] = clip.defenderHpFrom;
       this.frame.impact = null;
       this.frame.impactUnitId = null;
-      if (clip.defenderDies) {
-        this.frame.lingerUnits[clip.defenderId] = { hp: clip.defenderHpFrom, alpha: 1 };
-      }
+      this.frame.lingerUnits[clip.defenderId] = {
+        hp: clip.defenderHpFrom,
+        alpha: 1,
+      };
+      this.frame.lingerUnits[clip.attackerId] = {
+        hp: clip.attackerHpFrom,
+        alpha: 1,
+      };
       return;
     }
 
     if (t < beats.mainHoldEnd) {
-      // 掉血 + 数字停留：数字在血条走完后仍完整显示一段时间
       const drain = Math.min(
         1,
         (t - beats.flashEnd) / Math.max(0.001, beats.drainEnd - beats.flashEnd),
       );
       const hp = lerp(clip.defenderHpFrom, clip.defenderHpTo, easeInOut(drain));
       this.frame.hpDisplay[clip.defenderId] = hp;
-      if (clip.defenderDies) this.frame.lingerUnits[clip.defenderId] = { hp, alpha: 1 };
+      this.frame.lingerUnits[clip.defenderId] = { hp, alpha: 1 };
+      this.frame.lingerUnits[clip.attackerId] = {
+        hp: clip.attackerHpFrom,
+        alpha: 1,
+      };
       const holdLocal =
         t < beats.drainEnd
           ? 0
@@ -367,10 +514,11 @@ export class Presentation {
       );
       const hp = lerp(clip.attackerHpFrom, clip.attackerHpTo, easeInOut(drain));
       this.frame.hpDisplay[clip.attackerId] = hp;
-      if (clip.attackerDies) this.frame.lingerUnits[clip.attackerId] = { hp, alpha: 1 };
-      if (clip.defenderDies) {
-        this.frame.lingerUnits[clip.defenderId] = { hp: 0, alpha: lingerAlpha(false) };
-      }
+      this.frame.lingerUnits[clip.attackerId] = { hp, alpha: 1 };
+      this.frame.lingerUnits[clip.defenderId] = {
+        hp: clip.defenderHpTo,
+        alpha: clip.defenderDies ? lingerAlpha(false) : 1,
+      };
       const holdLocal =
         t < beats.counterDrainEnd
           ? 0
@@ -390,22 +538,44 @@ export class Presentation {
     this.frame.impact = null;
     this.frame.impactUnitId = null;
 
-    // 溃散阶段：先亮出提示，再淡出留影
     const routLocal = Math.max(0, (t - beats.routStart) / Math.max(0.001, 1 - beats.routStart));
-    const burstAlpha = routLocal < 0.6 ? Math.min(1, routLocal / 0.15) : Math.max(0, 1 - (routLocal - 0.6) / 0.4);
+    const burstAlpha =
+      routLocal < 0.6 ? Math.min(1, routLocal / 0.15) : Math.max(0, 1 - (routLocal - 0.6) / 0.4);
     if (clip.defenderDies) {
       this.frame.lingerUnits[clip.defenderId] = { hp: 0, alpha: lingerAlpha(t >= 1) };
       if (t >= beats.routStart) {
         this.frame.routBurst = { unitId: clip.defenderId, text: "溃散", alpha: burstAlpha };
       }
+    } else {
+      this.frame.lingerUnits[clip.defenderId] = {
+        hp: clip.defenderHpTo,
+        alpha: 1,
+      };
     }
     if (clip.attackerDies) {
       this.frame.lingerUnits[clip.attackerId] = { hp: 0, alpha: lingerAlpha(t >= 1) };
       if (t >= beats.routStart && !this.frame.routBurst) {
         this.frame.routBurst = { unitId: clip.attackerId, text: "溃散", alpha: burstAlpha };
       }
+    } else {
+      this.frame.lingerUnits[clip.attackerId] = {
+        hp: hasCounter ? clip.attackerHpTo : clip.attackerHpFrom,
+        alpha: 1,
+      };
     }
   }
+}
+
+function lingerFromSticky(
+  present: Record<string, boolean>,
+  hp: Record<string, number>,
+): VisualFrame["lingerUnits"] {
+  const linger: VisualFrame["lingerUnits"] = {};
+  for (const [id, on] of Object.entries(present)) {
+    if (!on) continue;
+    linger[id] = { hp: hp[id] ?? 0, alpha: 1 };
+  }
+  return linger;
 }
 
 interface AttackBeats {
@@ -448,4 +618,37 @@ export function attackBeats(hasCounter: boolean, hasDeath: boolean): AttackBeats
     counterHoldEnd: mainHoldEnd,
     routStart: hasDeath ? mainHoldEnd : 1,
   };
+}
+
+/**
+ * 纯函数：按片段顺序推演粘性姿态，供测试断言「时间线不穿帮」。
+ * 不驱动 RAF，只验证 commit 语义。
+ */
+export function projectStickyAfterClips(
+  seed: TimelineSeed,
+  clips: FxClip[],
+): { positions: Record<string, { x: number; y: number }>; hp: Record<string, number>; present: Record<string, boolean> } {
+  const positions = { ...seed.positions };
+  const hp = { ...seed.hp };
+  const present = { ...seed.present };
+  for (const clip of clips) {
+    if (clip.kind === "move") {
+      const end = clip.path[clip.path.length - 1];
+      if (end) positions[clip.unitId] = { x: end.x, y: end.y };
+    } else if (clip.kind === "attack") {
+      positions[clip.attackerId] = { x: clip.attackerFrom.x, y: clip.attackerFrom.y };
+      positions[clip.defenderId] = { x: clip.defenderFrom.x, y: clip.defenderFrom.y };
+      hp[clip.defenderId] = clip.defenderHpTo;
+      hp[clip.attackerId] = clip.attackerHpTo;
+      if (clip.defenderDies) {
+        present[clip.defenderId] = false;
+        hp[clip.defenderId] = 0;
+      }
+      if (clip.attackerDies) {
+        present[clip.attackerId] = false;
+        hp[clip.attackerId] = 0;
+      }
+    }
+  }
+  return { positions, hp, present };
 }

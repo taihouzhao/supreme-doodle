@@ -374,8 +374,14 @@ export class Board {
     for (const unit of state.units) {
       if (unit.evacuated) continue;
       const linger = visual?.lingerUnits[unit.id];
+      // 演出期间：终局已溃散但时间线尚未走到溃散的单位靠 linger / 粘性坐标继续绘制
       if (!unit.alive && !linger) continue;
-      this.drawUnit(unit, linger?.alpha ?? 1, linger?.hp);
+      const hpOverride =
+        linger?.hp ??
+        (visual?.busy && visual.hpDisplay[unit.id] !== undefined
+          ? visual.hpDisplay[unit.id]
+          : undefined);
+      this.drawUnit(unit, linger?.alpha ?? 1, hpOverride);
     }
 
     this.drawTargetMarks(state, this.overlay.attackTargets);
