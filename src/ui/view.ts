@@ -2,7 +2,7 @@ import { ITEMS, ITEM_IDS } from "../content/items";
 import { BALANCE } from "../content/balance";
 import { CHAPTER_ONE } from "../content/chapter";
 import { TERRAIN } from "../content/terrain";
-import { PROGRESS, levelFromExp } from "../content/progress";
+import { PROGRESS, levelFromExp, expProgress } from "../content/progress";
 import { UNIT_TYPES } from "../content/units";
 import { WEAPONS, WEAPON_HISTORY } from "../content/weapons";
 import { equippableWeapons } from "../core/campaign";
@@ -22,7 +22,7 @@ import {
 import { Board, terrainName } from "./board";
 import { breakdownFactors } from "./format";
 import { briefVictoryLines, objectiveLines } from "./objectives";
-import type { Session, SessionState } from "./session";
+import type { BriefTab, Session, SessionState } from "./session";
 import { downloadReplay, loadReplays } from "./storage";
 
 function itemEffectLabel(item: ItemId): string {
@@ -157,6 +157,7 @@ export class View {
   private readonly board: Board;
   private readonly regions: Record<string, HTMLElement>;
   private overlayScreen: SessionState["screen"] | null = null;
+  private overlayBriefTab: SessionState["briefTab"] | null = null;
   constructor(root: HTMLElement, session: Session) {
     this.root = root;
     this.session = session;
@@ -282,6 +283,11 @@ export class View {
           break;
         case "toggle-deploy":
           if (value) this.session.toggleDeploy(value);
+          break;
+        case "brief-tab":
+          if (value === "staff" || value === "ordnance" || value === "org") {
+            this.session.setBriefTab(value);
+          }
           break;
         case "loadout-adj": {
           const rosterId = target.dataset.roster;
@@ -789,8 +795,8 @@ export class View {
     dock.style.top = `${Math.round(best.top)}px`;
   }
 
-  /** 花名册一行：出战勾选 + 武器对比 + 携行配额 */
-  private armoryRow(state: SessionState, unit: RosterUnit, deployed: Set<string>): string {
+  /** 军械部一行：武器 + 携行（出战勾选在组织部） */
+  private ordnanceRow(state: SessionState, unit: RosterUnit): string {
     const options = equippableWeapons(state.campaign, unit.id);
     const current = WEAPONS[unit.weapon];
     const history = WEAPON_HISTORY[unit.weapon];
@@ -805,7 +811,6 @@ export class View {
     ]
       .filter(Boolean)
       .join(" · ");
-    const selected = deployed.has(unit.id);
     const loadout = state.campaign.pendingLoadout?.[unit.id] ?? {};
     const stock = state.campaign.inventory;
     const used = this.session.loadoutTotals();
@@ -816,21 +821,16 @@ export class View {
         return `<div class="loadout__item">
           <span>${esc(ITEMS[id].name)} ×${count}</span>
           <button type="button" class="btn btn--tiny" data-action="loadout-adj" data-roster="${esc(unit.id)}" data-item="${id}" data-delta="-1" data-value="${esc(unit.id)}:${id}:-" ${count <= 0 ? "disabled" : ""}>−</button>
-          <button type="button" class="btn btn--tiny" data-action="loadout-adj" data-roster="${esc(unit.id)}" data-item="${id}" data-delta="1" data-value="${esc(unit.id)}:${id}:+" ${remain <= 0 || !selected ? "disabled" : ""}>+</button>
+          <button type="button" class="btn btn--tiny" data-action="loadout-adj" data-roster="${esc(unit.id)}" data-item="${id}" data-delta="1" data-value="${esc(unit.id)}:${id}:+" ${remain <= 0 ? "disabled" : ""}>+</button>
         </div>`;
       })
       .join("");
 
-    return `<li class="armory__row${selected ? " is-deployed" : ""}">
-      <label class="armory__deploy">
-        <input type="checkbox" data-action="toggle-deploy" data-value="${esc(unit.id)}" ${selected ? "checked" : ""} ${unit.keyUnit ? "disabled" : ""} />
-        <span>${unit.keyUnit ? "主力" : selected ? "出战" : "待命"}</span>
-      </label>
+    return `<li class="armory__row">
       ${ico(WEAPON_ICON[unit.weapon], "armory__weapon")}
       <div class="armory__who">
-        <strong>${esc(unit.commanderName)}${unit.keyUnit ? " · 主角" : " · 真实人物"}</strong>
-        <small>${esc(unit.duty ?? "直属作战分队")} · 战斗 Lv.${unit.level} · ${esc(UNIT_TYPES[unit.type].name)}</small>
-        ${unit.bio ? `<small class="armory__bio">${esc(unit.bio)}</small>` : ""}
+        <strong>${esc(unit.commanderName)}${unit.keyUnit ? " · 主角" : ""}</strong>
+        <small>${esc(unit.duty ?? "直属作战分队")} · ${esc(UNIT_TYPES[unit.type].name)}</small>
       </div>
       <div class="armory__pick">
         <select data-action="equip-weapon" data-value="${esc(unit.id)}" aria-label="${esc(unit.name)}的武器">
@@ -853,10 +853,139 @@ export class View {
     </li>`;
   }
 
+  /** 组织部卡片：五维 + 出战勾选 */
+  private orgCard(unit: RosterUnit, deployed: Set<string>, cap: number): string {
+    const selected = deployed.has(unit.id);
+    const xp = expProgress(unit.exp);
+    const xpPct =
+      xp.need > 0 ? Math.max(0, Math.min(100, Math.round((xp.into / xp.need) * 100))) : 100;
+    const hpPct = Math.max(0, Math.min(100, Math.round((unit.hp / unit.maxHp) * 100)));
+    return `<article class="org-card${selected ? " is-deployed" : ""}">
+      <header class="org-card__head">
+        <label class="org-card__deploy">
+          <input type="checkbox" data-action="toggle-deploy" data-value="${esc(unit.id)}" ${selected ? "checked" : ""} ${unit.keyUnit ? "disabled" : ""} />
+          <span>${unit.keyUnit ? "主力" : selected ? "出战" : "待命"}</span>
+        </label>
+        <div class="org-card__who">
+          <strong>${esc(unit.commanderName)}${unit.keyUnit ? " · 主角" : ""}</strong>
+          <small>${esc(unit.duty ?? "直属作战分队")} · ${esc(unit.rank)} · ${esc(UNIT_TYPES[unit.type].name)}</small>
+          ${unit.bio ? `<small class="org-card__bio">${esc(unit.bio)}</small>` : ""}
+        </div>
+      </header>
+      <div class="org-card__bars">
+        <div class="bar bar--hp" title="生命 ${unit.hp}/${unit.maxHp}"><i style="width:${hpPct}%"></i><span>HP ${unit.hp}/${unit.maxHp}</span></div>
+        <div class="bar bar--xp" title="经验 ${Math.round(unit.exp)}"><i style="width:${xpPct}%"></i><span>Lv.${unit.level}${xp.need > 0 ? ` · EXP ${xp.into}/${xp.need}` : " · 满级"}</span></div>
+      </div>
+      <div class="org-card__stats">
+        ${meter("统率", unit.stats.leadership)}
+        ${meter("智力", unit.stats.intellect)}
+        ${meter("武力", unit.stats.might)}
+        ${meter("耐力", unit.stats.stamina)}
+        ${meter("机敏", unit.stats.agility)}
+      </div>
+      <p class="org-card__note">出战名额含主力；当前编制上限 ${cap}。</p>
+    </article>`;
+  }
+
+  private renderStaffPanel(state: SessionState): string {
+    const mission = CHAPTER_ONE.missions[state.campaign.missionIndex];
+    if (!mission) return "";
+    const goals = briefVictoryLines(mission);
+    const weather = mission.weather ?? { options: ["clear" as Weather], label: "晴", detail: "" };
+    const commandersById = new Map((mission.commanders ?? []).map((c) => [c.id, c]));
+    const eliteEnemies = mission.enemies.filter(
+      (enemy) => enemy.commanderId || enemy.title || (enemy.dropOptions?.length ?? 0) > 0,
+    );
+    return `
+      <p class="hq-panel__lead">${esc(mission.brief)}</p>
+      <h4>任务目标</h4>
+      <ul class="sheet__goals">
+        ${goals.map((goal) => `<li>${ico(UI_ICON.objPending, "ico ico--sm")}${esc(goal)}</li>`).join("")}
+      </ul>
+      <div class="brief-facts">
+        <article><strong>天气</strong><span>${esc(weather.label)}</span><small>${esc(weather.detail)}</small></article>
+        <article><strong>地图</strong><span>${esc(mission.mapNote ?? "战术抽象地图")}</span></article>
+        <article><strong>时间压力</strong><span>${mission.maxTurns} 回合</span><small>${esc(mission.historicalOutcome ?? "")}</small></article>
+        ${(mission.scripted ?? []).length
+          ? `<article><strong>战场规则</strong><span>${esc(
+              (mission.scripted ?? []).map((rule) => rule.note).join("；"),
+            )}</span></article>`
+          : ""}
+      </div>
+      <h4>敌军威胁</h4>
+      <p class="sheet__hint">主将与精锐就在本关棋盘上；击溃后可缴获精英道具。</p>
+      <div class="threat-strip">
+        ${eliteEnemies
+          .map((enemy) => {
+            const linked = enemy.commanderId ? commandersById.get(enemy.commanderId) : undefined;
+            const name = linked?.name ?? enemy.name ?? UNIT_TYPES[enemy.type].name;
+            const role = enemy.title ?? linked?.role ?? "精锐部队";
+            const formation = linked?.formation ?? enemy.equipment ?? UNIT_TYPES[enemy.type].name;
+            const portrait =
+              linked?.portrait && COMMANDER_PORTRAIT[linked.portrait]
+                ? COMMANDER_PORTRAIT[linked.portrait]
+                : null;
+            const drops = (enemy.dropOptions ?? []).map((id) => ITEMS[id].name).join(" / ");
+            return `<article class="threat-card">
+              ${portrait ? `<img src="${portrait}" alt="${esc(name)}肖像" />` : `<span class="threat-card__fallback">${esc(name.slice(0, 1))}</span>`}
+              <div>
+                <strong>${esc(name)}</strong>
+                <small>${esc(formation)} · ${esc(role)}</small>
+                <em>${drops ? `缴获：${esc(drops)}` : "精锐编制"}</em>
+              </div>
+            </article>`;
+          })
+          .join("")}
+      </div>
+      <h4>本关临时配属</h4>
+      <p class="sheet__hint">真实人物客串，战后不进入花名册。</p>
+      <ul class="sheet__roster">
+        ${(mission.storyAllies ?? [])
+          .map(
+            (ally, index) =>
+              `<li>${ico(unitIdentityPortrait("pva", state.campaign.roster.length + index), "ico ico--sm")}<span>${esc(ally.commander)}${esc(UNIT_TYPES[ally.type].name)}</span><span>${esc(ally.duty ?? `Lv.${ally.level}`)}</span></li>`,
+          )
+          .join("")}
+      </ul>
+      <p class="sheet__note">${esc(mission.historicalNote ?? "地图和单位数量均为战术抽象。")}</p>`;
+  }
+
+  private renderOrdnancePanel(state: SessionState): string {
+    const loadoutUsed = this.session.loadoutTotals();
+    const hasManualLoadout = ITEM_IDS.some((id) => (loadoutUsed[id] ?? 0) > 0);
+    const stockLine = ITEM_IDS.filter((id) => (state.campaign.inventory[id] ?? 0) > 0)
+      .map((id) => `${ITEMS[id].name}×${state.campaign.inventory[id]}`)
+      .join("、");
+    return `
+      <p class="sheet__hint">为各将领分配武器与本关携行。不分配物资时默认整库带入；未带出的物资留在库存。</p>
+      <p class="sheet__hint">战役库存：${stockLine || "空"} · ${
+        hasManualLoadout
+          ? `已分配：${ITEM_IDS.filter((id) => (loadoutUsed[id] ?? 0) > 0)
+              .map((id) => `${ITEMS[id].name}×${loadoutUsed[id]}`)
+              .join("、")}`
+          : "当前默认整库带入"
+      }</p>
+      <ul class="armory">
+        ${state.campaign.roster.map((unit) => this.ordnanceRow(state, unit)).join("")}
+      </ul>`;
+  }
+
+  private renderOrgPanel(state: SessionState): string {
+    const deployed = new Set(this.session.deployedIds());
+    const cap = this.session.deployCap();
+    return `
+      <p class="sheet__hint">出战 ${deployed.size} / ${cap}（含主力高大全）。查看五维成长，勾选本关上阵编制。</p>
+      <div class="org-grid">
+        ${state.campaign.roster.map((unit) => this.orgCard(unit, deployed, cap)).join("")}
+      </div>`;
+  }
+
   private renderOverlay(state: SessionState): void {
     const overlay = this.regions.overlay!;
     const sameScreen = this.overlayScreen === state.screen;
-    const scrollTop = sameScreen ? overlay.scrollTop : 0;
+    const sameTab = sameScreen && this.overlayBriefTab === state.briefTab;
+    const panel = overlay.querySelector<HTMLElement>(".hq-panel");
+    const scrollTop = sameScreen && sameTab && panel ? panel.scrollTop : sameScreen && !panel ? overlay.scrollTop : 0;
     const focused = document.activeElement as HTMLElement | null;
     const focusAction = sameScreen && overlay.contains(focused)
       ? focused?.dataset.action ?? null
@@ -868,8 +997,11 @@ export class View {
     overlay.hidden = content === null;
     overlay.innerHTML = content ?? "";
     this.overlayScreen = state.screen;
+    this.overlayBriefTab = state.briefTab;
     if (sameScreen && content !== null) {
-      overlay.scrollTop = scrollTop;
+      const nextPanel = overlay.querySelector<HTMLElement>(".hq-panel");
+      if (nextPanel) nextPanel.scrollTop = sameTab ? scrollTop : 0;
+      else overlay.scrollTop = scrollTop;
       if (focusAction) {
         const candidates = overlay.querySelectorAll<HTMLElement>(`[data-action="${focusAction}"]`);
         const target = [...candidates].find((candidate) =>
@@ -898,96 +1030,44 @@ export class View {
       case "brief": {
         const mission = CHAPTER_ONE.missions[state.campaign.missionIndex];
         if (!mission) return null;
-        const goals = briefVictoryLines(mission);
-        const weather = mission.weather ?? { options: ["clear" as Weather], label: "晴", detail: "" };
-        const commandersById = new Map((mission.commanders ?? []).map((c) => [c.id, c]));
-        const eliteEnemies = mission.enemies.filter(
-          (enemy) => enemy.commanderId || enemy.title || (enemy.dropOptions?.length ?? 0) > 0,
-        );
-        const deployed = new Set(this.session.deployedIds());
+        const tab = state.briefTab;
+        const deployed = this.session.deployedIds();
         const cap = this.session.deployCap();
-        const loadoutUsed = this.session.loadoutTotals();
-        const hasManualLoadout = ITEM_IDS.some((id) => (loadoutUsed[id] ?? 0) > 0);
-        return `<div class="sheet sheet--brief">
-          <div class="brief-head">
-            <img class="brief-head__portrait" src="${COMMANDER_PORTRAIT[CHAPTER_ONE.protagonist.portrait]}" alt="高大全肖像" />
-            <div class="brief-head__copy">
-              <p class="sheet__eyebrow">作战简报 · 第 ${state.campaign.missionIndex + 1} / ${CHAPTER_ONE.missions.length} 关 · ${esc(mission.date ?? "")}</p>
+        const tabs: { id: BriefTab; label: string; hint: string }[] = [
+          { id: "staff", label: "参谋部", hint: "下一任务" },
+          { id: "ordnance", label: "军械部", hint: "装备分配" },
+          { id: "org", label: "组织部", hint: "将领点数" },
+        ];
+        const panel =
+          tab === "ordnance"
+            ? this.renderOrdnancePanel(state)
+            : tab === "org"
+              ? this.renderOrgPanel(state)
+              : this.renderStaffPanel(state);
+        return `<div class="sheet sheet--brief sheet--hq">
+          <header class="hq-top">
+            <div class="hq-top__copy">
+              <p class="sheet__eyebrow">指挥部 · 第 ${state.campaign.missionIndex + 1} / ${CHAPTER_ONE.missions.length} 关 · ${esc(mission.date ?? "")}</p>
               <h1>${esc(mission.name)}</h1>
-              <p class="brief-head__location">${esc(mission.location ?? "")}</p>
-              <p class="sheet__lead">${esc(mission.brief)}</p>
+              <p class="hq-top__meta">${esc(mission.location ?? "")}</p>
             </div>
-          </div>
-
-          <section class="brief-block">
-            <h3>任务</h3>
-            <ul class="sheet__goals">
-              ${goals.map((goal) => `<li>${ico(UI_ICON.objPending, "ico ico--sm")}${esc(goal)}</li>`).join("")}
-            </ul>
-            <div class="brief-facts">
-              <article><strong>天气</strong><span>${esc(weather.label)}</span><small>${esc(weather.detail)}</small></article>
-              <article><strong>地图</strong><span>${esc(mission.mapNote ?? "战术抽象地图")}</span></article>
-              <article><strong>时间压力</strong><span>${mission.maxTurns} 回合</span><small>${esc(mission.historicalOutcome ?? "")}</small></article>
-              ${(mission.scripted ?? []).length
-                ? `<article><strong>战场规则</strong><span>${esc(
-                    (mission.scripted ?? []).map((rule) => rule.note).join("；"),
-                  )}</span></article>`
-                : ""}
-            </div>
-          </section>
-
-          <section class="brief-block">
-            <h3>敌军威胁</h3>
-            <p class="sheet__hint">下列主将与精锐就在本关棋盘上；击溃后可在原地缴获精英道具。</p>
-            <div class="threat-strip">
-              ${eliteEnemies
-                .map((enemy) => {
-                  const linked = enemy.commanderId ? commandersById.get(enemy.commanderId) : undefined;
-                  const name = linked?.name ?? enemy.name ?? UNIT_TYPES[enemy.type].name;
-                  const role = enemy.title ?? linked?.role ?? "精锐部队";
-                  const formation = linked?.formation ?? enemy.equipment ?? UNIT_TYPES[enemy.type].name;
-                  const portrait =
-                    linked?.portrait && COMMANDER_PORTRAIT[linked.portrait]
-                      ? COMMANDER_PORTRAIT[linked.portrait]
-                      : null;
-                  const drops = (enemy.dropOptions ?? []).map((id) => ITEMS[id].name).join(" / ");
-                  return `<article class="threat-card">
-                    ${portrait ? `<img src="${portrait}" alt="${esc(name)}肖像" />` : `<span class="threat-card__fallback">${esc(name.slice(0, 1))}</span>`}
-                    <div>
-                      <strong>${esc(name)}</strong>
-                      <small>${esc(formation)} · ${esc(role)}</small>
-                      <em>${drops ? `缴获：${esc(drops)}` : "精锐编制"}</em>
-                    </div>
-                  </article>`;
-                })
-                .join("")}
-            </div>
-          </section>
-
-          <section class="brief-block">
-            <h3>我方兵力</h3>
-            <p class="sheet__hint">出战名额 ${deployed.size} / ${cap}（含主力高大全）。本关临时配属为真实人物，战后不进入花名册。</p>
-            <ul class="sheet__roster">
-              ${(mission.storyAllies ?? [])
-                .map(
-                  (ally, index) =>
-                    `<li>${ico(unitIdentityPortrait("pva", state.campaign.roster.length + index), "ico ico--sm")}<span>${esc(ally.commander)}${esc(UNIT_TYPES[ally.type].name)} · 临时配属</span><span>${esc(ally.duty ?? `Lv.${ally.level}`)}</span></li>`,
-                )
-                .join("")}
-            </ul>
-          </section>
-
-          <section class="brief-block brief-block--armory">
-            <h3>军械库 · 编制与携行</h3>
-            <p class="sheet__hint">勾选出战、分配武器与携行物资。不分配物资时默认把战役库存整库带入本关；分配后未带出的物资会留在库存。</p>
-            <p class="sheet__hint">${hasManualLoadout ? `已分配携行：${ITEM_IDS.filter((id) => (loadoutUsed[id] ?? 0) > 0).map((id) => `${ITEMS[id].name}×${loadoutUsed[id]}`).join("、")}` : "当前：默认整库带入"}</p>
-            <ul class="armory">
-              ${state.campaign.roster.map((unit) => this.armoryRow(state, unit, deployed)).join("")}
-            </ul>
-          </section>
-
-          <p class="sheet__note">${esc(mission.historicalNote ?? "地图和单位数量均为战术抽象。")}</p>
-          <div class="sheet__actions"><button class="btn btn--primary" data-action="begin-mission">进入战场</button></div>
+          </header>
+          <nav class="hq-tabs" aria-label="指挥部部门">
+            ${tabs
+              .map(
+                (entry) =>
+                  `<button type="button" class="hq-tab${tab === entry.id ? " is-active" : ""}" data-action="brief-tab" data-value="${entry.id}" aria-pressed="${tab === entry.id}">
+                    <strong>${esc(entry.label)}</strong>
+                    <small>${esc(entry.hint)}</small>
+                  </button>`,
+              )
+              .join("")}
+          </nav>
+          <div class="hq-panel" data-region="hq-panel">${panel}</div>
+          <footer class="hq-footer">
+            <span class="hq-footer__deploy">出战 ${deployed.length} / ${cap}</span>
+            <button class="btn btn--primary" data-action="begin-mission">进入战场</button>
+          </footer>
         </div>`;
       }
 

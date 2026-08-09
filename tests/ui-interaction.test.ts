@@ -268,6 +268,45 @@ describe("后勤补充交互", () => {
   });
 });
 
+describe("指挥部仪表盘", () => {
+  it("简报默认参谋部，可切换军械部与组织部", () => {
+    const session = new Session();
+    session.newCampaign();
+    expect(session.current.screen).toBe("brief");
+    expect(session.current.briefTab).toBe("staff");
+
+    session.setBriefTab("ordnance");
+    expect(session.current.briefTab).toBe("ordnance");
+    session.setBriefTab("org");
+    expect(session.current.briefTab).toBe("org");
+
+    session.proceed();
+    // 通关前 proceed 仍回 brief，并重置到参谋部
+    if (session.current.screen === "brief") {
+      expect(session.current.briefTab).toBe("staff");
+    }
+  });
+
+  it("组织部负责出战勾选，军械部仍能换装", () => {
+    const session = new Session();
+    session.newCampaign();
+    const unit = session.current.campaign.roster.find((entry) => !entry.keyUnit)!;
+    const before = session.deployedIds();
+    expect(before).toContain(session.current.campaign.roster.find((u) => u.keyUnit)!.id);
+
+    session.toggleDeploy(unit.id);
+    // 切换一次后名额仍满或少一人取决于原先是否已选
+    const after = session.deployedIds();
+    expect(after).toContain(session.current.campaign.roster.find((u) => u.keyUnit)!.id);
+    expect(after.length).toBe(session.deployCap());
+
+    const weaponPool = session.current.campaign.armory;
+    expect(weaponPool.length).toBeGreaterThan(0);
+    session.equipWeapon(unit.id, unit.weapon);
+    expect(session.current.campaign.roster.find((u) => u.id === unit.id)?.weapon).toBe(unit.weapon);
+  });
+});
+
 describe("物资槽与目标定位", () => {
   it("七种正库存物资全部生成槽位，不截断末项", () => {
     const items = ITEM_IDS.map((id) => ({ id, count: 1 }));

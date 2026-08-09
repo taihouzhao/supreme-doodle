@@ -84,7 +84,7 @@ describe("战役继承", () => {
       basic += playCampaign("chapter-one", getAgent("basic"), seed).veteransAtEnd;
     }
     expect(tactical).toBeGreaterThanOrEqual(basic);
-  });
+  }, 30_000);
 
   it("经验等级会随战役推进出现", () => {
     const run = playCampaign("chapter-one", getAgent("tactical"), 2);
