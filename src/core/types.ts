@@ -197,7 +197,6 @@ export interface Unit {
   portraitGroup?: UnitPortraitGroup;
   portraitIndex?: number;
   level: number;
-  rank: string;
   /** 叙事中的固定职务/单位身份；与战斗等级分离。 */
   duty?: string;
   /** 1 级绝对底板（不含等级成长）；归队/降级时重算五维 */
@@ -358,13 +357,13 @@ export type Action =
 export interface DamageBreakdown {
   base: number;
   matchup: number;
-  veterancy: number;
+  level: number;
   commander: number;
   weapon: number;
   fatigue: number;
   flank: number;
   terrain: number;
-  defenderVeterancy: number;
+  defenderLevel: number;
   /** 主力护卫减伤；普通单位为 1。 */
   keyGuard: number;
   /** 多单位火力覆盖/互相呼应带来的攻击修正。 */
@@ -417,7 +416,7 @@ export type GameEvent =
       secondaryHits?: AttackImpact[];
     }
   | { type: "routed"; unitId: string; faction: Faction }
-  | { type: "levelUp"; unitId: string; from: number; to: number; rank: string }
+  | { type: "levelUp"; unitId: string; from: number; to: number }
   | { type: "captured"; objectiveId: string; by: Faction }
   | { type: "itemUsed"; unitId: string; item: ItemId; targetIds: string[]; damage: number; heal: number }
   | { type: "itemPicked"; unitId: string; item: ItemId }

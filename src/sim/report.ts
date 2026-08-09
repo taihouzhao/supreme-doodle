@@ -67,11 +67,11 @@ export function renderReport(result: SimulationResult): string {
   sections.push("## 连续战役");
   sections.push(
     [
-      "| 策略 | 十二关全胜率 | 平均任务胜率 | 平均通关数 | 结束时老兵数 | 结束时编制 | 平均永久损失 |",
+      "| 策略 | 十二关全胜率 | 平均任务胜率 | 平均通关数 | 结束时平均等级 | 结束时编制 | 平均永久损失 |",
       "|------|--------------|--------------|------------|--------------|------------|--------------|",
       ...result.campaigns.map(
         (row) =>
-          `| ${agentName(row.agentId)} | ${pct(row.fullClearRate)} | ${pct(row.avgCompletionRate)} | ${row.avgMissionsWon.toFixed(2)} | ${row.avgVeteransAtEnd.toFixed(1)} | ${row.avgRosterAtEnd.toFixed(1)} | ${row.avgPermanentLosses.toFixed(1)} |`,
+          `| ${agentName(row.agentId)} | ${pct(row.fullClearRate)} | ${pct(row.avgCompletionRate)} | ${row.avgMissionsWon.toFixed(2)} | ${row.avgLevelAtEnd.toFixed(1)} | ${row.avgRosterAtEnd.toFixed(1)} | ${row.avgPermanentLosses.toFixed(1)} |`,
       ),
     ].join("\n"),
   );
@@ -85,7 +85,7 @@ export function renderReport(result: SimulationResult): string {
       `- 第三关胜率：${pct(result.recovery.finalMissionWinRate)}`,
       `- 进入第三关时平均编制：${result.recovery.avgRosterBeforeFinal.toFixed(1)}`,
       `- 全程平均永久损失：${result.recovery.avgPermanentLosses.toFixed(1)}`,
-      `- 结束时平均老兵数：${result.recovery.avgVeteransAtEnd.toFixed(1)}`,
+      `- 结束时平均等级：${result.recovery.avgLevelAtEnd.toFixed(1)}`,
     ].join("\n"),
   );
 

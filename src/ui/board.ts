@@ -1,8 +1,9 @@
 import { TERRAIN } from "../content/terrain";
-import { resupplyOutcome, unitAt } from "../core/grid";
+import { WEAPONS } from "../content/weapons";
+import { attackRange, manhattan, resupplyOutcome, unitAt } from "../core/grid";
 import type { Faction, GameState, Objective, TerrainId, Unit, UnitTypeId, Vec2 } from "../core/types";
 import { BRIDGE_ICON, ITEM_ICON, UI_ICON, UNIT_ROLE_ICON, terrainIcon, unitPortrait } from "./assets";
-import { buildAttackPreview } from "./combatPreview";
+import { buildAttackPreview, type AttackPreview, type DamageRange } from "./combatPreview";
 import { imageCache } from "./imageCache";
 import type { VisualFrame } from "./presentation";
 import { bridgeAxisAt, CONNECTION, terrainConnectionMask } from "./terrainConnections";
@@ -16,6 +17,17 @@ const PAN_THRESHOLD = 8;
 const EDGE_BUFFER_TILES = 1.25;
 const KEY_PAN_STEP = 0.85;
 
+function weaponEffectLabel(type: UnitTypeId, weapon: string): string {
+  const profile = WEAPONS[weapon as keyof typeof WEAPONS]?.effectProfile;
+  if (profile === "mg" || type === "mg") return "机枪火力走廊";
+  if (profile === "mortar" || type === "mortar") return "迫击炮曲射";
+  if (profile === "artillery" || type === "artillery") return "炮兵远程覆盖";
+  if (profile === "rocket" || weapon === "bazooka") return "火箭爆破";
+  if (profile === "tank" || type === "tank") return "坦克直射";
+  if (type === "logistics") return "后勤支援";
+  return "步枪直射";
+}
+
 export interface BoardOverlay {
   selectedUnitId: string | null;
   moveTiles: Set<number>;
@@ -23,6 +35,8 @@ export interface BoardOverlay {
   attackTiles: Set<number>;
   /** 当前可点选的敌方目标格 */
   attackTargets: Set<number>;
+  /** 点击确认前的攻击预判；直接用于目标血条的虚拟扣减。 */
+  attackPreview: AttackPreview | null;
   /** 当前预览攻击会波及的次级格（含友伤格）。 */
   attackImpactTiles: Set<number>;
   /** 后勤可补充的友军格 */
@@ -43,6 +57,7 @@ export const EMPTY_OVERLAY: BoardOverlay = {
   moveTiles: new Set(),
   attackTiles: new Set(),
   attackTargets: new Set(),
+  attackPreview: null,
   attackImpactTiles: new Set(),
   resupplyTiles: new Set(),
   resupplyIdleTiles: new Set(),
@@ -434,6 +449,7 @@ export class Board {
       ctx.strokeRect(x * tile + 1.5, y * tile + 1.5, tile - 3, tile - 3);
     }
 
+    const activePreview = this.activeAttackPreview(state);
     for (const unit of state.units) {
       if (unit.evacuated) continue;
       const linger = visual?.lingerUnits[unit.id];
@@ -444,7 +460,7 @@ export class Board {
         (visual?.busy && visual.hpDisplay[unit.id] !== undefined
           ? visual.hpDisplay[unit.id]
           : undefined);
-      this.drawUnit(unit, linger?.alpha ?? 1, hpOverride);
+      this.drawUnit(unit, linger?.alpha ?? 1, hpOverride, activePreview);
     }
 
     this.drawTargetMarks(state, this.overlay.attackTargets);
@@ -472,6 +488,20 @@ export class Board {
 
     ctx.restore();
     this.drawMinimap(state, dpr);
+  }
+
+  private activeAttackPreview(state: GameState): AttackPreview | null {
+    const selected = state.units.find((unit) => unit.id === this.overlay.selectedUnitId);
+    if (!selected || selected.faction !== "player" || selected.hasActed) return null;
+    const pending = this.overlay.attackPreview;
+    if (pending && pending.attackerId === selected.id) return pending;
+    const hovered = this.hoveredTile;
+    if (!hovered) return null;
+    const index = hovered.y * state.width + hovered.x;
+    if (!this.overlay.attackTargets.has(index)) return null;
+    const target = unitAt(state, hovered.x, hovered.y);
+    if (!target || target.faction === selected.faction || !target.alive) return null;
+    return buildAttackPreview(state, selected, target);
   }
 
   /** 真实地名标注：让「云山」「三所里」这类地标出现在棋盘上而不只在简报里 */
@@ -779,31 +809,33 @@ export class Board {
     }
     const index = hovered.y * state.width + hovered.x;
     const target = unitAt(state, hovered.x, hovered.y);
-    if (!target) {
-      this.canvas.style.cursor = "default";
-      return;
-    }
-
     let title = "";
     let tone: "attack" | "resupply" = "attack";
     const lines: string[] = [];
-    if (this.overlay.attackTargets.has(index) && target.faction !== selected.faction) {
-      const preview = buildAttackPreview(state, selected, target);
-      title = `攻击预判 · ${target.name}`;
-      lines.push(`预计伤害  −${preview.damage.min}～${preview.damage.max}`);
-      lines.push(`敌军生命  ${target.hp} → ${preview.defenderHpAfter.min}～${preview.defenderHpAfter.max}`);
-      lines.push(
-        preview.counter
-          ? `可能反击  −${preview.counter.min}～${preview.counter.max}`
-          : "可能反击  无",
-      );
-      if (preview.rout !== "none") lines.push(preview.rout === "certain" ? "结果  确定击溃" : "结果  可能击溃");
-      for (const impact of preview.affected) {
-        const affected = state.units.find((unit) => unit.id === impact.unitId);
-        if (!affected) continue;
-        lines.push(`${affected.commanderName || affected.name}  −${impact.damage.min}～${impact.damage.max}${impact.friendly ? "（友伤）" : ""}`);
+    if (this.overlay.attackTiles.has(index)) {
+      const weapon = WEAPONS[selected.weapon];
+      const range = attackRange(state, selected);
+      const distance = manhattan(selected, hovered);
+      const effect = weaponEffectLabel(selected.type, selected.weapon);
+      const preview =
+        target && target.faction !== selected.faction && this.overlay.attackTargets.has(index)
+          ? buildAttackPreview(state, selected, target)
+          : null;
+      title = `武器范围 · ${weapon?.name ?? "当前武器"}`;
+      lines.push(`射程  ${range.min}～${range.max} 格 · 当前 ${distance} 格`);
+      lines.push(`作用  ${effect}${preview && preview.affected.length > 0 ? ` · 波及 ${preview.affected.length} 格` : " · 单点"}`);
+      if (preview && target) {
+        lines.push(`目标生命  ${target.hp} → ${preview.defenderHpAfter.min}～${preview.defenderHpAfter.max}`);
+        lines.push(
+          preview.counter
+            ? `守方可回射  −${preview.counter.min}～${preview.counter.max}`
+            : "守方不会自动反击",
+        );
+        if (preview.rout !== "none") lines.push(preview.rout === "certain" ? "结果  确定击溃" : "结果  可能击溃");
+      } else if (!target) {
+        lines.push("空白落点  可在射程内选择敌方单位");
       }
-    } else if (this.overlay.resupplyTiles.has(index) && target.faction === selected.faction) {
+    } else if (target && this.overlay.resupplyTiles.has(index) && target.faction === selected.faction) {
       const preview = resupplyOutcome(state, selected, target);
       tone = "resupply";
       title = `补充预判 · ${target.name}`;
@@ -821,7 +853,7 @@ export class Board {
     this.canvas.style.cursor = "pointer";
     const { ctx, tile } = this;
     const lineHeight = tile * 0.25;
-    const width = tile * 3.25;
+    const width = tile * 4.2;
     const height = tile * (0.56 + lines.length * 0.25);
     const dpr = window.devicePixelRatio || 1;
     const viewLeft = this.cameraX * dpr;
@@ -829,7 +861,12 @@ export class Board {
     const viewRight = viewLeft + this.viewCssW * dpr;
     const viewBottom = viewTop + this.viewCssH * dpr;
     let left = (hovered.x + 1.05) * tile;
-    let top = hovered.y * tile - tile * 0.08;
+    // 攻击范围框优先放在目标格上方，避免被跟手操作条（确认/休整）盖住。
+    // 贴近视口边缘时再由下面的 clamp 逻辑回退到可见区域。
+    let top =
+      tone === "attack"
+        ? hovered.y * tile - height - tile * 0.12
+        : hovered.y * tile - tile * 0.08;
     if (left + width > viewRight - tile * 0.1) left = hovered.x * tile - width - tile * 0.05;
     if (top + height > viewBottom - tile * 0.1) top = viewBottom - height - tile * 0.1;
     left = Math.max(viewLeft + tile * 0.1, left);
@@ -1177,7 +1214,12 @@ export class Board {
     return faction === "player" ? "#e7efe9" : "#f6e9e6";
   }
 
-  private drawUnit(unit: Unit, alpha = 1, hpOverride?: number): void {
+  private drawUnit(
+    unit: Unit,
+    alpha = 1,
+    hpOverride?: number,
+    attackPreview?: AttackPreview | null,
+  ): void {
     const { ctx, tile } = this;
     const style = FACTION_STYLE[unit.faction];
     const { cx, cy } = this.unitDrawPos(unit);
@@ -1208,21 +1250,28 @@ export class Board {
     ctx.lineWidth = Math.max(1.2, tile * 0.035);
     ctx.stroke();
 
-    if (unit.eliteTier === "boss") {
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius + tile * 0.11, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(248, 205, 92, 0.98)";
-      ctx.lineWidth = Math.max(2.8, tile * 0.065);
-      ctx.shadowColor = "rgba(248, 205, 92, 0.48)";
-      ctx.shadowBlur = tile * 0.12;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    } else if (unit.eliteTier === "elite") {
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius + tile * 0.08, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(224, 182, 90, 0.92)";
-      ctx.lineWidth = Math.max(1.8, tile * 0.04);
-      ctx.stroke();
+    // 老存档/增援单位可能没有持久化 eliteTier；敌军主将仍必须保持
+    // 同一套精英识别，否则头像会退回普通红圈而丢失战场层级信息。
+    const eliteTier =
+      unit.eliteTier ??
+      (unit.faction === "enemy" && unit.duty === "敌军主将" ? "boss" : null);
+    if (eliteTier) {
+      const wreathSize = radius * (eliteTier === "boss" ? 3.35 : 3.05);
+      const wreathDrawn = this.drawImage(
+        UI_ICON.eliteWreath,
+        cx - wreathSize / 2,
+        cy - wreathSize / 2,
+        wreathSize,
+        wreathSize,
+        eliteTier === "boss" ? 1 : 0.88,
+      );
+      if (!wreathDrawn) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + tile * (eliteTier === "boss" ? 0.11 : 0.08), 0, Math.PI * 2);
+        ctx.strokeStyle = eliteTier === "boss" ? "rgba(248, 205, 92, 0.98)" : "rgba(224, 182, 90, 0.92)";
+        ctx.lineWidth = Math.max(2, tile * 0.05);
+        ctx.stroke();
+      }
     }
 
     const iconSize = radius * 1.95;
@@ -1281,6 +1330,23 @@ export class Board {
     ctx.fillStyle = ratio > 0.55 ? "#5aa469" : ratio > 0.28 ? "#d9a326" : "#c8503c";
     ctx.fillRect(barX, barY, barWidth * ratio, barHeight);
 
+    const projected = this.projectedHp(unit, attackPreview);
+    if (projected) {
+      const expectedRatio = Math.max(0, Math.min(1, projected.expected / unit.maxHp));
+      const lowRatio = Math.max(0, Math.min(1, projected.min / unit.maxHp));
+      // 直接在真实生命条上叠加预测损失带：不新增伤害图标，金线表示中值。
+      if (expectedRatio < ratio) {
+        ctx.fillStyle = "rgba(202, 73, 55, 0.75)";
+        ctx.fillRect(barX + barWidth * expectedRatio, barY, barWidth * (ratio - expectedRatio), barHeight);
+      }
+      if (lowRatio < expectedRatio) {
+        ctx.fillStyle = "rgba(232, 163, 75, 0.36)";
+        ctx.fillRect(barX + barWidth * lowRatio, barY, barWidth * (expectedRatio - lowRatio), barHeight);
+      }
+      ctx.fillStyle = "rgba(255, 239, 190, 0.95)";
+      ctx.fillRect(barX + barWidth * expectedRatio - Math.max(1, tile * 0.018), barY - tile * 0.035, Math.max(2, tile * 0.036), barHeight + tile * 0.07);
+    }
+
     if (unit.keyUnit) {
       const star = tile * 0.3;
       if (
@@ -1299,6 +1365,11 @@ export class Board {
         ctx.fillText("主", cx + radius * 0.75, cy - radius * 0.75);
       }
     }
+  }
+
+  private projectedHp(unit: Unit, preview?: AttackPreview | null): DamageRange | null {
+    if (!preview || preview.defenderId !== unit.id || unit.faction === "player") return null;
+    return preview.defenderHpAfter;
   }
 
   private drawUnitSilhouette(

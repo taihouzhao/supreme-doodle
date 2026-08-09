@@ -1,6 +1,6 @@
 import { BALANCE } from "../content/balance";
 import { ITEMS } from "../content/items";
-import { LOGISTICS, UNIT_TYPES, VETERANCY } from "../content/units";
+import { LOGISTICS, PROGRESS, UNIT_TYPES } from "../content/units";
 import { WEAPONS, secondaryDamageMultiplier, weaponPattern } from "../content/weapons";
 import { effectiveStats, inventoryForUnit, syncLevelFromExp } from "./commander";
 import { COUNTER_RATIO, canCounter, computeDamage, itemDamage, refreshMaxHp } from "./combat";
@@ -41,7 +41,6 @@ function grantExp(
       unitId: unit.id,
       from: promotion.from,
       to: promotion.to,
-      rank: unit.rank,
     });
   }
 }
@@ -57,7 +56,6 @@ function grantExpSilent(unit: Unit, amount: number, state?: GameState): GameEven
     unitId: unit.id,
     from: promotion.from,
     to: promotion.to,
-    rank: unit.rank,
   };
 }
 
@@ -239,7 +237,7 @@ export function performAttack(
   state.rng = main.rng;
   defender.hp -= main.damage;
   {
-    const promote = grantExpSilent(attacker, main.damage * VETERANCY.expPerDamage, state);
+    const promote = grantExpSilent(attacker, main.damage * PROGRESS.expPerDamage, state);
     if (promote) pendingPromotes.push(promote);
   }
   if (attacker.faction === "player") state.stats.damageDealt += main.damage;
@@ -252,7 +250,7 @@ export function performAttack(
     counterDamage = Math.max(1, Math.round(counter.damage * COUNTER_RATIO));
     attacker.hp -= counterDamage;
     {
-      const promote = grantExpSilent(defender, counterDamage * VETERANCY.expPerDamage, state);
+      const promote = grantExpSilent(defender, counterDamage * PROGRESS.expPerDamage, state);
       if (promote) pendingPromotes.push(promote);
     }
     if (defender.faction === "player") state.stats.damageDealt += counterDamage;
@@ -313,7 +311,7 @@ export function performAttack(
 
   if (defenderRouted) {
     routUnit(state, defender, events);
-    grantExp(attacker, VETERANCY.expPerRout, state, events);
+    grantExp(attacker, PROGRESS.expPerRout, state, events);
     capturePrisoners(state, attacker, defender, events);
   }
 
@@ -326,24 +324,24 @@ export function performAttack(
       splashTarget.hp -= splashDamage;
       if (attacker.faction === "player") state.stats.damageDealt += splashDamage;
       else state.stats.damageTaken += splashDamage;
-      const promote = grantExpSilent(attacker, splashDamage * VETERANCY.expPerDamage, state);
+      const promote = grantExpSilent(attacker, splashDamage * PROGRESS.expPerDamage, state);
       if (promote) events.push(promote);
       if (splashTarget.hp <= 0) {
         routUnit(state, splashTarget, events);
-        grantExp(attacker, VETERANCY.expPerRout, state, events);
+        grantExp(attacker, PROGRESS.expPerRout, state, events);
         capturePrisoners(state, attacker, splashTarget, events);
       }
     }
   }
   if (attackerRouted) {
     routUnit(state, attacker, events);
-    grantExp(defender, VETERANCY.expPerRout, state, events);
+    grantExp(defender, PROGRESS.expPerRout, state, events);
   }
   for (const victim of secondaryRouted) {
     if (!victim.alive) continue;
     routUnit(state, victim, events);
     if (victim.faction === "enemy") {
-      grantExp(attacker, VETERANCY.expPerRout, state, events);
+      grantExp(attacker, PROGRESS.expPerRout, state, events);
       capturePrisoners(state, attacker, victim, events);
     }
   }
@@ -465,7 +463,7 @@ export function performItem(
     targetIds.push(target.id);
     if (target.hp <= 0) {
       routUnit(state, target, events);
-      grantExp(unit, VETERANCY.expPerRout, state, events);
+      grantExp(unit, PROGRESS.expPerRout, state, events);
       capturePrisoners(state, unit, target, events);
     }
   } else {
@@ -484,7 +482,7 @@ export function performItem(
       targetIds.push(victim.id);
       if (victim.hp <= 0) {
         routUnit(state, victim, events);
-        grantExp(unit, VETERANCY.expPerRout, state, events);
+        grantExp(unit, PROGRESS.expPerRout, state, events);
         capturePrisoners(state, unit, victim, events);
       }
     }

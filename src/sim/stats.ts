@@ -12,7 +12,7 @@ export interface MissionAggregate {
   avgTurns: number;
   avgEnemyRouted: number;
   avgEvacuated: number;
-  avgVeteransAlive: number;
+  avgLevelAlive: number;
   lostSeeds: number[];
 }
 
@@ -22,7 +22,7 @@ export interface CampaignAggregate {
   fullClearRate: number;
   avgMissionsWon: number;
   avgCompletionRate: number;
-  avgVeteransAtEnd: number;
+  avgLevelAtEnd: number;
   avgRosterAtEnd: number;
   avgPermanentLosses: number;
 }
@@ -68,7 +68,7 @@ export function aggregateMission(
     avgTurns: mean(runs.map((run) => run.turnsUsed)),
     avgEnemyRouted: mean(runs.map((run) => run.enemyRouted)),
     avgEvacuated: mean(runs.map((run) => run.evacuated)),
-    avgVeteransAlive: mean(runs.map((run) => run.veteransAlive)),
+    avgLevelAlive: mean(runs.map((run) => run.averageLevelAlive)),
     lostSeeds: runs.filter((run) => run.status !== "won").map((run) => run.seed),
   };
 }
@@ -85,7 +85,7 @@ export function aggregateCampaign(agentId: string, runs: CampaignRun[]): Campaig
     avgMissionsWon: mean(runs.map((run) => run.missionsWon)),
     avgCompletionRate:
       missionCount === 0 ? 0 : mean(runs.map((run) => run.missionsWon / missionCount)),
-    avgVeteransAtEnd: mean(runs.map((run) => run.veteransAtEnd)),
+    avgLevelAtEnd: mean(runs.map((run) => run.averageLevelAtEnd)),
     avgRosterAtEnd: mean(runs.map((run) => run.rosterAtEnd)),
     avgPermanentLosses: mean(
       runs.map((run) => run.outcomes.reduce((sum, o) => sum + o.permanentLosses.length, 0)),

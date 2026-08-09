@@ -9,7 +9,7 @@ import { attachmentFits } from "../content/attachments";
 import { ITEM_IDS } from "../content/items";
 import type { MissionConfig } from "../content/missions/schema";
 import { BASE_STATS } from "../content/progress";
-import { LOGISTICS, levelFromExp, rankName, veterancyLevel } from "../content/units";
+import { LOGISTICS, levelFromExp } from "../content/units";
 import { WEAPONS, defaultWeaponFor, weaponFits } from "../content/weapons";
 import { effectiveMaxHp, recomputeStatsAtLevel } from "./commander";
 import { createMissionState, emptyInventory, type RosterUnit } from "./mission";
@@ -35,7 +35,7 @@ export interface MissionOutcome {
   itemsDiscarded?: ItemId[];
   attachmentsGained: AttachmentId[];
   rosterAfter: number;
-  veteransAfter: number;
+  averageLevelAfter: number;
   landmarksDiscovered: string[];
 }
 
@@ -76,7 +76,7 @@ export interface CampaignState {
   history: MissionOutcome[];
   serial: number;
   status: "running" | "complete";
-  /** 出击前勾选的伴随单位 id；空则自动老兵优先 */
+  /** 出击前勾选的伴随单位 id；空则自动按等级与主力标记选择 */
   pendingDeploy?: string[];
   /** 出击前为各单位分配的携行物资（按 rosterId）；空则整库带入 */
   pendingLoadout?: Record<string, ItemLoadout>;
@@ -188,7 +188,6 @@ function rosterFromSpec(
     commanderKind: "companion",
     commanderName: spec.commander,
     level: spec.level,
-    rank: rankName(spec.level),
     duty: spec.duty ?? "直属作战分队指挥员",
     bio: spec.bio,
     baseStats,
@@ -698,7 +697,6 @@ export function finishMission(
         exp: deployed.exp,
         fatigue: deployed.fatigue,
         level: deployed.level,
-        rank: deployed.rank,
         stats: deployed.stats,
         weapon: deployed.weapon,
         backpack: normalizeBackpack(deployed.backpack),
@@ -718,7 +716,6 @@ export function finishMission(
         hp: Math.max(25, chapter.returningUnit.hp),
         exp,
         level,
-        rank: rankName(level),
         stats: rosterUnit.baseStats
           ? recomputeStatsAtLevel(
               rosterUnit.baseStats,
@@ -756,7 +753,6 @@ export function finishMission(
       hp: chapter.returningUnit.hp,
       exp,
       level,
-      rank: rankName(level),
       stats: rosterUnit.baseStats
         ? recomputeStatsAtLevel(
             rosterUnit.baseStats,
@@ -833,7 +829,10 @@ export function finishMission(
     itemsDiscarded: discardedWarehouse,
     attachmentsGained,
     rosterAfter: roster.length,
-    veteransAfter: roster.filter((u) => veterancyLevel(u.exp) >= 3).length,
+    averageLevelAfter:
+      roster.length > 0
+        ? Math.round((roster.reduce((sum, unit) => sum + unit.level, 0) / roster.length) * 10) / 10
+        : 0,
     landmarksDiscovered: finalState.places
       .filter((place) => (finalState.discoveredPlaceIds ?? []).includes(place.id ?? `${place.x},${place.y}`))
       .map((place) => place.name),
@@ -858,7 +857,7 @@ export function rosterSummary(campaign: CampaignState): string {
   return campaign.roster
     .map(
       (u) =>
-        `${u.name}(${u.rank}Lv${u.level} ${u.hp}/${u.maxHp} ${WEAPONS[u.weapon].name})`,
+        `${u.name}(Lv.${u.level} EXP${Math.round(u.exp)} ${u.hp}/${u.maxHp} ${WEAPONS[u.weapon].name})`,
     )
     .join("、");
 }

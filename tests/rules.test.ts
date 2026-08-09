@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { BALANCE } from "../src/content/balance";
 import { getMission } from "../src/content/missions";
-import { UNIT_TYPES, veterancyLevel } from "../src/content/units";
+import { UNIT_TYPES, levelFromExp } from "../src/content/units";
 import { canCounter, damageComponents, estimateDamage } from "../src/core/combat";
 import { runEnemyPhase } from "../src/core/enemyAi";
 import { applyAction, legalActions } from "../src/core/engine";
@@ -181,6 +181,20 @@ describe("战斗", () => {
     expect(canCounter(state, attacker, defender)).toBe(true);
   });
 
+  it("远程兵种不会自动反击，只有步兵与机枪回射", () => {
+    const state = scenario();
+    const attacker = put(state, "p0", 6, 6);
+    const defender = put(state, "e0", 6, 5);
+    for (const type of ["mortar", "artillery", "tank"] as const) {
+      defender.type = type;
+      defender.weapon = type === "mortar" ? "mortar60" : type === "artillery" ? "type75" : "sherman";
+      expect(canCounter(state, attacker, defender)).toBe(false);
+    }
+    defender.type = "rifle";
+    defender.weapon = "m1_garand";
+    expect(canCounter(state, attacker, defender)).toBe(true);
+  });
+
   it("抖动被限制在窄区间内，没有暴击", () => {
     const state = scenario();
     const attacker = put(state, "p0", 6, 6);
@@ -211,8 +225,8 @@ describe("战斗", () => {
   });
 
   it("等级随经验提升", () => {
-    expect(veterancyLevel(0)).toBe(1);
-    expect(veterancyLevel(500)).toBeGreaterThan(1);
+    expect(levelFromExp(0)).toBe(1);
+    expect(levelFromExp(500)).toBeGreaterThan(1);
   });
 
   it("多单位火力呼应与相互掩护进入伤害分解", () => {

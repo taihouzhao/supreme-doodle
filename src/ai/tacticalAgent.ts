@@ -61,13 +61,13 @@ function alliesAround(state: GameState, unit: Unit, tile: Vec2): number {
 
 /**
  * 保存部队：把「这一步会不会送掉一个单位」显式计入代价。
- * 老兵越贵，越不该拿去换。
+ * 高等级单位越稀缺，越不该拿去换。
  */
 function deathRisk(unit: Unit, projectedDamage: number): number {
   const keyWeight = unit.keyUnit ? 3.5 : 1;
   if (projectedDamage < unit.hp) return projectedDamage * 0.35 * keyWeight;
-  const veteranWeight = 1 + Math.min(10, unit.level) * 0.12;
-  return (80 + (projectedDamage - unit.hp)) * veteranWeight * keyWeight + (unit.keyUnit ? 120 : 0);
+  const levelWeight = 1 + Math.min(10, unit.level) * 0.12;
+  return (80 + (projectedDamage - unit.hp)) * levelWeight * keyWeight + (unit.keyUnit ? 120 : 0);
 }
 
 /** 据点必须有人站着，否则回合结束就会被敌人占走 */

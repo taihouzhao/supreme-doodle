@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getAgent } from "../src/ai";
 import { CHAPTER_ONE } from "../src/content/chapter";
-import { LOGISTICS, veterancyLevel } from "../src/content/units";
+import { LOGISTICS, levelFromExp } from "../src/content/units";
 import {
   createCampaign,
   finishMission,
@@ -100,20 +100,20 @@ describe("战役继承", () => {
     expect(recovered / trials).toBeGreaterThanOrEqual(1 / 3);
   });
 
-  it("老兵是稀缺资源：战术策略保住的老兵不少于基础策略", () => {
+  it("平均战斗等级：战术策略不低于基础策略", () => {
     const trials = 2;
     let tactical = 0;
     let basic = 0;
     for (let seed = 1; seed <= trials; seed += 1) {
-      tactical += playCampaign("chapter-one", getAgent("tactical"), seed).veteransAtEnd;
-      basic += playCampaign("chapter-one", getAgent("basic"), seed).veteransAtEnd;
+      tactical += playCampaign("chapter-one", getAgent("tactical"), seed).averageLevelAtEnd;
+      basic += playCampaign("chapter-one", getAgent("basic"), seed).averageLevelAtEnd;
     }
     expect(tactical).toBeGreaterThanOrEqual(basic);
   }, 30_000);
 
   it("经验等级会随战役推进出现", () => {
     const run = playCampaign("chapter-one", getAgent("tactical"), 2);
-    expect(run.finalCampaign.roster.some((u) => veterancyLevel(u.exp) >= 3)).toBe(true);
+    expect(run.finalCampaign.roster.some((u) => levelFromExp(u.exp) >= 3)).toBe(true);
   });
 
   it("开局伴随将领精简，战场另有剧情将领", () => {
@@ -145,7 +145,7 @@ describe("战役继承", () => {
     expect(key.stats).toEqual({ leadership: 49, intellect: 44, might: 46, stamina: 47, agility: 42 });
     expect(key.maxHp).toBe(165);
     expect(key.duty).toBe("志司直属加强营指挥员");
-    expect(key.rank).toBe("熟练");
+    expect(key.level).toBe(levelFromExp(key.exp));
   });
 
   it("部队番号为唯一主将+兵种，不带序号", () => {

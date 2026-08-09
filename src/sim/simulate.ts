@@ -24,7 +24,7 @@ export interface RecoveryResult {
   finalMissionWinRate: number;
   avgRosterBeforeFinal: number;
   avgPermanentLosses: number;
-  avgVeteransAtEnd: number;
+  avgLevelAtEnd: number;
 }
 
 export interface SimulationResult {
@@ -60,7 +60,7 @@ function summarizeRecovery(runs: CampaignRun[]): RecoveryResult {
     avgPermanentLosses: mean(
       runs.map((run) => run.outcomes.reduce((sum, o) => sum + o.permanentLosses.length, 0)),
     ),
-    avgVeteransAtEnd: mean(runs.map((run) => run.veteransAtEnd)),
+    avgLevelAtEnd: mean(runs.map((run) => run.averageLevelAtEnd)),
   };
 }
 

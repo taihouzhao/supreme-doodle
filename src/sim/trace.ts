@@ -1,5 +1,5 @@
 import { getAgent } from "../ai";
-import { UNIT_TYPES, veterancyName } from "../content/units";
+import { UNIT_TYPES, levelFromExp } from "../content/units";
 import { playStandaloneMission } from "./runner";
 import type { GameState } from "../core/types";
 
@@ -43,6 +43,6 @@ console.log("");
 for (const unit of state.units) {
   const status = unit.evacuated ? "已撤离" : unit.alive ? `${unit.hp}/${unit.maxHp}` : "溃散";
   console.log(
-    `${unit.faction === "player" ? "我" : "敌"} ${unit.name.padEnd(6)} ${UNIT_TYPES[unit.type].name.padEnd(4)} ${status.padEnd(9)} 疲劳${Math.round(unit.fatigue)} ${veterancyName(unit.exp)}(${Math.round(unit.exp)})${unit.keyUnit ? " [主力]" : ""}`,
+    `${unit.faction === "player" ? "我" : "敌"} ${unit.name.padEnd(6)} ${UNIT_TYPES[unit.type].name.padEnd(4)} ${status.padEnd(9)} 疲劳${Math.round(unit.fatigue)} Lv.${levelFromExp(unit.exp)} EXP${Math.round(unit.exp)}${unit.keyUnit ? " [主力]" : ""}`,
   );
 }

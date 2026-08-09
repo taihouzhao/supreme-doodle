@@ -1,5 +1,5 @@
 import { ITEMS } from "../content/items";
-import { UNIT_TYPES, veterancyName } from "../content/units";
+import { UNIT_TYPES, levelFromExp } from "../content/units";
 import { WEAPONS } from "../content/weapons";
 import { ATTACHMENTS } from "../content/attachments";
 import type { DamageBreakdown, GameEvent, GameState, Unit } from "../core/types";
@@ -34,7 +34,7 @@ export interface Factor {
 export function breakdownFactors(breakdown: DamageBreakdown): Factor[] {
   const entries: [string, number][] = [
     ["兵种克制", breakdown.matchup],
-    ["等级", breakdown.veterancy],
+    ["攻击等级", breakdown.level],
     ["将领", breakdown.commander],
     ["武器", breakdown.weapon],
     ["疲劳", breakdown.fatigue],
@@ -42,7 +42,7 @@ export function breakdownFactors(breakdown: DamageBreakdown): Factor[] {
     ["火力呼应", breakdown.coordination ?? 1],
     ["包围封锁", breakdown.encirclement ?? 1],
     ["目标地形", breakdown.terrain],
-    ["目标防护", breakdown.defenderVeterancy],
+    ["目标等级", breakdown.defenderLevel],
     ["相互掩护", breakdown.defensiveSupport ?? 1],
     ["主力护卫", breakdown.keyGuard],
     ["天气", breakdown.weather],
@@ -111,5 +111,5 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
 }
 
 export function unitSummary(unit: Unit): string {
-  return `${UNIT_TYPES[unit.type].name} · ${veterancyName(unit.exp)}`;
+  return `${UNIT_TYPES[unit.type].name} · Lv.${levelFromExp(unit.exp)} · EXP ${Math.round(unit.exp)}`;
 }

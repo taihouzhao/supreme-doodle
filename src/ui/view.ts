@@ -100,7 +100,7 @@ function combatSummary(battle: GameState, unit: Unit): StatCell[] {
     {
       label: "防御",
       value: `${defence >= 0 ? "+" : ""}${defence}%`,
-      hint: `${terrain.name}地形 ${Math.round(terrain.defense * 100)}% + 武器与资历`,
+      hint: `${terrain.name}地形 ${Math.round(terrain.defense * 100)}% + 武器与等级`,
     },
     { label: "射程", value: `${range.min}–${range.max}`, hint: "含地形与武器修正" },
     {
@@ -400,6 +400,7 @@ export class View {
         moveTiles: this.session.moveTiles(),
         attackTiles: this.session.attackTiles(),
         attackTargets: this.session.attackTargets(),
+        attackPreview: this.session.attackPreview(),
         attackImpactTiles: new Set(
           (this.session.attackPreview()?.affected ?? []).map((impact) => {
             const unit = battle.units.find((candidate) => candidate.id === impact.unitId);
@@ -602,12 +603,6 @@ export class View {
     const kind =
       unit.commanderKind === "story" ? "剧情" : unit.commanderKind === "companion" ? "伴随" : "敌军";
     const duty = unit.duty ?? (unit.keyUnit ? CHAPTER_ONE.protagonist.title : `${kind}作战分队`);
-    const preview = this.session.attackPreview();
-    const previewForUnit = preview?.attackerId === unit.id ? preview : null;
-    const previewTarget = previewForUnit
-      ? battle.units.find((candidate) => candidate.id === previewForUnit.defenderId)
-      : null;
-
     const combat = combatSummary(battle, unit);
     const slots = !isMine
       ? ""
@@ -615,26 +610,6 @@ export class View {
           ${unit.backpack ? `<div class="slots__capacity">随行物资 <b>${unit.backpack.length}/3</b></div>` : ""}
           ${renderItemSlots(items, state.pendingItem, locked || unit.hasActed)}
         </div>`;
-
-    const attackPreview = previewForUnit && previewTarget
-      ? `<section class="attack-preview" aria-label="攻击预测">
-          <div class="attack-preview__head"><strong>攻击预测 · ${esc(unitDisplayName(previewTarget))}</strong><span>${previewForUnit.rout === "certain" ? "确定击溃" : previewForUnit.rout === "possible" ? "可能击溃" : "无法击溃"}</span></div>
-          ${previewForUnit.affected.length > 0 ? `<p class="attack-preview__pattern">${previewForUnit.effectProfile === "mg" ? "机枪火力走廊" : previewForUnit.effectProfile === "mortar" ? "迫击炮溅射" : previewForUnit.effectProfile === "artillery" ? "炮击范围" : previewForUnit.effectProfile === "rocket" ? "爆炸范围" : "多目标攻击"} · 已标记 ${previewForUnit.affected.length} 个次级格</p>` : ""}
-          <div class="attack-preview__numbers">
-            <span>预计伤害 <b>${previewForUnit.damage.min}–${previewForUnit.damage.max}</b><small>中值 ${previewForUnit.damage.expected}</small></span>
-            <span>目标剩余 <b>${previewForUnit.defenderHpAfter.min}–${previewForUnit.defenderHpAfter.max}</b><small>当前 ${previewTarget.hp}</small></span>
-            <span>预计反击 <b>${previewForUnit.counter ? `${previewForUnit.counter.min}–${previewForUnit.counter.max}` : "无"}</b><small>${previewForUnit.counterConditional ? "若未被击溃" : previewForUnit.counter ? "射程可及" : "无法反击"}</small></span>
-          </div>
-          ${previewForUnit.affected.length > 0 ? `<ul class="attack-preview__affected">${previewForUnit.affected.map((impact) => {
-            const affectedUnit = battle.units.find((candidate) => candidate.id === impact.unitId);
-            return `<li class="${impact.friendly ? "is-friendly" : ""}"><span>${esc(unitDisplayName(affectedUnit ?? { name: impact.unitId, commanderName: impact.unitId }))}</span><b>−${impact.damage.min}–${impact.damage.max}</b>${impact.friendly ? "<em>友军次级伤害</em>" : ""}</li>`;
-          }).join("")}</ul>` : ""}
-          <ul class="factors">${breakdownFactors(previewForUnit.breakdown).slice(0, 8).map((factor) =>
-            `<li class="${factor.favourable ? "is-up" : "is-down"}"><span>${esc(factor.label)}</span><strong>×${factor.value.toFixed(2)}</strong></li>`,
-          ).join("")}</ul>
-          ${previewForUnit.breakdown.coordinationSources?.length ? `<p class="card__note">火力呼应来源：${esc(previewForUnit.breakdown.coordinationSources.join("、"))}</p>` : ""}
-        </section>`
-      : "";
 
     const detail = state.detailExpanded
       ? `<div class="card__help">
@@ -675,7 +650,6 @@ export class View {
       ${unit.type === "logistics" && isMine && !unit.hasActed ? `<p class="card__state">后勤：靠近伤员后点跟手「补充」，或点棋盘上的青绿友军</p>` : ""}
       ${isMine && unit.hasActed ? `<p class="card__dim">本回合已行动</p>` : ""}
       ${slots}
-      ${attackPreview}
       ${detail}
     </section>`;
   }
@@ -1237,7 +1211,7 @@ export class View {
             <li><span>撤离</span><strong>${outcome.evacuated}</strong></li>
             <li><span>永久损失</span><strong>${outcome.permanentLosses.length}</strong></li>
             <li><span>归队</span><strong>${outcome.returningUnits.length}</strong></li>
-            <li><span>3级以上老兵</span><strong>${outcome.veteransAfter}</strong></li>
+            <li><span>平均战斗等级</span><strong>Lv.${outcome.averageLevelAfter.toFixed(1)}</strong></li>
             <li><span>缴获武器</span><strong>${outcome.weaponsGained.length}</strong></li>
             <li><span>回收附件</span><strong>${outcome.attachmentsGained.length}</strong></li>
           </ul>
@@ -1264,7 +1238,7 @@ export class View {
       case "chapterEnd": {
         const history = state.campaign.history;
         const won = history.filter((h) => h.status === "won").length;
-        const veterans = state.campaign.roster.filter((u) => u.level >= 6);
+        const highLevelUnits = state.campaign.roster.filter((u) => u.level >= 6);
         return `<div class="sheet">
           <p class="sheet__eyebrow">章节结束</p>
           <h1>通过 ${won}/${history.length} 场</h1>
@@ -1277,7 +1251,7 @@ export class View {
               )
               .join("")}
           </ul>
-          <p class="sheet__note">其中 ${veterans.length} 人达到战斗 Lv.6 以上——他们是这一章真正的产出。等级代表战斗资历，不等同历史军衔或职务晋升。</p>
+          <p class="sheet__note">其中 ${highLevelUnits.length} 人达到战斗 Lv.6 以上——等级与 EXP 是唯一的成长记录，不代表历史军衔或职务晋升。</p>
           <div class="sheet__actions">
             <button class="btn btn--primary" data-action="new-campaign">再打一遍</button>
             <button class="btn" data-action="download-replay">导出回放</button>

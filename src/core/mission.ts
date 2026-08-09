@@ -58,7 +58,6 @@ export interface RosterUnit {
   commanderName: string;
   backpack?: ItemId[];
   level: number;
-  rank: string;
   duty?: string;
   /** 史实简介（花名册 / 简报） */
   bio?: string;
@@ -110,7 +109,6 @@ function makeUnit(params: {
   portraitGroup?: UnitPortraitGroup;
   portraitIndex?: number;
   level: number;
-  rank: string;
   duty?: string;
   baseStats?: CommanderStats;
   stats: CommanderStats;
@@ -141,7 +139,6 @@ function makeUnit(params: {
     portraitGroup: params.portraitGroup,
     portraitIndex: params.portraitIndex,
     level: params.level,
-    rank: params.rank,
     duty: params.duty,
     baseStats: params.baseStats,
     stats: params.stats,
@@ -233,7 +230,6 @@ export function createMissionState(setup: MissionSetup): GameState {
         portraitGroup: "pva",
         portraitIndex: nextPortrait("pva"),
         level: rosterUnit.level,
-        rank: rosterUnit.rank,
         duty: rosterUnit.duty,
         baseStats: rosterUnit.baseStats,
         stats: rosterUnit.stats,

@@ -881,87 +881,6 @@ body {
   color: var(--ink-soft);
 }
 
-.attack-preview {
-  margin-top: 0.5rem;
-  padding: 0.45rem;
-  border: 1px solid rgba(168, 68, 58, 0.42);
-  border-radius: 8px;
-  background: rgba(168, 68, 58, 0.08);
-}
-
-.attack-preview__head {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.74rem;
-}
-
-.attack-preview__head span {
-  color: var(--enemy);
-  font-weight: 700;
-}
-
-.attack-preview__pattern {
-  margin: 0.32rem 0;
-  color: var(--ink-soft);
-  font-size: 0.64rem;
-}
-
-.attack-preview__affected {
-  display: grid;
-  gap: 0.18rem;
-  margin: 0.35rem 0;
-  padding: 0;
-  list-style: none;
-  font-size: 0.62rem;
-}
-
-.attack-preview__affected li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.2rem 0.28rem;
-  border-radius: 4px;
-  background: rgba(218, 183, 91, 0.12);
-}
-
-.attack-preview__affected li.is-friendly {
-  background: rgba(190, 91, 72, 0.14);
-}
-
-.attack-preview__affected em {
-  color: var(--enemy);
-  font-style: normal;
-  font-size: 0.56rem;
-}
-
-.attack-preview__numbers {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.28rem;
-  margin: 0.4rem 0;
-}
-
-.attack-preview__numbers > span {
-  display: flex;
-  flex-direction: column;
-  padding: 0.28rem;
-  border-radius: 6px;
-  background: rgba(247, 243, 234, 0.72);
-  font-size: 0.62rem;
-  color: var(--ink-soft);
-}
-
-.attack-preview__numbers b {
-  color: var(--ink);
-  font-size: 0.82rem;
-}
-
-.attack-preview__numbers small {
-  font-size: 0.56rem;
-}
-
 .card__range {
   margin-left: auto;
   color: var(--ink-soft);
@@ -2568,10 +2487,6 @@ select:focus-visible,
     bottom: auto;
     width: min(210px, 48%);
     max-height: 29%;
-  }
-
-  .attack-preview__numbers {
-    grid-template-columns: 1fr;
   }
 
   .hud-sheet__close,

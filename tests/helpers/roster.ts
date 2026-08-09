@@ -1,4 +1,4 @@
-import { BASE_STATS, rankName, statsAtLevel } from "../../src/content/progress";
+import { BASE_STATS, statsAtLevel } from "../../src/content/progress";
 import { defaultWeaponFor } from "../../src/content/weapons";
 import type { RosterUnit } from "../../src/core/mission";
 import type { ItemId, UnitTypeId } from "../../src/core/types";
@@ -28,7 +28,6 @@ export function testRosterUnit(
     commanderKind: "companion",
     commanderName,
     level,
-    rank: rankName(level),
     baseStats,
     stats,
     weapon,

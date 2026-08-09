@@ -31,6 +31,7 @@ function rangeFrom(state: GameState, unit: Unit, pos: Vec2, moved = false): { mi
 }
 
 function canCounterFrom(state: GameState, attacker: Unit, defender: Unit, from: Vec2): boolean {
+  if (defender.type !== "rifle" && defender.type !== "mg") return false;
   if (effectiveIndirect(attacker)) return false;
   const range = rangeFrom(state, defender, { x: defender.x, y: defender.y });
   const distance = manhattan(from, defender);

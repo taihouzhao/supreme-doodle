@@ -198,7 +198,7 @@ export function buildTimeline(prev: GameState, events: GameEvent[]): Timeline {
       clips.push({
         kind: "promote",
         unitId: event.unitId,
-        text: `晋升 ${event.rank}`,
+        text: `战斗等级 Lv.${event.from}→Lv.${event.to}`,
         duration: FX_TIMING.promoteMs,
       });
       index += 1;

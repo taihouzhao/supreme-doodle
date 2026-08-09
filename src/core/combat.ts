@@ -84,7 +84,7 @@ export function damageComponents(
     BALANCE.factionDamage[attacker.faction] *
     (attacker.faction === "enemy" ? state.enemyDamageMultiplier ?? 1 : 1);
   const matchup = MATCHUP[attacker.type][defender.type] * matchupMultiplier(attacker, defender);
-  const veterancy = levelAtk;
+  const level = levelAtk;
   const fatigue =
     1 -
     BALANCE.fatigue.attackPenalty *
@@ -126,7 +126,7 @@ export function damageComponents(
     rawDefense *= 1 - Math.max(0, atkStats.intellect - 40) * 0.004;
   }
   const terrain = 1 - rawDefense;
-  const defenderVeterancy =
+  const defenderLevel =
     (1 - PROGRESS.defensePerLevel * Math.max(0, defender.level - 1)) *
     (1 - Math.max(0, defStats.stamina - 40) * 0.003) *
     (1 - equipmentDefenseReduction(defender, distance > 1));
@@ -143,7 +143,7 @@ export function damageComponents(
     Math.round(
       base *
         matchup *
-        veterancy *
+        level *
         commander *
         weapon *
         fatigue *
@@ -151,7 +151,7 @@ export function damageComponents(
         coordination *
         encirclement *
         terrain *
-        defenderVeterancy *
+        defenderLevel *
         defensiveSupport *
         keyGuard *
         weather *
@@ -165,7 +165,7 @@ export function damageComponents(
   return {
     base,
     matchup,
-    veterancy,
+    level,
     commander,
     weapon,
     fatigue,
@@ -174,7 +174,7 @@ export function damageComponents(
     encirclement,
     coordinationSources: coordinationSourceList,
     terrain,
-    defenderVeterancy,
+    defenderLevel,
     defensiveSupport,
     keyGuard,
     weather,
@@ -225,6 +225,8 @@ export function estimateDamageFrom(
 
 export function canCounter(state: GameState, attacker: Unit, defender: Unit): boolean {
   if (!defender.alive || defender.hp <= 0) return false;
+  // 只有步兵与机枪具备近距离自动回射；迫击炮、炮兵、坦克和后勤不会被动反击。
+  if (defender.type !== "rifle" && defender.type !== "mg") return false;
   if (effectiveIndirect(attacker)) return false;
   const range = attackRange(state, defender);
   const distance = manhattan(attacker, defender);

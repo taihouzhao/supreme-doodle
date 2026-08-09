@@ -7,7 +7,6 @@ import {
   allocatePoints,
   enemyProfileFromExp,
   levelFromExp,
-  rankName,
   statsAtLevel,
 } from "../content/progress";
 import { UNIT_TYPES } from "../content/units";
@@ -84,24 +83,19 @@ export function recomputeStatsAtLevel(
  */
 export function syncLevelFromExp(unit: Unit): { from: number; to: number } | null {
   const nextLevel = levelFromExp(unit.exp);
-  if (nextLevel === unit.level) {
-    unit.rank = rankName(unit.level);
-    return null;
-  }
+  if (nextLevel === unit.level) return null;
   const from = unit.level;
   if (nextLevel < from) {
     if (unit.baseStats) {
       unit.stats = recomputeStatsAtLevel(unit.baseStats, unit.type, nextLevel, unit.commanderName);
     }
     unit.level = nextLevel;
-    unit.rank = rankName(nextLevel);
     return null;
   }
   const gained = (nextLevel - unit.level) * PROGRESS.pointsPerLevel;
   const salt = unit.commanderName.length + unit.level;
   unit.stats = addStats(unit.stats, allocatePoints(GROWTH_WEIGHTS[unit.type], gained, salt));
   unit.level = nextLevel;
-  unit.rank = rankName(unit.level);
   return { from, to: nextLevel };
 }
 
@@ -112,14 +106,13 @@ export function makeEnemyCommander(
   name: string,
 ): Pick<
   Unit,
-  "commanderKind" | "commanderName" | "level" | "rank" | "stats" | "baseStats" | "weapon" | "exp"
+  "commanderKind" | "commanderName" | "level" | "stats" | "baseStats" | "weapon" | "exp"
 > {
   const profile = enemyProfileFromExp(type, exp, name.length);
   return {
     commanderKind: "enemy",
     commanderName: name,
     level: profile.level,
-    rank: profile.rank,
     stats: profile.stats,
     baseStats: profile.baseStats,
     weapon,
@@ -135,7 +128,7 @@ export function makeStoryCommander(
   extra?: Partial<CommanderStats>,
 ): Pick<
   Unit,
-  "commanderKind" | "commanderName" | "level" | "rank" | "stats" | "baseStats" | "weapon" | "exp"
+  "commanderKind" | "commanderName" | "level" | "stats" | "baseStats" | "weapon" | "exp"
 > {
   const base = addStats(BASE_STATS, {
     leadership: 0,
@@ -149,7 +142,6 @@ export function makeStoryCommander(
     commanderKind: "story",
     commanderName: commander,
     level,
-    rank: rankName(level),
     baseStats: base,
     stats: statsAtLevel(base, type, level, commander.length),
     weapon,

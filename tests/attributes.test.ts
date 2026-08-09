@@ -32,7 +32,6 @@ function bareUnit(overrides: Partial<Unit> & Pick<Unit, "id" | "type" | "command
     equipment: "test",
     weapon: "type38",
     commanderKind: "companion",
-    rank: "新锐",
     x: 1,
     y: 1,
     hp: 80,

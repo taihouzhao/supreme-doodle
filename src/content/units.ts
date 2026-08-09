@@ -1,5 +1,5 @@
 import type { UnitTypeDef, UnitTypeId } from "../core/types";
-import { PROGRESS, levelFromExp, levelLabel, rankName } from "./progress";
+import { PROGRESS, levelFromExp } from "./progress";
 
 export const UNIT_TYPES: Record<UnitTypeId, UnitTypeDef> = {
   rifle: {
@@ -110,23 +110,4 @@ export const MATCHUP: Record<UnitTypeId, Record<UnitTypeId, number>> = {
   logistics: { rifle: 0, mg: 0, mortar: 0, artillery: 0, tank: 0, logistics: 0 },
 };
 
-/** @deprecated 兼容旧测试命名；新逻辑请用 levelFromExp / levelLabel */
-export const VETERANCY = {
-  thresholds: [0, PROGRESS.expForLevel(3), PROGRESS.expForLevel(6)] as const,
-  names: ["新锐", "老兵", "精锐"] as const,
-  attackPerLevel: PROGRESS.attackPerLevel,
-  defensePerLevel: PROGRESS.defensePerLevel,
-  maxHpPerLevel: 8,
-  expPerDamage: PROGRESS.expPerDamage,
-  expPerRout: PROGRESS.expPerRout,
-};
-
-export function veterancyLevel(exp: number): number {
-  return levelFromExp(exp);
-}
-
-export function veterancyName(exp: number): string {
-  return levelLabel(levelFromExp(exp));
-}
-
-export { levelFromExp, levelLabel, rankName, PROGRESS };
+export { levelFromExp, PROGRESS };

@@ -10,7 +10,7 @@ import type {
 } from "../core/types";
 
 /** Cache-bust when swapping generated art without renaming. */
-const V = "?v=7";
+const V = "?v=8";
 
 /** Static art under /assets (served from public/). */
 
@@ -157,6 +157,7 @@ export const UI_ICON = {
   objDone: `/assets/ui/obj-done.png${V}`,
   evac: `/assets/ui/evac.png${V}`,
   fieldItem: `/assets/ui/field-item.png${V}`,
+  eliteWreath: `/assets/ui/elite-wreath.png${V}`,
   keyUnit: `/assets/ui/key-unit.png${V}`,
   actEndTurn: `/assets/ui/act-end-turn.png${V}`,
   actCapture: `/assets/ui/act-capture.png${V}`,

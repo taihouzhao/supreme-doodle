@@ -1,7 +1,7 @@
 import type { Agent } from "../ai/types";
 import { CHAPTERS } from "../content/chapter";
 import { getMission } from "../content/missions";
-import { veterancyLevel } from "../content/units";
+import { levelFromExp } from "../content/units";
 import {
   createCampaign,
   finishMission,
@@ -39,7 +39,7 @@ export interface MissionFacts {
   damageDealt: number;
   damageTaken: number;
   survivors: number;
-  veteransAlive: number;
+  averageLevelAlive: number;
   weather: GameState["weather"];
 }
 
@@ -63,7 +63,7 @@ function toFacts(run: MissionRun): MissionFacts {
     damageDealt: run.damageDealt,
     damageTaken: run.damageTaken,
     survivors: run.survivors,
-    veteransAlive: run.veteransAlive,
+    averageLevelAlive: run.averageLevelAlive,
     weather: run.weather,
   };
 }
@@ -118,7 +118,10 @@ export function playMission(
     damageDealt: state.stats.damageDealt,
     damageTaken: state.stats.damageTaken,
     survivors: survivors.length,
-    veteransAlive: survivors.filter((u) => veterancyLevel(u.exp) >= 1).length,
+    averageLevelAlive:
+      survivors.length > 0
+        ? survivors.reduce((sum, unit) => sum + levelFromExp(unit.exp), 0) / survivors.length
+        : 0,
     weather: state.weather,
     actions,
     finalState: state,
@@ -176,7 +179,7 @@ export interface CampaignRun {
   outcomes: MissionOutcome[];
   finalCampaign?: CampaignState;
   missionsWon: number;
-  veteransAtEnd: number;
+  averageLevelAtEnd: number;
   rosterAtEnd: number;
 }
 
@@ -230,7 +233,10 @@ export function playCampaign(
     seed,
     outcomes,
     missionsWon: missions.filter((m) => m.status === "won").length,
-    veteransAtEnd: campaign.roster.filter((u) => veterancyLevel(u.exp) >= 1).length,
+    averageLevelAtEnd:
+      campaign.roster.length > 0
+        ? campaign.roster.reduce((sum, unit) => sum + levelFromExp(unit.exp), 0) / campaign.roster.length
+        : 0,
     rosterAtEnd: campaign.roster.length,
   };
 

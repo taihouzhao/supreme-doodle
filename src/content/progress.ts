@@ -4,15 +4,7 @@ export type { CommanderStats, CommanderKind } from "../core/types";
 
 export type StatKey = keyof CommanderStats;
 
-/** 战斗熟练度称谓；不等同任何一方的军衔或剧情职务。 */
-export const RANKS: { minLevel: number; name: string }[] = [
-  { minLevel: 1, name: "新锐" },
-  { minLevel: 2, name: "熟练" },
-  { minLevel: 4, name: "老兵" },
-  { minLevel: 7, name: "精锐" },
-  { minLevel: 11, name: "资深" },
-  { minLevel: 16, name: "王牌" },
-];
+/** 数值成长曲线：只使用 EXP 与 Lv.，不维护额外的经验称谓。 */
 
 export const PROGRESS = {
   maxLevel: 20,
@@ -53,14 +45,6 @@ export const BASE_STATS: CommanderStats = {
   stamina: 40,
   agility: 40,
 };
-
-export function rankName(level: number): string {
-  let name = RANKS[0]!.name;
-  for (const rank of RANKS) {
-    if (level >= rank.minLevel) name = rank.name;
-  }
-  return name;
-}
 
 export function levelFromExp(exp: number): number {
   let level = 1;
@@ -161,13 +145,9 @@ export function enemyProfileFromExp(
   type: UnitTypeId,
   exp: number,
   salt = 0,
-): { level: number; stats: CommanderStats; rank: string; baseStats: CommanderStats } {
+): { level: number; stats: CommanderStats; baseStats: CommanderStats } {
   const level = Math.max(1, Math.min(PROGRESS.maxLevel, levelFromExp(exp)));
   const base = enemyBaseStats();
   const stats = statsAtLevel(base, type, Math.max(1, level), salt);
-  return { level, stats, rank: rankName(level), baseStats: base };
-}
-
-export function levelLabel(level: number): string {
-  return `${rankName(level)} · Lv.${level}`;
+  return { level, stats, baseStats: base };
 }

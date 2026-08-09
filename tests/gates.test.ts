@@ -14,7 +14,7 @@ function aggregate(agentId: string, missionId: string, winRate: number): Mission
     avgTurns: 1,
     avgEnemyRouted: 0,
     avgEvacuated: 0,
-    avgVeteransAlive: 0,
+    avgLevelAlive: 0,
     lostSeeds: [],
   };
 }
@@ -31,7 +31,7 @@ function localGate(rows: MissionAggregate[]) {
       finalMissionWinRate: 0,
       avgRosterBeforeFinal: 0,
       avgPermanentLosses: 0,
-      avgVeteransAtEnd: 0,
+      avgLevelAtEnd: 0,
     },
   });
   return gates.find((gate) => gate.id === "no-local-dominant-strategy")!;
