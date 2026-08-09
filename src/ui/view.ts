@@ -711,18 +711,82 @@ export class View {
     if (!rect) return;
 
     const pad = 8;
+    const gap = 8;
     const dockW = Math.min(dock.offsetWidth || 220, map.clientWidth - pad * 2);
     const dockH = dock.offsetHeight || 72;
-    let left = rect.left + rect.width / 2 - dockW / 2;
-    let top = rect.top + rect.height + 6;
-    // 贴底则翻到格子上方
-    if (top + dockH > map.clientHeight - pad) {
-      top = rect.top - dockH - 6;
+    const maxLeft = Math.max(pad, map.clientWidth - dockW - pad);
+    const maxTop = Math.max(pad, map.clientHeight - dockH - pad);
+
+    // 候选：下/上/右/左及斜角，优先躲开可走/可攻等蓝色高亮
+    const raw: Array<{ left: number; top: number }> = [
+      { left: rect.left + rect.width / 2 - dockW / 2, top: rect.top + rect.height + gap },
+      { left: rect.left + rect.width / 2 - dockW / 2, top: rect.top - dockH - gap },
+      { left: rect.left + rect.width + gap, top: rect.top + rect.height / 2 - dockH / 2 },
+      { left: rect.left - dockW - gap, top: rect.top + rect.height / 2 - dockH / 2 },
+      { left: rect.left + rect.width + gap, top: rect.top + rect.height + gap },
+      { left: rect.left - dockW - gap, top: rect.top + rect.height + gap },
+      { left: rect.left + rect.width + gap, top: rect.top - dockH - gap },
+      { left: rect.left - dockW - gap, top: rect.top - dockH - gap },
+    ];
+
+    const moveTiles = this.session.moveTiles();
+    const blocked = new Set<number>([
+      ...moveTiles,
+      ...this.session.attackTiles(),
+      ...this.session.resupplyTargets(),
+      ...this.session.itemTiles(),
+    ]);
+    // 选中格本身也不宜被操作条盖住，方便再点取消/切单位
+    blocked.add(anchorY * battle.width + anchorX);
+
+    const clamp = (left: number, top: number) => ({
+      left: Math.max(pad, Math.min(left, maxLeft)),
+      top: Math.max(pad, Math.min(top, maxTop)),
+    });
+
+    const overlapScore = (left: number, top: number): number => {
+      let score = 0;
+      for (const key of blocked) {
+        const x = key % battle.width;
+        const y = Math.floor(key / battle.width);
+        const tile = this.board.tileCssRect(x, y);
+        if (!tile) continue;
+        const overlapX = Math.max(
+          0,
+          Math.min(left + dockW, tile.left + tile.width) - Math.max(left, tile.left),
+        );
+        const overlapY = Math.max(
+          0,
+          Math.min(top + dockH, tile.top + tile.height) - Math.max(top, tile.top),
+        );
+        if (overlapX > 0 && overlapY > 0) {
+          // 可走格权重更高：宁可挡一点旁白区域，也不挡蓝色移动区
+          const weight = moveTiles.has(key) ? 4 : 1;
+          score += overlapX * overlapY * weight;
+        }
+      }
+      // 轻微偏好更靠近锚点的方案
+      const cx = left + dockW / 2;
+      const cy = top + dockH / 2;
+      const ax = rect.left + rect.width / 2;
+      const ay = rect.top + rect.height / 2;
+      score += Math.hypot(cx - ax, cy - ay) * 0.02;
+      return score;
+    };
+
+    let best = clamp(raw[0]!.left, raw[0]!.top);
+    let bestScore = overlapScore(best.left, best.top);
+    for (const candidate of raw.slice(1)) {
+      const next = clamp(candidate.left, candidate.top);
+      const score = overlapScore(next.left, next.top);
+      if (score < bestScore) {
+        best = next;
+        bestScore = score;
+      }
     }
-    left = Math.max(pad, Math.min(left, map.clientWidth - dockW - pad));
-    top = Math.max(pad, Math.min(top, map.clientHeight - dockH - pad));
-    dock.style.left = `${Math.round(left)}px`;
-    dock.style.top = `${Math.round(top)}px`;
+
+    dock.style.left = `${Math.round(best.left)}px`;
+    dock.style.top = `${Math.round(best.top)}px`;
   }
 
   /** 花名册一行：出战勾选 + 武器对比 + 携行配额 */

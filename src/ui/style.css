@@ -280,7 +280,7 @@ body {
   display: none;
 }
 
-/* 跟手操作条：贴近单位/攻击目标，避免埋在左上卡片底部 */
+/* 跟手操作条：贴近单位/攻击目标；本体不挡棋盘点击，仅按钮可点 */
 .action-dock {
   position: absolute;
   z-index: 5;
@@ -295,7 +295,7 @@ body {
   color: #f2ede2;
   box-shadow: 0 10px 24px rgba(12, 14, 10, 0.35);
   backdrop-filter: blur(8px);
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .action-dock[hidden] {
@@ -308,6 +308,7 @@ body {
   letter-spacing: 0.02em;
   margin-bottom: 0.28rem;
   color: #e8e0d2;
+  pointer-events: none;
 }
 
 .action-dock__hint {
@@ -315,18 +316,21 @@ body {
   line-height: 1.35;
   color: #c9bfad;
   margin-bottom: 0.3rem;
+  pointer-events: none;
 }
 
 .action-dock__row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.3rem;
+  pointer-events: none;
 }
 
 .action-dock .btn {
   font-size: 0.78rem;
   padding: 0.42rem 0.62rem;
   border-radius: 8px;
+  pointer-events: auto;
 }
 
 .action-dock .btn--primary {
