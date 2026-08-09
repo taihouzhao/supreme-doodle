@@ -736,7 +736,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     scripted: [
       { kind: "barrage", turns: [4, 8], damage: 3, note: "上甘岭炮火准备" },
     ],
-    victory: { holdUntilEnd: true, minPostsHeld: 2, minSurvivors: 3 },
+    victory: { holdUntilEnd: true, minPostsHeld: 1, minSurvivors: 3 },
   },
   {
     id: "m11-pork-chop",
@@ -855,7 +855,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { type: "rifle", x: 7, y: 7, name: "韩军第6师主峰守备连", equipment: "M1加兰德步枪", exp: 70 },
       { type: "rifle", x: 11, y: 6, name: "韩军第6师中东峰守备连", equipment: "M1加兰德步枪", exp: 70 },
       { type: "mg", x: 9, y: 6, name: "韩军地堡火力组", equipment: "勃朗宁M1919机枪", exp: 80 },
-      { type: "artillery", x: 15, y: 11, name: "韩军纵深炮兵组", equipment: "M2A1 105毫米榴弹炮", exp: 60 },
+      { type: "artillery", x: 15, y: 11, name: "韩军纵深炮兵组", equipment: "M2A1 105毫米榴弹炮", exp: 70 },
       { type: "rifle", x: 10, y: 9, name: "韩军纵深警戒队", equipment: "M1加兰德步枪", exp: 40 },
     ],
     variantSlots: [],
