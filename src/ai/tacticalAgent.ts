@@ -400,11 +400,15 @@ export const tacticalAgent: Agent = {
       const posts = state.objectives.filter((o) => o.kind === "hold");
       const onPost = posts.some((o) => o.x === unit.x && o.y === unit.y);
       if (!onPost && unit.mpLeft > 0) {
+        const contested = posts.filter((post) => post.owner !== "player");
         const vacant = posts.filter((post) => {
           const occ = unitAt(state, post.x, post.y);
           return !occ || occ.id === unit.id;
         });
-        const goal = nearest(unit, vacant.length > 0 ? vacant : posts);
+        const goal = nearest(
+          unit,
+          contested.length > 0 ? contested : vacant.length > 0 ? vacant : posts,
+        );
         if (goal && (unit.x !== goal.x || unit.y !== goal.y)) {
           let best: { x: number; y: number; dist: number } | null = null;
           for (const tile of stoppableTiles(state, unit)) {
@@ -427,10 +431,10 @@ export const tacticalAgent: Agent = {
         }
         const options = attackOptions(state, unit).filter((option) => {
           if (unit.keyUnit && canBeCountered(state, unit, option.target)) return false;
-          // 满血守军可以利用工事主动压低突击梯队；低血量单位只补刀，避免无谓换血。
-          if (hpRatio < 0.35 && !option.lethal) return false;
-          // 中残血时避免无反击换血，保全阻击关存活门槛。
-          if (hpRatio < 0.55 && canBeCountered(state, unit, option.target) && !option.lethal) {
+          const nearPost = posts.some((post) => manhattan(option.target, post) <= 2);
+          if (!nearPost) return option.lethal;
+          if (hpRatio < 0.4 && !option.lethal) return false;
+          if (hpRatio < 0.6 && canBeCountered(state, unit, option.target) && !option.lethal) {
             return false;
           }
           return true;

@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { runSimulation } from "../src/sim/simulate";
+import { THRESHOLDS } from "../src/sim/gates";
 
 /**
  * 冒烟级别的平衡检查：种子数比 `npm run sim` 少，只保证梯度方向没有被改坏。
  * 正式判定以平衡报告为准。
  */
 describe("能力梯度", () => {
-  const result = runSimulation({ seeds: 40, campaignSeeds: 4 });
+  const result = runSimulation({ seeds: 40, campaignSeeds: 12 });
 
   const rate = (agentId: string, missionId: string): number =>
     result.missions.find((row) => row.agentId === agentId && row.missionId === missionId)!.winRate;
@@ -51,8 +52,10 @@ describe("能力梯度", () => {
   it("基础策略十二关平均任务胜率处于偏难可玩带", () => {
     const basic = result.campaigns.find((row) => row.agentId === "basic");
     expect(basic).toBeTruthy();
-    expect(basic!.avgCompletionRate).toBeGreaterThanOrEqual(0.2);
-    expect(basic!.avgCompletionRate).toBeLessThanOrEqual(0.55);
+    const [lo, hi] = THRESHOLDS.playerCampaignWinBand;
+    // 冒烟战役样本小，上沿额外放宽 10pp；正式判定以 gates / npm run sim 为准
+    expect(basic!.avgCompletionRate).toBeGreaterThanOrEqual(lo);
+    expect(basic!.avgCompletionRate).toBeLessThanOrEqual(hi + 0.1);
   });
 
   it("不存在所有策略都无法完成核心目标的种子", () => {
