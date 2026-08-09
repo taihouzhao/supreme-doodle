@@ -219,25 +219,35 @@ export function canAttack(state: GameState, attacker: Unit, defender: Unit): boo
   return distance >= min && distance <= max;
 }
 
-/** 后勤可补充的正交相邻友军（未满员、仍有疲劳，或我方弹药窗口已过期） */
-export function resupplyTargets(state: GameState, unit: Unit): Unit[] {
-  if (unit.type !== "logistics" || !unit.alive || unit.evacuated) return [];
-  const ammoActive = state.scripted.some(
-    (rule) => rule.kind === "supplyWindow" && state.turn > rule.untilTurn,
-  );
+/** 后勤正交相邻的存活友军（含已满员，供 UI 提示） */
+export function adjacentFriendlyUnits(state: GameState, unit: Unit): Unit[] {
+  if (!unit.alive || unit.evacuated) return [];
   const out: Unit[] = [];
   for (const step of NEIGHBOURS) {
     const other = unitAt(state, unit.x + step.x, unit.y + step.y);
     if (!other || other.faction !== unit.faction || !other.alive || other.evacuated) continue;
-    // 仅玩家受 supplyWindow 惩罚；弹药补给人机都可选，但 AI 侧另有优先级过滤
-    const needsAmmo =
-      ammoActive &&
-      other.faction === "player" &&
-      (other.supplyRestoredUntil ?? 0) < state.turn;
-    if (other.hp >= other.maxHp && other.fatigue <= 0 && !needsAmmo) continue;
+    if (other.id === unit.id) continue;
     out.push(other);
   }
   return out;
+}
+
+/** 友军此刻是否可被后勤补充 */
+export function needsResupply(state: GameState, ally: Unit): boolean {
+  const ammoActive = state.scripted.some(
+    (rule) => rule.kind === "supplyWindow" && state.turn > rule.untilTurn,
+  );
+  const needsAmmo =
+    ammoActive &&
+    ally.faction === "player" &&
+    (ally.supplyRestoredUntil ?? 0) < state.turn;
+  return ally.hp < ally.maxHp || ally.fatigue > 0 || needsAmmo;
+}
+
+/** 后勤可补充的正交相邻友军（未满员、仍有疲劳，或我方弹药窗口已过期） */
+export function resupplyTargets(state: GameState, unit: Unit): Unit[] {
+  if (unit.type !== "logistics" || !unit.alive || unit.evacuated) return [];
+  return adjacentFriendlyUnits(state, unit).filter((ally) => needsResupply(state, ally));
 }
 
 export function attackableTargets(state: GameState, unit: Unit): Unit[] {

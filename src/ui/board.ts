@@ -22,6 +22,8 @@ export interface BoardOverlay {
   attackTargets: Set<number>;
   /** 后勤可补充的友军格 */
   resupplyTiles: Set<number>;
+  /** 邻接但暂无需补给的友军格（仅提示） */
+  resupplyIdleTiles: Set<number>;
   itemTiles: Set<number>;
   inspected: Vec2 | null;
   /** 任务目标点击后的地名高亮 */
@@ -37,6 +39,7 @@ export const EMPTY_OVERLAY: BoardOverlay = {
   attackTiles: new Set(),
   attackTargets: new Set(),
   resupplyTiles: new Set(),
+  resupplyIdleTiles: new Set(),
   itemTiles: new Set(),
   inspected: null,
   highlightObjectiveId: null,
@@ -148,6 +151,17 @@ export class Board {
     this.cameraY = y * this.cssTile + this.cssTile / 2 - this.viewCssH / 2;
     this.clampCamera();
     this.syncOrigin();
+  }
+
+  /** 格子在 `.stage__map` 内的 CSS 矩形，供跟手操作条定位 */
+  tileCssRect(x: number, y: number): { left: number; top: number; width: number; height: number } | null {
+    if (!this.state || this.viewCssW <= 0 || this.viewCssH <= 0) return null;
+    return {
+      left: x * this.cssTile - this.cameraX,
+      top: y * this.cssTile - this.cameraY,
+      width: this.cssTile,
+      height: this.cssTile,
+    };
   }
 
   private focusPlayerArmy(state: GameState): void {
@@ -857,6 +871,9 @@ export class Board {
 
     hatchRegion(this.overlay.attackTiles, HIGHLIGHT.attackHatch);
     outlineRegion(this.overlay.attackTiles, HIGHLIGHT.attackEdge, Math.max(2, tile * 0.06), 2.5);
+
+    fillRegion(this.overlay.resupplyIdleTiles, HIGHLIGHT.resupplyIdle);
+    outlineRegion(this.overlay.resupplyIdleTiles, HIGHLIGHT.resupplyIdleEdge, Math.max(1.5, tile * 0.04), 1.5);
 
     fillRegion(this.overlay.resupplyTiles, HIGHLIGHT.resupply);
     hatchRegion(this.overlay.resupplyTiles, HIGHLIGHT.resupplyHatch);

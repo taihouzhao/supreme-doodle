@@ -192,6 +192,82 @@ describe("结束回合保护", () => {
   });
 });
 
+describe("后勤补充交互", () => {
+  beforeEach(() => {
+    vi.stubGlobal("requestAnimationFrame", vi.fn(() => 1));
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("选中后勤后可对邻接伤员执行补充，满员友军给出提示", () => {
+    const session = new Session();
+    session.beginMission();
+    const battle = session.current.battle!;
+    const logistics = battle.units.find((u) => u.faction === "player" && u.type === "logistics");
+    const ally = battle.units.find(
+      (u) => u.faction === "player" && u.type !== "logistics" && u.alive,
+    );
+    expect(logistics).toBeTruthy();
+    expect(ally).toBeTruthy();
+
+    Object.assign(logistics!, {
+      x: 4,
+      y: 4,
+      hasActed: false,
+      evacuated: false,
+      mpLeft: 4,
+    });
+    Object.assign(ally!, {
+      x: 4,
+      y: 5,
+      hp: 30,
+      fatigue: 20,
+      hasActed: false,
+      evacuated: false,
+    });
+    battle.tiles[4 * battle.width + 4] = "plain";
+    battle.tiles[5 * battle.width + 4] = "plain";
+
+    session.selectUnit(logistics!.id);
+    expect(session.resupplyAllies().map((u) => u.id)).toContain(ally!.id);
+
+    const beforeHp = ally!.hp;
+    session.resupplyAlly(ally!.id);
+    const nextAlly = session.current.battle!.units.find((u) => u.id === ally!.id)!;
+    expect(nextAlly.hp).toBeGreaterThan(beforeHp);
+    expect(session.current.actions.at(-1)).toMatchObject({
+      kind: "resupply",
+      targetId: ally!.id,
+    });
+  });
+
+  it("点满员邻接友军不切换选中并提示无需补给", () => {
+    const session = new Session();
+    session.beginMission();
+    const battle = session.current.battle!;
+    const logistics = battle.units.find((u) => u.faction === "player" && u.type === "logistics")!;
+    const ally = battle.units.find(
+      (u) => u.faction === "player" && u.type !== "logistics" && u.alive,
+    )!;
+    Object.assign(logistics, { x: 3, y: 3, hasActed: false, evacuated: false });
+    Object.assign(ally, {
+      x: 3,
+      y: 4,
+      hp: ally.maxHp,
+      fatigue: 0,
+      hasActed: false,
+      evacuated: false,
+    });
+    session.selectUnit(logistics.id);
+    session.clickTile({ x: 3, y: 4 });
+    expect(session.current.selectedUnitId).toBe(logistics.id);
+    expect(session.current.notice).toContain("暂无需补给");
+  });
+});
+
 describe("物资槽与目标定位", () => {
   it("七种正库存物资全部生成槽位，不截断末项", () => {
     const items = ITEM_IDS.map((id) => ({ id, count: 1 }));
