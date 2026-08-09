@@ -859,7 +859,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { type: "rifle", x: 10, y: 9, name: "韩军纵深警戒队", equipment: "M1加兰德步枪", exp: 40 },
     ],
     variantSlots: [],
-    waves: [{ window: [4, 5], units: [{ type: "rifle", x: 10, y: 12, name: "韩军预备队", equipment: "M1加兰德步枪", exp: 100 }] }, { window: [7, 8], units: [{ type: "mg", x: 9, y: 12, name: "金城川机枪队", equipment: "勃朗宁M1919机枪", exp: 80 }, { type: "rifle", x: 11, y: 12, name: "韩军纵深反击队", equipment: "M1加兰德步枪", exp: 70 }] }],
+    waves: [{ window: [4, 5], units: [{ type: "rifle", x: 10, y: 12, name: "韩军预备队", equipment: "M1加兰德步枪", exp: 80 }] }, { window: [7, 8], units: [{ type: "mg", x: 9, y: 12, name: "金城川机枪队", equipment: "勃朗宁M1919机枪", exp: 80 }, { type: "rifle", x: 11, y: 12, name: "韩军纵深反击队", equipment: "M1加兰德步枪", exp: 70 }] }],
     objectives: [
       { id: "kyoyam-east", name: "轿岩山中东峰", kind: "capture", x: 11, y: 6, owner: "enemy" },
       { id: "kyoyam-main", name: "轿岩山主峰", kind: "capture", x: 7, y: 7, owner: "enemy" },
@@ -873,7 +873,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     scripted: [
       { kind: "barrage", turns: [1], damage: 8, target: "enemy", note: "志愿军开局炮火准备" },
-      { kind: "barrage", turns: [3, 6], damage: 5, note: "联合国军拦阻炮火" },
+      { kind: "barrage", turns: [4, 7], damage: 3, note: "联合国军拦阻炮火" },
       { kind: "supplyWindow", untilTurn: 9, penalty: 0.1, note: "金城反击弹药窗口" },
     ],
     victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 3 },
