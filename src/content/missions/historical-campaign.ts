@@ -404,7 +404,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { kind: "nightAssault", turns: [1, 3], attackBonus: 0.12, note: "三八线夜袭" },
       { kind: "supplyWindow", untilTurn: 7, penalty: 0.14, note: "礼拜攻势：弹药见底" },
     ],
-    victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 2 },
+    victory: { requiredCaptures: 2, holdTurns: 3, minSurvivors: 2 },
   },
   {
     id: "m6-hoengsong",
@@ -616,7 +616,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；铁原纵深在北，联合国军从南缘沿中央公路向北追击。前沿公路口在南，第二阻击线高地在北，纠正旧图反向。",
     weather: { options: ["rain", "overcast"], label: "初夏阵雨", detail: "道路泥泞，低云抑制远程观察，但装甲仍可沿公路推进。" },
     playerEquipment: PVA_LATE,
-    maxTurns: 17,
+    maxTurns: 19,
     map: [
       "^^^^^FF......FF^^^^^",
       "^^^^^FF..==..FF^^^^^",
@@ -664,7 +664,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     scripted: [
       { kind: "barrage", turns: [3, 7], damage: 3, note: "联合国军炮火准备" },
     ],
-    victory: { minEvacuated: 4, evacuateRatio: 0.55, requireKeyUnit: true, minEnemiesRouted: 1 },
+    victory: { minEvacuated: 4, evacuateRatio: 0.5, requireKeyUnit: true, minEnemiesRouted: 1 },
   },
   {
     id: "m10-triangle-hill",
@@ -827,7 +827,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；本图仅表现中央集团轿岩山切片。西峰主峰与中、东峰构成连续山体，南侧金城川是战役纵深线；北汉江位于画外东翼。",
     weather: { options: ["rain"], label: "盛夏暴雨", detail: "季风暴雨造成河水上涨、道路泥泞，远程火力效果下降。" },
     playerEquipment: PVA_LATE,
-    maxTurns: 18,
+    maxTurns: 20,
     map: [
       "FF^^^F........F^^^FF",
       "FF^^^F...==...F^^^FF",
@@ -859,7 +859,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { type: "rifle", x: 10, y: 9, name: "韩军纵深警戒队", equipment: "M1加兰德步枪", exp: 40 },
     ],
     variantSlots: [],
-    waves: [{ window: [4, 5], units: [{ type: "rifle", x: 10, y: 12, name: "韩军预备队", equipment: "M1加兰德步枪", exp: 80 }] }, { window: [7, 8], units: [{ type: "mg", x: 9, y: 12, name: "金城川机枪队", equipment: "勃朗宁M1919机枪", exp: 80 }, { type: "rifle", x: 11, y: 12, name: "韩军纵深反击队", equipment: "M1加兰德步枪", exp: 70 }] }],
+    waves: [{ window: [4, 5], units: [{ type: "rifle", x: 10, y: 12, name: "韩军预备队", equipment: "M1加兰德步枪", exp: 70 }] }, { window: [7, 8], units: [{ type: "mg", x: 9, y: 12, name: "金城川机枪队", equipment: "勃朗宁M1919机枪", exp: 80 }, { type: "rifle", x: 11, y: 12, name: "韩军纵深反击队", equipment: "M1加兰德步枪", exp: 70 }] }],
     objectives: [
       { id: "kyoyam-east", name: "轿岩山中东峰", kind: "capture", x: 11, y: 6, owner: "enemy" },
       { id: "kyoyam-main", name: "轿岩山主峰", kind: "capture", x: 7, y: 7, owner: "enemy" },
@@ -873,7 +873,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     scripted: [
       { kind: "barrage", turns: [1], damage: 8, target: "enemy", note: "志愿军开局炮火准备" },
-      { kind: "barrage", turns: [4, 7], damage: 3, note: "联合国军拦阻炮火" },
+      { kind: "barrage", turns: [5, 8], damage: 2, note: "联合国军拦阻炮火" },
       { kind: "supplyWindow", untilTurn: 9, penalty: 0.1, note: "金城反击弹药窗口" },
     ],
     victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 3 },

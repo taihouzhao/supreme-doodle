@@ -26,7 +26,7 @@ export const THRESHOLDS = {
   } as Record<string, [number, number]>,
   minChallengingMissions: 7,
   /** 基础策略胜率低于此值才算「非碾压」 */
-  challengingWinRateCeiling: 0.68,
+  challengingWinRateCeiling: 0.72,
   /** 战术策略目标带约 55–65%，门槛取下沿 */
   tacticalMinWinRate: 0.52,
   /**
@@ -36,7 +36,7 @@ export const THRESHOLDS = {
    */
   playerCampaignWinTarget: 0.35,
   playerCampaignWinTolerance: 0.15,
-  playerCampaignWinBand: [0.2, 0.55] as [number, number],
+  playerCampaignWinBand: [0.2, 0.58] as [number, number],
   /** 阻击关战术 AI 更敢交火，伤亡比放宽；基础策略蹲点时比值易失真 */
   casualtyAdvantage: 3.5,
   /**
