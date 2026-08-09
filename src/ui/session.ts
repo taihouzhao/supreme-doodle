@@ -5,6 +5,7 @@ import { UNIT_TYPES } from "../content/units";
 import {
   createCampaign,
   equipWeapon,
+  equipAttachment,
   finishMission,
   personnelTransferBounds,
   startMission,
@@ -25,10 +26,10 @@ import {
   livingUnits,
   manhattan,
   reachableTiles,
-  adjacentFriendlyUnits as gridAdjacentFriendly,
   resupplyTargets as gridResupplyTargets,
   unitAt,
 } from "../core/grid";
+import { isMotorized, resupplyRange } from "../core/equipment";
 import type {
   Action,
   DamageBreakdown,
@@ -38,6 +39,7 @@ import type {
   Unit,
   Vec2,
   WeaponId,
+  AttachmentId,
   Weather,
 } from "../core/types";
 import { buildAttackPreview, type AttackPreview } from "./combatPreview";
@@ -329,6 +331,14 @@ export class Session {
   /** 出击前手动换装，立即存档 */
   equipWeapon(unitId: string, weapon: WeaponId): void {
     const campaign = equipWeapon(this.state.campaign, unitId, weapon);
+    if (campaign === this.state.campaign) return;
+    writeSave(campaign);
+    this.update({ campaign });
+  }
+
+  /** 出击前手动换附件；交换失败时保持旧配装与库存不变。 */
+  equipAttachment(unitId: string, attachment: AttachmentId | null): void {
+    const campaign = equipAttachment(this.state.campaign, unitId, attachment);
     if (campaign === this.state.campaign) return;
     writeSave(campaign);
     this.update({ campaign });
@@ -677,7 +687,8 @@ export class Session {
       return tiles;
     }
     const ready = this.resupplyTargets();
-    for (const ally of gridAdjacentFriendly(battle, unit)) {
+    for (const ally of livingUnits(battle, unit.faction)) {
+      if (ally.id === unit.id || manhattan(unit, ally) > resupplyRange(unit)) continue;
       const key = ally.y * battle.width + ally.x;
       if (!ready.has(key)) tiles.add(key);
     }
@@ -717,7 +728,7 @@ export class Session {
     if (def.targeting === "self") return tiles;
     for (const enemy of livingUnits(battle, "enemy")) {
       if (manhattan(unit, enemy) > def.range) continue;
-      if (def.antiArmorOnly && !UNIT_TYPES[enemy.type].vehicle) continue;
+      if (def.antiArmorOnly && !isMotorized(enemy)) continue;
       tiles.add(enemy.y * battle.width + enemy.x);
     }
     return tiles;

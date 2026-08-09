@@ -102,6 +102,18 @@ export const WEAPON_ICON: Record<WeaponId, string> = {
   bren: `/assets/weapons/zb26.svg${V}`,
   mac24: `/assets/weapons/zb26.svg${V}`,
   centurion: `/assets/weapons/sherman.svg${V}`,
+  mosin_m44_marksman: `/assets/weapons/mosin.svg${V}`,
+  m1d_sniper: `/assets/weapons/m1_garand.svg${V}`,
+  bar_m1918a2: `/assets/weapons/zb26.svg${V}`,
+  m2hb: `/assets/weapons/m1919.svg${V}`,
+  type92_infantry_gun: `/assets/weapons/mortar82.svg${V}`,
+  mortar120: `/assets/weapons/m1_mortar.svg${V}`,
+  m2_4_2_mortar: `/assets/weapons/m1_mortar.svg${V}`,
+  qf25: `/assets/weapons/m1_mortar.svg${V}`,
+  zis3: `/assets/weapons/m1_mortar.svg${V}`,
+  m30_122: `/assets/weapons/m1_mortar.svg${V}`,
+  bm13: `/assets/weapons/m1_mortar.svg${V}`,
+  m1_155: `/assets/weapons/m1_mortar.svg${V}`,
   supply_cart: `/assets/weapons/type38.svg${V}`,
 };
 

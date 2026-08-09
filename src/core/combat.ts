@@ -5,9 +5,16 @@ import { MATCHUP, PROGRESS, UNIT_TYPES } from "../content/units";
 import { WEAPONS } from "../content/weapons";
 import { effectiveMaxHp, effectiveStats } from "./commander";
 import {
+  effectiveIndirect,
+  equipmentDamageMultiplier,
+  equipmentDefenseReduction,
+  isMotorized,
+  matchupMultiplier,
+} from "./equipment";
+import {
   adjacentAllies,
   attackRange,
-  coordinationAllies,
+  coordinationSources,
   defensiveSupportAllies,
   manhattan,
   tileAt,
@@ -61,18 +68,21 @@ export function damageComponents(
   const distance = manhattan(attacker, defender);
   const atkStats = effectiveStats(attacker, state.inventory);
   const defStats = effectiveStats(defender, state.inventory);
-  const defWeapon = WEAPONS[defender.weapon];
 
-  const primaryStat = attackerDef.indirect ? atkStats.intellect : atkStats.might;
+  const indirect = effectiveIndirect(attacker);
+  const primaryStat = indirect ? atkStats.intellect : atkStats.might;
   // 统率常驻微幅（仅高于中性点）；夹击仍额外吃统率缩放
   const leadAtk = 1 + Math.max(0, atkStats.leadership - 40) * 0.001;
   const commander = (1 + (primaryStat - 40) * 0.005) * leadAtk;
-  // 武器进攻已并入五维 stats；breakdown.weapon 恒为 1
-  const weapon = 1;
+  // 武器基础属性并入五维；倍率、架设/射程等专属效果单独留在拆解中。
+  const weapon = equipmentDamageMultiplier(attacker, state, defender);
   const levelAtk = 1 + PROGRESS.attackPerLevel * Math.max(0, attacker.level - 1);
 
-  const base = attackerDef.attack * BALANCE.factionDamage[attacker.faction];
-  const matchup = MATCHUP[attacker.type][defender.type];
+  const base =
+    attackerDef.attack *
+    BALANCE.factionDamage[attacker.faction] *
+    (attacker.faction === "enemy" ? state.enemyDamageMultiplier ?? 1 : 1);
+  const matchup = MATCHUP[attacker.type][defender.type] * matchupMultiplier(attacker, defender);
   const veterancy = levelAtk;
   const fatigue =
     1 -
@@ -84,11 +94,12 @@ export function damageComponents(
     1 +
       Math.min(BALANCE.flank.cap, adjacentAllies(state, attacker) * BALANCE.flank.perAlly) *
       leadScale;
+  const coordinationSourceList = coordinationSources(state, attacker, defender);
   const coordination =
     1 +
       Math.min(
         BALANCE.coordination.cap,
-        coordinationAllies(state, attacker, defender) * BALANCE.coordination.perAlly,
+        coordinationSourceList.length * BALANCE.coordination.perAlly,
       ) *
         leadScale;
   const defensiveSupport = Math.max(
@@ -101,10 +112,10 @@ export function damageComponents(
   );
 
   let rawDefense =
-    attackerDef.indirect && defenderTile.defense > 0
+    indirect && defenderTile.defense > 0
       ? defenderTile.defense / 2
       : defenderTile.defense;
-  if (attackerDef.indirect) {
+  if (indirect) {
     // 智力进一步压低掩体收益
     rawDefense *= 1 - Math.max(0, atkStats.intellect - 40) * 0.004;
   }
@@ -112,10 +123,11 @@ export function damageComponents(
   const defenderVeterancy =
     (1 - PROGRESS.defensePerLevel * Math.max(0, defender.level - 1)) *
     (1 - Math.max(0, defStats.stamina - 40) * 0.003) *
-    (1 - (defWeapon?.defenseBonus ?? 0));
+    (1 - equipmentDefenseReduction(defender, distance > 1));
   const keyGuard = defender.keyUnit ? BALANCE.keyUnitDamageTaken : 1;
   const weather = distance > 1 ? 1 + WEATHER_EFFECT[state.weather].rangedDamage : 1;
-  const setup = !attacker.movedThisTurn ? 1 + attackerDef.setupBonus : 1;
+  const setupBonus = WEAPONS[attacker.weapon]?.setupBonusOverride ?? attackerDef.setupBonus;
+  const setup = !attacker.movedThisTurn ? 1 + setupBonus : 1;
   const highGround = 1 + attackerTile.attackBonus;
   const scripted =
     nightAssaultBonus(state, attacker, distance) * supplyPenalty(state, attacker);
@@ -152,6 +164,7 @@ export function damageComponents(
     fatigue,
     flank,
     coordination,
+    coordinationSources: coordinationSourceList,
     terrain,
     defenderVeterancy,
     defensiveSupport,
@@ -204,7 +217,7 @@ export function estimateDamageFrom(
 
 export function canCounter(state: GameState, attacker: Unit, defender: Unit): boolean {
   if (!defender.alive || defender.hp <= 0) return false;
-  if (UNIT_TYPES[attacker.type].indirect) return false;
+  if (effectiveIndirect(attacker)) return false;
   const range = attackRange(state, defender);
   const distance = manhattan(attacker, defender);
   return distance >= range.min && distance <= range.max;
@@ -212,7 +225,7 @@ export function canCounter(state: GameState, attacker: Unit, defender: Unit): bo
 
 export function itemDamage(item: keyof typeof ITEMS, target: Unit, user?: Unit, state?: GameState): number {
   const def = ITEMS[item];
-  if (def.antiArmorOnly && !UNIT_TYPES[target.type].vehicle) return 0;
+  if (def.antiArmorOnly && !isMotorized(target)) return 0;
   let damage = def.damage;
   if (user && state) {
     const intellect = effectiveStats(user, state.inventory).intellect;

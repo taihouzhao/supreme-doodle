@@ -12,6 +12,7 @@ import {
   unitAt,
 } from "../core/grid";
 import { movementBudget } from "../core/mission";
+import { effectiveIndirect } from "../core/equipment";
 import type { ReachableTile } from "../core/grid";
 import type { GameState, Unit, Vec2 } from "../core/types";
 
@@ -58,7 +59,7 @@ export function attackOptions(state: GameState, unit: Unit): AttackOption[] {
 }
 
 export function canBeCountered(state: GameState, attacker: Unit, defender: Unit): boolean {
-  if (UNIT_TYPES[attacker.type].indirect) return false;
+  if (effectiveIndirect(attacker)) return false;
   const range = attackRange(state, defender);
   const distance = manhattan(attacker, defender);
   return distance >= range.min && distance <= range.max;

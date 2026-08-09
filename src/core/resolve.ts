@@ -15,7 +15,7 @@ import {
   unitAt,
 } from "./grid";
 import { isEvacTile } from "./mission";
-import { nextInt, nextRange } from "./rng";
+import { deriveSeed, nextInt, nextRange } from "./rng";
 import type { GameEvent, GameState, ItemId, Unit, Vec2 } from "./types";
 
 const FATIGUE = BALANCE.fatigue;
@@ -79,6 +79,31 @@ export function routUnit(state: GameState, unit: Unit, events: GameEvent[]): voi
       y: unit.y,
     });
   }
+
+  // 装备战利品使用独立 equipmentLoot 派生流，不改变战斗/天气/增援结果。
+  if (unit.faction === "enemy" && unit.dropWeapons && unit.dropWeapons.length > 0) {
+    const draw = nextInt(
+      deriveSeed(state.seed, `equipmentLoot:${unit.id}:weapon:${state.turn}`),
+      0,
+      unit.dropWeapons.length - 1,
+    );
+    const weapon = unit.dropWeapons[draw.value]!;
+    state.fieldWeapons.push({ id: `elite-wpn-${unit.id}`, weapon, x: unit.x, y: unit.y });
+  }
+  if (unit.faction === "enemy" && unit.dropAttachments && unit.dropAttachments.length > 0) {
+    const draw = nextInt(
+      deriveSeed(state.seed, `equipmentLoot:${unit.id}:attachment:${state.turn}`),
+      0,
+      unit.dropAttachments.length - 1,
+    );
+    const attachment = unit.dropAttachments[draw.value]!;
+    (state.fieldAttachments ??= []).push({
+      id: `elite-att-${unit.id}`,
+      attachment,
+      x: unit.x,
+      y: unit.y,
+    });
+  }
 }
 
 /** 落地结算：战场拾取与撤离带判定，移动与击溃推进共用 */
@@ -99,13 +124,15 @@ function settleTileEntry(state: GameState, unit: Unit, events: GameEvent[]): voi
   if (weaponDrop) {
     state.fieldWeapons.splice(weaponIndex, 1);
     state.pendingWeapons.push(weaponDrop.weapon);
-    const def = WEAPONS[weaponDrop.weapon];
-    if (def.forTypes.includes(unit.type) && def.score > WEAPONS[unit.weapon].score) {
-      unit.weapon = weaponDrop.weapon;
-      unit.equipment = def.name;
-      refreshMaxHp(unit, state);
-    }
     events.push({ type: "weaponPicked", unitId: unit.id, weapon: weaponDrop.weapon });
+  }
+
+  const attachmentIndex = (state.fieldAttachments ?? []).findIndex((i) => i.x === x && i.y === y);
+  const attachmentDrop = (state.fieldAttachments ?? [])[attachmentIndex];
+  if (attachmentDrop) {
+    state.fieldAttachments!.splice(attachmentIndex, 1);
+    (state.pendingAttachments ??= []).push(attachmentDrop.attachment);
+    events.push({ type: "attachmentPicked", unitId: unit.id, attachment: attachmentDrop.attachment });
   }
 
   if (isEvacTile(state, x, y)) {
@@ -239,12 +266,34 @@ export function performAttack(
     grantExp(attacker, VETERANCY.expPerRout, state, events);
     capturePrisoners(state, attacker, defender, events);
   }
+
+  const splashRatio = WEAPONS[attacker.weapon]?.splashRatio ?? 0;
+  if (splashRatio > 0) {
+    for (const pos of orthogonalNeighbours(defenderFrom)) {
+      const splashTarget = unitAt(state, pos.x, pos.y);
+      if (!splashTarget || splashTarget.faction === attacker.faction || !splashTarget.alive) continue;
+      const splashDamage = Math.max(1, Math.round(main.damage * splashRatio));
+      splashTarget.hp -= splashDamage;
+      if (attacker.faction === "player") state.stats.damageDealt += splashDamage;
+      else state.stats.damageTaken += splashDamage;
+      const promote = grantExpSilent(attacker, splashDamage * VETERANCY.expPerDamage, state);
+      if (promote) events.push(promote);
+      if (splashTarget.hp <= 0) {
+        routUnit(state, splashTarget, events);
+        grantExp(attacker, VETERANCY.expPerRout, state, events);
+        capturePrisoners(state, attacker, splashTarget, events);
+      }
+    }
+  }
   if (attackerRouted) {
     routUnit(state, attacker, events);
     grantExp(defender, VETERANCY.expPerRout, state, events);
   }
 
   addFatigue(attacker, FATIGUE.perAttack);
+  attacker.attackedThisTurn = true;
+  const cooldown = WEAPONS[attacker.weapon]?.cooldownTurns ?? 0;
+  if (cooldown > 0) attacker.weaponCooldownUntil = state.turn + cooldown;
   attacker.hasActed = true;
   attacker.mpLeft = 0;
   return true;

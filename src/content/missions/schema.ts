@@ -1,5 +1,6 @@
 import type {
   CommanderStats,
+  AttachmentId,
   Faction,
   ItemId,
   MissionKind,
@@ -46,6 +47,9 @@ export interface EnemySpec {
   title?: string;
   /** 击溃时原地掉落的道具池（精英道具） */
   dropOptions?: ItemId[];
+  /** 击溃时原地掉落的有限装备；战后才进入军械库。 */
+  dropWeapons?: WeaponId[];
+  dropAttachments?: AttachmentId[];
 }
 
 /** 本关临时配属：真实人物客串出战，不进入跨关花名册。 */
@@ -54,6 +58,7 @@ export interface StoryAllySpec {
   type: UnitTypeId;
   level: number;
   weapon?: WeaponId;
+  attachment?: AttachmentId;
   stats?: Partial<CommanderStats>;
   equipment?: string;
   /** 真实职务 / 部队身份 */
@@ -82,6 +87,12 @@ export interface WeaponDropSpec {
   x: number;
   y: number;
   options: WeaponId[];
+}
+
+export interface AttachmentDropSpec {
+  x: number;
+  y: number;
+  options: AttachmentId[];
 }
 
 export interface ObjectiveSpec {
@@ -143,6 +154,8 @@ export interface MissionConfig {
   playerEquipment?: Partial<Record<UnitTypeId, string>>;
   /** 装备时代，影响默认武器 */
   equipmentEra?: "early" | "late";
+  /** 关卡局部平衡：仅缩放该关敌军火力，不改变随机流。 */
+  enemyDamageMultiplier?: number;
   maxTurns: number;
   map: string[];
   playerSpawns: Vec2[];
@@ -157,8 +170,14 @@ export interface MissionConfig {
   supplyPoints?: Vec2[];
   itemDrops: ItemDropSpec[];
   weaponDrops?: WeaponDropSpec[];
+  attachmentDrops?: AttachmentDropSpec[];
   /** 通关后写入军械库的武器 */
   weaponRewards?: WeaponId[];
+  /** 通关后写入军械库的附件 */
+  attachmentRewards?: AttachmentId[];
+  /** 出击前写入军械库的史实换装（例如 M10 的 M-30 与 BM-13）。 */
+  preMissionWeapons?: WeaponId[];
+  preMissionAttachments?: AttachmentId[];
   /** 地图上标注的真实地名 */
   places?: PlaceLabelSpec[];
   /** 史实脚本事件 */

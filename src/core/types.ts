@@ -44,7 +44,33 @@ export type WeaponId =
   | "bren"
   | "mac24"
   | "centurion"
+  | "mosin_m44_marksman"
+  | "m1d_sniper"
+  | "bar_m1918a2"
+  | "m2hb"
+  | "type92_infantry_gun"
+  | "mortar120"
+  | "m2_4_2_mortar"
+  | "qf25"
+  | "zis3"
+  | "m30_122"
+  | "bm13"
+  | "m1_155"
   | "supply_cart";
+
+export type AttachmentId =
+  | "engineer_tools"
+  | "pack_train"
+  | "field_telephone"
+  | "ammo_carrier"
+  | "camouflage_net"
+  | "winter_kit"
+  | "medic_team"
+  | "motor_transport"
+  | "artillery_tractor"
+  | "scr300_radio"
+  | "rangefinder"
+  | "t52_vest";
 
 export type Weather = "clear" | "overcast" | "rain" | "snow" | "fog";
 
@@ -137,6 +163,8 @@ export interface Unit {
   /** 显示用装备名；数值以 weapon + stats 为准 */
   equipment: string;
   weapon: WeaponId;
+  /** 0–1 件占用附件槽的装备；消耗品仍在 inventory。 */
+  attachment?: AttachmentId;
   commanderKind: CommanderKind;
   commanderName: string;
   /** 地图与详情卡共用的稳定人物身份；旧存档缺省时由 UI 做兼容回退。 */
@@ -158,6 +186,8 @@ export interface Unit {
   fatigue: number;
   mpLeft: number;
   movedThisTurn: boolean;
+  /** 本回合是否实际发动过攻击；供卫生员回合末触发条件使用。 */
+  attackedThisTurn?: boolean;
   hasActed: boolean;
   alive: boolean;
   evacuated: boolean;
@@ -170,6 +200,12 @@ export interface Unit {
   supplyRestoredUntil?: number;
   /** 击溃时原地掉落的道具池（敌军精英 / 主将） */
   dropOptions?: ItemId[];
+  /** 敌军精英可掉落的有限武器/附件；战后才入库。 */
+  dropWeapons?: WeaponId[];
+  dropAttachments?: AttachmentId[];
+  /** BM-13 等装备的回合冷却与医疗触发计数。 */
+  weaponCooldownUntil?: number;
+  medicTriggersUsed?: number;
 }
 
 export interface Objective {
@@ -191,6 +227,13 @@ export interface FieldItem {
 export interface FieldWeapon {
   id: string;
   weapon: WeaponId;
+  x: number;
+  y: number;
+}
+
+export interface FieldAttachment {
+  id: string;
+  attachment: AttachmentId;
   x: number;
   y: number;
 }
@@ -231,6 +274,7 @@ export interface GameState {
   rng: number;
   turn: number;
   maxTurns: number;
+  enemyDamageMultiplier?: number;
   phase: Faction;
   width: number;
   height: number;
@@ -239,8 +283,11 @@ export interface GameState {
   objectives: Objective[];
   fieldItems: FieldItem[];
   fieldWeapons: FieldWeapon[];
+  /** 战场回收，任务结算后才进入战役附件库存。旧状态缺省为空。 */
+  fieldAttachments?: FieldAttachment[];
   /** 本关拾取、通关后并入战役军械库 */
   pendingWeapons: WeaponId[];
+  pendingAttachments?: AttachmentId[];
   evacZone: Vec2[];
   /** 补给点：站上可恢复弹药窗口（与后勤补给共用 supplyRestoredUntil） */
   supplyPoints: Vec2[];
@@ -284,6 +331,8 @@ export interface DamageBreakdown {
   keyGuard: number;
   /** 多单位火力覆盖/互相呼应带来的攻击修正。 */
   coordination?: number;
+  /** 参与本次协调的单位/中继来源，供伤害拆解与战报展示。 */
+  coordinationSources?: string[];
   /** 守方邻近单位对本次攻击的掩护修正（小于 1 表示减伤）。 */
   defensiveSupport?: number;
   weather: number;
@@ -330,6 +379,7 @@ export type GameEvent =
   | { type: "itemUsed"; unitId: string; item: ItemId; targetIds: string[]; damage: number; heal: number }
   | { type: "itemPicked"; unitId: string; item: ItemId }
   | { type: "weaponPicked"; unitId: string; weapon: WeaponId }
+  | { type: "attachmentPicked"; unitId: string; attachment: AttachmentId }
   | { type: "reinforced"; unitIds: string[] }
   | { type: "healed"; unitId: string; amount: number }
   | {

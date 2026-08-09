@@ -1293,6 +1293,9 @@ body {
 
 .sheet--hq {
   gap: 0.65rem;
+  /* Tab changes rebuild the compact dashboard; avoid restarting the entrance
+     transform so viewport checks and keyboard focus always see the full sheet. */
+  animation: none;
 }
 
 .hq-top h1 {

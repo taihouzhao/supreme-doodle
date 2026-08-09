@@ -377,6 +377,9 @@ export class Board {
     for (const weapon of state.fieldWeapons) {
       this.drawFieldItem(weapon.x, weapon.y);
     }
+    for (const attachment of state.fieldAttachments ?? []) {
+      this.drawFieldItem(attachment.x, attachment.y);
+    }
 
     this.drawOverlay(state);
 

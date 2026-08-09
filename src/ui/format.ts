@@ -1,6 +1,7 @@
 import { ITEMS } from "../content/items";
 import { UNIT_TYPES, veterancyName } from "../content/units";
 import { WEAPONS } from "../content/weapons";
+import { ATTACHMENTS } from "../content/attachments";
 import type { DamageBreakdown, GameEvent, GameState, Unit } from "../core/types";
 
 export function factionLabel(faction: "player" | "enemy"): string {
@@ -82,6 +83,8 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
       return `${unitLabel(state, event.unitId)} 拾取了${ITEMS[event.item].name}`;
     case "weaponPicked":
       return `${unitLabel(state, event.unitId)} 缴获了${WEAPONS[event.weapon].name}`;
+    case "attachmentPicked":
+      return `${unitLabel(state, event.unitId)} 回收了${ATTACHMENTS[event.attachment].name}（战后入库）`;
     case "reinforced":
       return `联合军增援抵达（${event.unitIds.length} 个单位）`;
     case "evacuated":

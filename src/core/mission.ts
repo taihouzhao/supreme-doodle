@@ -13,16 +13,27 @@ import {
   makeEnemyCommander,
   makeStoryCommander,
 } from "./commander";
-import { livingUnits, tileAt, unitAt } from "./grid";
+import { inEnemyZoc, livingUnits, tileAt, unitAt } from "./grid";
+import {
+  barrageDefenseReduction,
+  coldAttritionMultiplier,
+  ignoresVehicleTerrain,
+  isMotorized,
+  movementModifier,
+  snowMovePenaltyReduction,
+  supplyPenaltyMultiplier,
+} from "./equipment";
 import { Rng, deriveSeed } from "./rng";
 import type {
   CommanderKind,
   CommanderStats,
   FieldItem,
+  FieldAttachment,
   FieldWeapon,
   GameEvent,
   GameState,
   ItemId,
+  AttachmentId,
   Objective,
   TerrainId,
   Unit,
@@ -53,6 +64,7 @@ export interface RosterUnit {
   baseStats: CommanderStats;
   stats: CommanderStats;
   weapon: WeaponId;
+  attachment?: AttachmentId;
   /** 玩家在军械库里手动指定过武器；自动换装不再覆盖 */
   manualWeapon?: boolean;
 }
@@ -104,7 +116,10 @@ function makeUnit(params: {
   hp?: number;
   fatigue?: number;
   keyUnit?: boolean;
+  attachment?: AttachmentId;
   dropOptions?: ItemId[];
+  dropWeapons?: WeaponId[];
+  dropAttachments?: AttachmentId[];
 }): Unit {
   const draft: Unit = {
     id: params.id,
@@ -114,6 +129,7 @@ function makeUnit(params: {
     name: params.name,
     equipment: params.equipment ?? WEAPONS[params.weapon]?.name ?? UNIT_TYPES[params.type].name,
     weapon: params.weapon,
+    attachment: params.attachment,
     commanderKind: params.commanderKind,
     commanderName: params.commanderName,
     portraitGroup: params.portraitGroup,
@@ -136,6 +152,8 @@ function makeUnit(params: {
     evacuated: false,
     keyUnit: params.keyUnit ?? false,
     dropOptions: params.dropOptions,
+    dropWeapons: params.dropWeapons,
+    dropAttachments: params.dropAttachments,
   };
   const maxHp = effectiveMaxHp(draft);
   draft.maxHp = maxHp;
@@ -151,6 +169,7 @@ export function createMissionState(setup: MissionSetup): GameState {
   const waveRng = new Rng(deriveSeed(seed, "reinforce"));
   const weatherRng = new Rng(deriveSeed(seed, "weather"));
   const itemRng = new Rng(deriveSeed(seed, "items"));
+  const equipmentLootRng = new Rng(deriveSeed(seed, "equipmentLoot"));
 
   const portraitCounters: Record<UnitPortraitGroup, number> = {
     pva: 0,
@@ -201,6 +220,7 @@ export function createMissionState(setup: MissionSetup): GameState {
         // 花名册实际装备决定战斗结算与显示；关卡装备表只用于历史简报。
         equipment: WEAPONS[rosterUnit.weapon].name,
         weapon: rosterUnit.weapon,
+        attachment: rosterUnit.attachment,
         commanderKind: rosterUnit.commanderKind,
         commanderName: rosterUnit.commanderName,
         portraitGroup: "pva",
@@ -234,6 +254,7 @@ export function createMissionState(setup: MissionSetup): GameState {
         type: ally.type,
         name: designation(ally.commander, ally.type),
         equipment: ally.equipment ?? WEAPONS[weapon].name,
+        attachment: ally.attachment,
         ...profile,
         portraitGroup: "pva",
         portraitIndex: nextPortrait("pva"),
@@ -253,7 +274,13 @@ export function createMissionState(setup: MissionSetup): GameState {
     defaultDuty: string,
   ): Unit => {
     const linked = spec.commanderId ? commandersById.get(spec.commanderId) : undefined;
-    const elite = Boolean(spec.commanderId || spec.title || (spec.dropOptions?.length ?? 0) > 0);
+    const elite = Boolean(
+      spec.commanderId ||
+        spec.title ||
+        (spec.dropOptions?.length ?? 0) > 0 ||
+        (spec.dropWeapons?.length ?? 0) > 0 ||
+        (spec.dropAttachments?.length ?? 0) > 0,
+    );
     const name = linked
       ? `${linked.name}指挥部`
       : (spec.name ?? UNIT_TYPES[spec.type].name);
@@ -281,6 +308,8 @@ export function createMissionState(setup: MissionSetup): GameState {
       y: spec.y,
       hp: spec.hp,
       dropOptions: spec.dropOptions,
+      dropWeapons: spec.dropWeapons,
+      dropAttachments: spec.dropAttachments,
     });
   };
 
@@ -303,10 +332,17 @@ export function createMissionState(setup: MissionSetup): GameState {
     y: drop.y,
   }));
 
-  const weaponRng = new Rng(deriveSeed(seed, "weapons"));
+  const weaponRng = new Rng(deriveSeed(seed, "equipmentLoot:weapons"));
   const fieldWeapons: FieldWeapon[] = (mission.weaponDrops ?? []).map((drop, index) => ({
     id: `wpn${index}`,
     weapon: weaponRng.pick(drop.options),
+    x: drop.x,
+    y: drop.y,
+  }));
+
+  const fieldAttachments: FieldAttachment[] = (mission.attachmentDrops ?? []).map((drop, index) => ({
+    id: `att${index}`,
+    attachment: equipmentLootRng.pick(drop.options),
     x: drop.x,
     y: drop.y,
   }));
@@ -327,6 +363,7 @@ export function createMissionState(setup: MissionSetup): GameState {
     rng: deriveSeed(seed, "combat"),
     turn: 1,
     maxTurns: mission.maxTurns,
+    enemyDamageMultiplier: mission.enemyDamageMultiplier,
     phase: "player",
     width,
     height,
@@ -335,7 +372,9 @@ export function createMissionState(setup: MissionSetup): GameState {
     objectives,
     fieldItems,
     fieldWeapons,
+    fieldAttachments,
     pendingWeapons: [],
+    pendingAttachments: [],
     evacZone: mission.evacZone.map((v) => ({ ...v })),
     supplyPoints: (mission.supplyPoints ?? []).map((v) => ({ ...v })),
     inventory: { ...emptyInventory(), ...inventory },
@@ -376,10 +415,16 @@ export function movementBudget(
   weather: GameState["weather"],
   inventory?: GameState["inventory"],
 ): number {
-  const base = UNIT_TYPES[unit.type].move + agilityMoveBonus(effectiveStats(unit, inventory));
+  const base =
+    UNIT_TYPES[unit.type].move +
+    agilityMoveBonus(effectiveStats(unit, inventory)) +
+    movementModifier(unit);
   const fatiguePenalty =
     1 - BALANCE.fatigue.movePenalty * (unit.fatigue / BALANCE.fatigue.max);
-  const weatherPenalty = weather === "rain" || weather === "snow" ? 1 : 0;
+  const weatherPenalty =
+    weather === "rain" || weather === "snow"
+      ? Math.max(0, 1 - snowMovePenaltyReduction(unit))
+      : 0;
   return Math.max(1, Math.floor(base * fatiguePenalty) - weatherPenalty);
 }
 
@@ -389,6 +434,7 @@ export function beginPhase(state: GameState, faction: Unit["faction"]): void {
     if (unit.faction !== faction || !unit.alive || unit.evacuated) continue;
     unit.mpLeft = movementBudget(unit, state.weather, state.inventory);
     unit.movedThisTurn = false;
+    unit.attackedThisTurn = false;
     unit.hasActed = false;
   }
 }
@@ -423,7 +469,7 @@ function findFreeSpot(state: GameState, unit: Unit): Vec2 | null {
         const y = unit.y + dy;
         if (x < 0 || y < 0 || x >= state.width || y >= state.height) continue;
         if (unitAt(state, x, y)) continue;
-        if (UNIT_TYPES[unit.type].vehicle && !tileAt(state, x, y).vehiclePassable) continue;
+        if (isMotorized(unit) && !ignoresVehicleTerrain(unit) && !tileAt(state, x, y).vehiclePassable) continue;
         return { x, y };
       }
     }
@@ -445,6 +491,22 @@ export function runUpkeep(state: GameState, faction: Unit["faction"], events: Ga
       state.supplyPoints.some((p) => p.x === unit.x && p.y === unit.y)
     ) {
       unit.supplyRestoredUntil = Math.max(unit.supplyRestoredUntil ?? 0, state.turn + 1);
+    }
+
+    // 卫生员每关最多自动触发 3 次；移动或等待不算攻击，进入敌方控制区则不触发。
+    if (
+      unit.attachment === "medic_team" &&
+      !unit.attackedThisTurn &&
+      !inEnemyZoc(state, unit, unit.x, unit.y) &&
+      unit.hp < unit.maxHp &&
+      (unit.medicTriggersUsed ?? 0) < 3
+    ) {
+      const amount = Math.min(6, unit.maxHp - unit.hp);
+      if (amount > 0) {
+        unit.hp += amount;
+        unit.medicTriggersUsed = (unit.medicTriggersUsed ?? 0) + 1;
+        events.push({ type: "healed", unitId: unit.id, amount });
+      }
     }
   }
 
@@ -469,7 +531,10 @@ export function runScripted(state: GameState, events: GameEvent[]): void {
       const hit: string[] = [];
       for (const unit of livingUnits(state, rule.target ?? "player")) {
         const cover = tileAt(state, unit.x, unit.y).defense;
-        const damage = Math.max(1, Math.round(rule.damage * (1 - Math.max(0, cover))));
+        const damage = Math.max(
+          1,
+          Math.round(rule.damage * (1 - Math.max(0, cover)) * (1 - barrageDefenseReduction(unit))),
+        );
         unit.hp -= damage;
         hit.push(unit.id);
         if (unit.hp <= 0) routByScript(state, unit, events);
@@ -489,7 +554,7 @@ export function runScripted(state: GameState, events: GameEvent[]): void {
       // 严寒不分敌我，双方都在冻伤减员
       for (const unit of livingUnits(state)) {
         const shelter = tileAt(state, unit.x, unit.y).regen > 0 ? 0.5 : 1;
-        const damage = Math.max(1, Math.round(rule.damage * shelter));
+        const damage = Math.max(1, Math.round(rule.damage * shelter * coldAttritionMultiplier(unit)));
         if (unit.hp <= damage) {
           // 冻伤不直接打死单位，只压到残血，避免无操作败北
           unit.hp = Math.max(1, unit.hp);
@@ -536,7 +601,10 @@ export function supplyPenalty(state: GameState, unit: Unit): number {
   if ((unit.supplyRestoredUntil ?? 0) >= state.turn) return 1;
   for (const rule of state.scripted) {
     if (rule.kind !== "supplyWindow") continue;
-    if (state.turn > rule.untilTurn) return 1 - rule.penalty;
+    if (state.turn > rule.untilTurn) {
+      const penalty = rule.penalty * supplyPenaltyMultiplier(unit);
+      return 1 - Math.min(0.95, Math.max(0, penalty));
+    }
   }
   return 1;
 }

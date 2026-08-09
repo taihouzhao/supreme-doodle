@@ -5,15 +5,16 @@ import {
   rosterUnitName,
   type ChapterConfig,
 } from "../content/chapter";
+import { attachmentFits } from "../content/attachments";
 import { ITEM_IDS } from "../content/items";
 import type { MissionConfig } from "../content/missions/schema";
 import { BASE_STATS } from "../content/progress";
 import { LOGISTICS, levelFromExp, rankName, veterancyLevel } from "../content/units";
-import { WEAPONS, bestWeapon, defaultWeaponFor, weaponFits } from "../content/weapons";
+import { WEAPONS, defaultWeaponFor, weaponFits } from "../content/weapons";
 import { effectiveMaxHp, recomputeStatsAtLevel } from "./commander";
 import { createMissionState, emptyInventory, type RosterUnit } from "./mission";
 import { deriveSeed, nextRandom } from "./rng";
-import type { GameState, ItemId, MissionStatus, WeaponId } from "./types";
+import type { AttachmentId, GameState, ItemId, MissionStatus, WeaponId } from "./types";
 
 export interface MissionOutcome {
   missionId: string;
@@ -30,6 +31,7 @@ export interface MissionOutcome {
   replacements: string[];
   replacementNames: string[];
   weaponsGained: WeaponId[];
+  attachmentsGained: AttachmentId[];
   rosterAfter: number;
   veteransAfter: number;
 }
@@ -37,6 +39,7 @@ export interface MissionOutcome {
 export type ItemLoadout = Partial<Record<ItemId, number>>;
 
 export interface CampaignState {
+  schemaVersion?: 3;
   chapterId: string;
   seed: number;
   rng: number;
@@ -44,6 +47,8 @@ export interface CampaignState {
   roster: RosterUnit[];
   inventory: Record<ItemId, number>;
   armory: WeaponId[];
+  /** 有限附件库存；数组表示同型号的多件实物，兼容 v2 的数组军械库。 */
+  attachments: AttachmentId[];
   history: MissionOutcome[];
   serial: number;
   status: "running" | "complete";
@@ -51,6 +56,8 @@ export interface CampaignState {
   pendingDeploy?: string[];
   /** 出击前为各单位分配的携行物资（按 rosterId）；空则整库带入 */
   pendingLoadout?: Record<string, ItemLoadout>;
+  /** 已发放过的战前史实换装关卡，避免重复 startMission 造成复制库存。 */
+  preMissionClaimed?: string[];
 }
 
 export interface PersonnelTransferBounds {
@@ -124,6 +131,7 @@ function rosterFromSpec(
     bio?: string;
     baseStats?: Parameters<typeof buildCompanionStats>[0]["baseStats"];
     weapon?: WeaponId;
+    attachment?: AttachmentId;
     keyUnit?: boolean;
   },
 ): RosterUnit {
@@ -134,6 +142,7 @@ function rosterFromSpec(
     duty: spec.duty,
     baseStats: spec.baseStats,
     weapon: spec.weapon,
+    attachment: spec.attachment,
     keyUnit: spec.keyUnit,
   };
   const baseStats: RosterUnit["baseStats"] = { ...BASE_STATS, ...spec.baseStats };
@@ -159,6 +168,7 @@ function rosterFromSpec(
     baseStats,
     stats,
     weapon,
+    attachment: spec.attachment,
   };
   draft.maxHp = effectiveMaxHp(draft);
   draft.hp = draft.maxHp;
@@ -170,6 +180,16 @@ export function createCampaign(chapterId: string, seed: number): CampaignState {
   const roster: RosterUnit[] = chapter.startingRoster.map((spec, index) =>
     rosterFromSpec(`r${index}`, spec),
   );
+  const armory = [...chapter.startingArmory];
+  for (const unit of roster) {
+    const owned = armory.filter((id) => id === unit.weapon).length;
+    const equipped = roster.filter((entry) => entry.weapon === unit.weapon).length;
+    if (owned < equipped) armory.push(unit.weapon);
+  }
+  const attachments = [...(chapter.startingAttachments ?? [])];
+  for (const unit of roster) {
+    if (unit.attachment && !attachments.includes(unit.attachment)) attachments.push(unit.attachment);
+  }
 
   return {
     chapterId,
@@ -178,12 +198,15 @@ export function createCampaign(chapterId: string, seed: number): CampaignState {
     missionIndex: 0,
     roster,
     inventory: { ...emptyInventory(), ...chapter.startingInventory },
-    armory: [...chapter.startingArmory],
+    armory,
+    attachments,
+    schemaVersion: 3,
     history: [],
     serial: roster.length,
     status: "running",
     pendingDeploy: roster.map((unit) => unit.id),
     pendingLoadout: {},
+    preMissionClaimed: [],
   };
 }
 
@@ -344,25 +367,58 @@ export function adjustLoadoutItem(
   return { ...campaign, pendingLoadout: loadout };
 }
 
-function autoEquip(roster: RosterUnit[], armory: WeaponId[]): void {
+function autoEquip(roster: RosterUnit[], armory: WeaponId[], attachments: AttachmentId[] = []): void {
   for (const unit of roster) {
-    const keepManual = unit.manualWeapon && weaponFits(unit.weapon, unit.type);
-    if (!keepManual) {
-      unit.weapon = bestWeapon(unit.type, [...armory, unit.weapon], unit.weapon);
+    // 取消“评分最高即最好”：只修复旧存档中不适配的型号，不主动替换玩家选择。
+    if (!weaponFits(unit.weapon, unit.type)) {
+      const fallback = armory.find((id) => weaponFits(id, unit.type));
+      if (fallback) unit.weapon = fallback;
       unit.manualWeapon = false;
+    }
+    if (
+      unit.attachment &&
+      (!attachmentFits(unit.attachment, unit.type) ||
+        !attachments.includes(unit.attachment) ||
+        (unit.weapon === "bm13" && unit.attachment === "artillery_tractor"))
+    ) {
+      unit.attachment = undefined;
     }
     unit.maxHp = effectiveMaxHp(unit);
     unit.hp = Math.min(unit.hp, unit.maxHp);
   }
 }
 
+function equippedWeaponCount(campaign: CampaignState, weapon: WeaponId, exceptUnitId?: string): number {
+  return campaign.roster.filter((unit) => unit.id !== exceptUnitId && unit.weapon === weapon).length;
+}
+
+function equippedAttachmentCount(campaign: CampaignState, attachment: AttachmentId, exceptUnitId?: string): number {
+  return campaign.roster.filter((unit) => unit.id !== exceptUnitId && unit.attachment === attachment).length;
+}
+
+export function ownedWeaponCount(campaign: CampaignState, weapon: WeaponId): number {
+  return campaign.armory.filter((id) => id === weapon).length;
+}
+
+export function freeWeaponCount(campaign: CampaignState, weapon: WeaponId, exceptUnitId?: string): number {
+  return Math.max(0, ownedWeaponCount(campaign, weapon) - equippedWeaponCount(campaign, weapon, exceptUnitId));
+}
+
+export function ownedAttachmentCount(campaign: CampaignState, attachment: AttachmentId): number {
+  return campaign.attachments.filter((id) => id === attachment).length;
+}
+
+export function freeAttachmentCount(campaign: CampaignState, attachment: AttachmentId, exceptUnitId?: string): number {
+  return Math.max(0, ownedAttachmentCount(campaign, attachment) - equippedAttachmentCount(campaign, attachment, exceptUnitId));
+}
+
 export function equippableWeapons(campaign: CampaignState, unitId: string): WeaponId[] {
   const unit = campaign.roster.find((u) => u.id === unitId);
   if (!unit) return [];
   const pool = new Set<WeaponId>([unit.weapon, ...campaign.armory]);
-  return [...pool]
-    .filter((id) => weaponFits(id, unit.type))
-    .sort((a, b) => WEAPONS[b].score - WEAPONS[a].score);
+  return [...pool].filter(
+    (id) => weaponFits(id, unit.type) && (id === unit.weapon || freeWeaponCount(campaign, id, unitId) > 0),
+  );
 }
 
 export function equipWeapon(
@@ -374,10 +430,43 @@ export function equipWeapon(
   const unit = campaign.roster[index];
   if (!unit) return campaign;
   if (!weaponFits(weapon, unit.type)) return campaign;
-  if (weapon !== unit.weapon && !campaign.armory.includes(weapon)) return campaign;
+  if (weapon !== unit.weapon && freeWeaponCount(campaign, weapon, unitId) <= 0) return campaign;
 
   const roster = [...campaign.roster];
   const updated: RosterUnit = { ...unit, weapon, manualWeapon: true };
+  updated.maxHp = effectiveMaxHp(updated);
+  updated.hp = Math.min(updated.hp, updated.maxHp);
+  roster[index] = updated;
+  return { ...campaign, roster };
+}
+
+export function equippableAttachments(campaign: CampaignState, unitId: string): AttachmentId[] {
+  const unit = campaign.roster.find((u) => u.id === unitId);
+  if (!unit) return [];
+  const pool = new Set<AttachmentId>([...(unit.attachment ? [unit.attachment] : []), ...campaign.attachments]);
+  return [...pool].filter(
+    (id) =>
+      attachmentFits(id, unit.type) &&
+      !(id === "artillery_tractor" && unit.weapon === "bm13") &&
+      (id === unit.attachment || freeAttachmentCount(campaign, id, unitId) > 0),
+  );
+}
+
+export function equipAttachment(
+  campaign: CampaignState,
+  unitId: string,
+  attachment: AttachmentId | null,
+): CampaignState {
+  const index = campaign.roster.findIndex((u) => u.id === unitId);
+  const unit = campaign.roster[index];
+  if (!unit) return campaign;
+  if (attachment !== null) {
+    if (!attachmentFits(attachment, unit.type)) return campaign;
+    if (attachment === "artillery_tractor" && unit.weapon === "bm13") return campaign;
+    if (attachment !== unit.attachment && freeAttachmentCount(campaign, attachment, unitId) <= 0) return campaign;
+  }
+  const roster = [...campaign.roster];
+  const updated: RosterUnit = { ...unit, attachment: attachment ?? undefined };
   updated.maxHp = effectiveMaxHp(updated);
   updated.hp = Math.min(updated.hp, updated.maxHp);
   roster[index] = updated;
@@ -411,10 +500,31 @@ function replenish(campaign: CampaignState, chapter: ChapterConfig): string[] {
       duty: "补充步兵分队指挥员",
       weapon: defaultWeaponFor("rifle", "early"),
     });
+    // 新补充单位随附同期基础武器，保证有限库存下仍然可以合法部署。
+    campaign.armory.push(unit.weapon);
     campaign.roster.push(unit);
     added.push(id);
   }
   return added;
+}
+
+function addArtilleryCompanion(campaign: CampaignState, commander: string): string {
+  const id = `r${campaign.serial}`;
+  campaign.serial += 1;
+  const unit = rosterFromSpec(id, {
+    commander,
+    type: "artillery",
+    level: 1,
+    duty: commander === "谭朝志" ? "常驻炮兵指挥员" : "炮兵补位指挥员",
+    bio:
+      commander === "谭朝志"
+        ? "第五关前编入加强营的常驻炮兵，携带现有75毫米山炮。"
+        : "孔庆三炮兵作为谭朝志炮兵永久减员后的编制补位。",
+    weapon: "type75",
+  });
+  if (freeWeaponCount(campaign, unit.weapon) <= 0) campaign.armory.push(unit.weapon);
+  campaign.roster.push(unit);
+  return id;
 }
 
 export interface MissionStart {
@@ -430,8 +540,14 @@ export function startMission(campaign: CampaignState): MissionStart {
   if (!mission) throw new Error("章节已结束");
 
   const next = structuredClone(campaign);
+  next.preMissionClaimed ??= [];
+  if (!next.preMissionClaimed.includes(mission.id)) {
+    next.armory.push(...(mission.preMissionWeapons ?? []));
+    (next.attachments ??= []).push(...(mission.preMissionAttachments ?? []));
+    next.preMissionClaimed.push(mission.id);
+  }
   const replacements = replenish(next, chapter);
-  autoEquip(next.roster, next.armory);
+  autoEquip(next.roster, next.armory, next.attachments ?? []);
 
   const deployedIds = normalizeDeployIds(next, mission, next.pendingDeploy);
   const deployed = deployedIds
@@ -488,6 +604,7 @@ export function finishMission(
         rank: deployed.rank,
         stats: deployed.stats,
         weapon: deployed.weapon,
+        attachment: deployed.attachment,
         missionsSurvived: rosterUnit.missionsSurvived + 1,
       });
       continue;
@@ -550,6 +667,7 @@ export function finishMission(
           )
         : deployed.stats,
       weapon: deployed.weapon,
+      attachment: deployed.attachment,
       fatigue: deployed.fatigue,
       missionsSurvived: rosterUnit.missionsSurvived + 1,
       maxHp: 1,
@@ -571,9 +689,14 @@ export function finishMission(
     ...(won ? mission?.weaponRewards ?? [] : []),
   ];
   for (const weapon of weaponsGained) {
-    if (!next.armory.includes(weapon)) next.armory.push(weapon);
+    next.armory.push(weapon);
   }
-  autoEquip(roster, next.armory);
+  const attachmentsGained: AttachmentId[] = [
+    ...(finalState.pendingAttachments ?? []),
+    ...(won ? mission?.attachmentRewards ?? [] : []),
+  ];
+  (next.attachments ??= []).push(...attachmentsGained);
+  autoEquip(roster, next.armory, next.attachments);
 
   next.roster = roster;
   const merged = emptyInventory();
@@ -604,12 +727,21 @@ export function finishMission(
       .map((id) => next.roster.find((unit) => unit.id === id)?.name)
       .filter((name): name is string => Boolean(name)),
     weaponsGained,
+    attachmentsGained,
     rosterAfter: roster.length,
     veteransAfter: roster.filter((u) => veterancyLevel(u.exp) >= 3).length,
   };
 
   next.history.push(outcome);
   next.missionIndex += 1;
+  // M4 结束后、M5 开始前固定加入谭朝志炮兵；若之后炮兵永久减员则由孔庆三补位。
+  if (mission?.id === "m4-chosin" && !next.roster.some((unit) => unit.type === "artillery")) {
+    addArtilleryCompanion(next, "谭朝志");
+  } else if (next.missionIndex >= 5 && !next.roster.some((unit) => unit.type === "artillery")) {
+    addArtilleryCompanion(next, "孔庆三");
+  }
+  next.pendingDeploy = next.roster.map((unit) => unit.id);
+  outcome.rosterAfter = next.roster.length;
   if (next.missionIndex >= chapter.missions.length) next.status = "complete";
 
   return { campaign: next, outcome };
