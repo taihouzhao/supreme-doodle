@@ -863,7 +863,7 @@ export class View {
     return `<article class="org-card${selected ? " is-deployed" : ""}">
       <header class="org-card__head">
         <label class="org-card__deploy">
-          <input type="checkbox" data-action="toggle-deploy" data-value="${esc(unit.id)}" ${selected ? "checked" : ""} ${unit.keyUnit ? "disabled" : ""} />
+          <input type="checkbox" data-action="toggle-deploy" data-value="${esc(unit.id)}" aria-label="${esc(unit.commanderName)}出战" ${selected ? "checked" : ""} ${unit.keyUnit ? "disabled" : ""} />
           <span>${unit.keyUnit ? "主力" : selected ? "出战" : "待命"}</span>
         </label>
         <div class="org-card__who">
@@ -1036,7 +1036,7 @@ export class View {
         const tabs: { id: BriefTab; label: string; hint: string }[] = [
           { id: "staff", label: "参谋部", hint: "下一任务" },
           { id: "ordnance", label: "军械部", hint: "装备分配" },
-          { id: "org", label: "组织部", hint: "将领点数" },
+          { id: "org", label: "组织部", hint: "编制成长" },
         ];
         const panel =
           tab === "ordnance"
@@ -1056,14 +1056,14 @@ export class View {
             ${tabs
               .map(
                 (entry) =>
-                  `<button type="button" class="hq-tab${tab === entry.id ? " is-active" : ""}" data-action="brief-tab" data-value="${entry.id}" aria-pressed="${tab === entry.id}">
+                  `<button type="button" id="brief-tab-${entry.id}" class="hq-tab${tab === entry.id ? " is-active" : ""}" data-action="brief-tab" data-value="${entry.id}" aria-controls="hq-panel" aria-pressed="${tab === entry.id}">
                     <strong>${esc(entry.label)}</strong>
                     <small>${esc(entry.hint)}</small>
                   </button>`,
               )
               .join("")}
           </nav>
-          <div class="hq-panel" data-region="hq-panel">${panel}</div>
+          <div id="hq-panel" class="hq-panel" data-region="hq-panel" role="region" aria-labelledby="brief-tab-${tab}">${panel}</div>
           <footer class="hq-footer">
             <span class="hq-footer__deploy">出战 ${deployed.length} / ${cap}</span>
             <button class="btn btn--primary" data-action="begin-mission">进入战场</button>
