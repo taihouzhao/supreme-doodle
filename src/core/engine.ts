@@ -183,6 +183,7 @@ export function legalActions(state: GameState): Action[] {
     if (unit.faction === "player") {
       for (const item of ITEM_IDS) {
         if ((state.inventory[item] ?? 0) <= 0) continue;
+        if (unit.backpack && !unit.backpack.includes(item)) continue;
         const def = ITEMS[item];
         if (def.targeting === "self") {
           const canHeal = def.heal > 0 && unit.hp < unit.maxHp;

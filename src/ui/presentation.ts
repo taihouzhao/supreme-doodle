@@ -1,4 +1,4 @@
-import type { GameEvent, GameState, Vec2 } from "../core/types";
+import type { GameEvent, GameState, Vec2, WeaponEffectProfile } from "../core/types";
 
 export interface VisualFrame {
   busy: boolean;
@@ -14,7 +14,8 @@ export interface VisualFrame {
   promoteBurst: { unitId: string; text: string; alpha: number; scale: number } | null;
   impact: { x: number; y: number; text: string; alpha: number } | null;
   impactUnitId: string | null;
-  strikeLine: { fromId: string; toId: string; alpha: number } | null;
+  secondaryImpacts: { x: number; y: number; text: string; alpha: number; friendly: boolean }[];
+  strikeLine: { fromId: string; toId: string; alpha: number; profile?: WeaponEffectProfile } | null;
   trail: { x: number; y: number; alpha: number }[];
   flashUnitId: string | null;
 }
@@ -49,6 +50,9 @@ type AttackClip = {
   attackerFrom: Vec2;
   defenderFrom: Vec2;
   duration: number;
+  weapon: string;
+  effectProfile: WeaponEffectProfile;
+  secondaryHits: NonNullable<Extract<GameEvent, { type: "attacked" }>["secondaryHits"]>;
 };
 
 export type FxClip = MoveClip | AttackClip | PromoteClip;
@@ -93,6 +97,7 @@ function idleFrame(): VisualFrame {
     promoteBurst: null,
     impact: null,
     impactUnitId: null,
+    secondaryImpacts: [],
     strikeLine: null,
     trail: [],
     flashUnitId: null,
@@ -179,6 +184,9 @@ export function buildTimeline(prev: GameState, events: GameEvent[]): Timeline {
         attackerDies,
         attackerFrom: event.attackerFrom,
         defenderFrom: event.defenderFrom,
+        weapon: event.weapon ?? "",
+        effectProfile: event.effectProfile ?? "rifle",
+        secondaryHits: event.secondaryHits ?? [],
         duration,
       });
       index += 1;
@@ -379,6 +387,7 @@ export class Presentation {
     this.frame.routBurst = null;
     this.frame.impact = null;
     this.frame.impactUnitId = null;
+    this.frame.secondaryImpacts = [];
     this.frame.strikeLine = null;
     this.frame.flashUnitId = null;
 
@@ -401,6 +410,7 @@ export class Presentation {
     this.frame.strikeLine = null;
     this.frame.impact = null;
     this.frame.impactUnitId = null;
+    this.frame.secondaryImpacts = [];
     this.frame.flashUnitId = null;
     this.frame.routBurst = null;
     const pop = t < 0.25 ? t / 0.25 : 1;
@@ -433,6 +443,7 @@ export class Presentation {
     this.frame.promoteBurst = null;
     this.frame.trail = [];
     this.frame.flashUnitId = t >= beats.aimEnd && t < beats.flashEnd ? clip.attackerId : null;
+    this.frame.secondaryImpacts = [];
     this.frame.routBurst = null;
 
     const lingerAlpha = (done: boolean) => {
@@ -452,6 +463,7 @@ export class Presentation {
         fromId: clip.attackerId,
         toId: clip.defenderId,
         alpha: Math.min(rampIn, fade),
+        profile: clip.effectProfile,
       };
     } else if (hasCounter && t < beats.counterHoldEnd) {
       const local = (t - beats.mainHoldEnd) / Math.max(0.001, beats.counterHoldEnd - beats.mainHoldEnd);
@@ -459,6 +471,7 @@ export class Presentation {
         fromId: clip.defenderId,
         toId: clip.attackerId,
         alpha: local < 0.5 ? Math.min(1, local / 0.2) : Math.max(0, 1 - (local - 0.5) / 0.5),
+        profile: "rifle",
       };
     } else {
       this.frame.strikeLine = null;
@@ -502,6 +515,13 @@ export class Presentation {
         alpha: holdLocal < 0.7 ? 1 : Math.max(0, 1 - (holdLocal - 0.7) / 0.3),
       };
       this.frame.impactUnitId = clip.defenderId;
+      this.frame.secondaryImpacts = clip.secondaryHits.map((hit) => ({
+        x: hit.at.x,
+        y: hit.at.y,
+        text: `-${hit.damage}`,
+        alpha: this.frame.impact?.alpha ?? 1,
+        friendly: hit.friendly,
+      }));
       return;
     }
 
@@ -531,6 +551,7 @@ export class Presentation {
         alpha: holdLocal < 0.7 ? 1 : Math.max(0, 1 - (holdLocal - 0.7) / 0.3),
       };
       this.frame.impactUnitId = clip.attackerId;
+      this.frame.secondaryImpacts = [];
       return;
     }
 

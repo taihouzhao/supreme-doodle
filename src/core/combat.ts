@@ -3,7 +3,7 @@ import { ITEMS } from "../content/items";
 import { WEATHER_EFFECT } from "../content/terrain";
 import { MATCHUP, PROGRESS, UNIT_TYPES } from "../content/units";
 import { WEAPONS } from "../content/weapons";
-import { effectiveMaxHp, effectiveStats } from "./commander";
+import { effectiveMaxHp, effectiveStats, inventoryForUnit } from "./commander";
 import {
   adjacentAllies,
   attackRange,
@@ -30,7 +30,7 @@ function levelish(exp: number): number {
 }
 
 export function refreshMaxHp(unit: Unit, state?: GameState): void {
-  const next = effectiveMaxHp(unit, state?.inventory);
+  const next = effectiveMaxHp(unit, state ? inventoryForUnit(unit, state.inventory) : undefined);
   if (next !== unit.maxHp) {
     const ratio = unit.maxHp > 0 ? unit.hp / unit.maxHp : 1;
     unit.maxHp = next;
@@ -60,8 +60,8 @@ export function damageComponents(
   const attackerTile = tileAt(state, attacker.x, attacker.y);
   const defenderTile = tileAt(state, defender.x, defender.y);
   const distance = manhattan(attacker, defender);
-  const atkStats = effectiveStats(attacker, state.inventory);
-  const defStats = effectiveStats(defender, state.inventory);
+  const atkStats = effectiveStats(attacker, inventoryForUnit(attacker, state.inventory));
+  const defStats = effectiveStats(defender, inventoryForUnit(defender, state.inventory));
   const defWeapon = WEAPONS[defender.weapon];
 
   const primaryStat = attackerDef.indirect ? atkStats.intellect : atkStats.might;
@@ -223,7 +223,7 @@ export function itemDamage(item: keyof typeof ITEMS, target: Unit, user?: Unit, 
   if (def.antiArmorOnly && !UNIT_TYPES[target.type].vehicle) return 0;
   let damage = def.damage;
   if (user && state) {
-    const intellect = effectiveStats(user, state.inventory).intellect;
+    const intellect = effectiveStats(user, inventoryForUnit(user, state.inventory)).intellect;
     damage = Math.round(damage * (1 + Math.max(0, intellect - 40) * 0.005));
   }
   return damage;

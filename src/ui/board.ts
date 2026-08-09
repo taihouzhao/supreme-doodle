@@ -23,6 +23,8 @@ export interface BoardOverlay {
   attackTiles: Set<number>;
   /** 当前可点选的敌方目标格 */
   attackTargets: Set<number>;
+  /** 当前预览攻击会波及的次级格（含友伤格）。 */
+  attackImpactTiles: Set<number>;
   /** 后勤可补充的友军格 */
   resupplyTiles: Set<number>;
   /** 邻接但暂无需补给的友军格（仅提示） */
@@ -41,6 +43,7 @@ export const EMPTY_OVERLAY: BoardOverlay = {
   moveTiles: new Set(),
   attackTiles: new Set(),
   attackTargets: new Set(),
+  attackImpactTiles: new Set(),
   resupplyTiles: new Set(),
   resupplyIdleTiles: new Set(),
   itemTiles: new Set(),
@@ -442,6 +445,7 @@ export class Board {
     }
 
     this.drawTargetMarks(state, this.overlay.attackTargets);
+    this.drawImpactTargetMarks(state, this.overlay.attackImpactTiles);
     this.drawTargetMarks(state, this.overlay.resupplyTiles);
     this.drawTargetMarks(state, this.overlay.itemTiles);
 
@@ -450,6 +454,9 @@ export class Board {
     }
     if (visual?.impact && visual.impactUnitId) {
       this.drawImpactForUnit(state, visual);
+    }
+    if (visual?.secondaryImpacts.length) {
+      this.drawSecondaryImpacts(visual);
     }
     if (visual?.routBurst) {
       this.drawRoutBurst(state, visual);
@@ -512,11 +519,7 @@ export class Board {
       ctx.beginPath();
       ctx.arc(cx, cy, tile * 0.12, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "rgba(240, 248, 240, 0.95)";
-      ctx.font = `700 ${Math.round(tile * 0.14)}px "Noto Sans SC", sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("补", cx, cy);
+      this.drawImage(UI_ICON.fieldItem, cx - tile * 0.14, cy - tile * 0.14, tile * 0.28, tile * 0.28);
     }
     ctx.restore();
   }
@@ -792,6 +795,11 @@ export class Board {
           : "可能反击  无",
       );
       if (preview.rout !== "none") lines.push(preview.rout === "certain" ? "结果  确定击溃" : "结果  可能击溃");
+      for (const impact of preview.affected) {
+        const affected = state.units.find((unit) => unit.id === impact.unitId);
+        if (!affected) continue;
+        lines.push(`${affected.commanderName || affected.name}  −${impact.damage.min}～${impact.damage.max}${impact.friendly ? "（友伤）" : ""}`);
+      }
     } else if (this.overlay.resupplyTiles.has(index) && target.faction === selected.faction) {
       const preview = resupplyOutcome(state, selected, target);
       tone = "resupply";
@@ -1136,6 +1144,22 @@ export class Board {
     }
   }
 
+  private drawImpactTargetMarks(state: GameState, indices: Set<number>): void {
+    const { ctx, tile } = this;
+    for (const index of indices) {
+      const x = (index % state.width) * tile;
+      const y = Math.floor(index / state.width) * tile;
+      ctx.save();
+      ctx.fillStyle = "rgba(226, 170, 72, 0.22)";
+      ctx.fillRect(x + tile * 0.08, y + tile * 0.08, tile * 0.84, tile * 0.84);
+      ctx.strokeStyle = "rgba(244, 208, 119, 0.95)";
+      ctx.lineWidth = Math.max(2, tile * 0.045);
+      ctx.setLineDash([tile * 0.12, tile * 0.08]);
+      ctx.strokeRect(x + tile * 0.12, y + tile * 0.12, tile * 0.76, tile * 0.76);
+      ctx.restore();
+    }
+  }
+
   private unitDrawPos(unit: Unit): { cx: number; cy: number } {
     const { tile } = this;
     const visual = this.overlay.visual;
@@ -1180,6 +1204,23 @@ export class Board {
     ctx.strokeStyle = style.ring;
     ctx.lineWidth = Math.max(1.2, tile * 0.035);
     ctx.stroke();
+
+    if (unit.eliteTier === "boss") {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius + tile * 0.11, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(248, 205, 92, 0.98)";
+      ctx.lineWidth = Math.max(2.8, tile * 0.065);
+      ctx.shadowColor = "rgba(248, 205, 92, 0.48)";
+      ctx.shadowBlur = tile * 0.12;
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+    } else if (unit.eliteTier === "elite") {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius + tile * 0.08, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(224, 182, 90, 0.92)";
+      ctx.lineWidth = Math.max(1.8, tile * 0.04);
+      ctx.stroke();
+    }
 
     const iconSize = radius * 1.95;
     ctx.save();
@@ -1236,17 +1277,6 @@ export class Board {
     const ratio = Math.max(0, Math.min(1, hp / unit.maxHp));
     ctx.fillStyle = ratio > 0.55 ? "#5aa469" : ratio > 0.28 ? "#d9a326" : "#c8503c";
     ctx.fillRect(barX, barY, barWidth * ratio, barHeight);
-
-    const pips = Math.min(5, Math.max(1, Math.ceil(unit.level / 4)));
-    for (let i = 0; i < pips; i += 1) {
-      ctx.beginPath();
-      ctx.arc(cx - tile * 0.22 + i * tile * 0.16, cy - radius * 0.85, tile * 0.055, 0, Math.PI * 2);
-      ctx.fillStyle = unit.commanderKind === "story" ? "#9ec5e8" : "#f5d76e";
-      ctx.fill();
-      ctx.strokeStyle = "rgba(40, 32, 10, 0.7)";
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
 
     if (unit.keyUnit) {
       const star = tile * 0.3;
@@ -1370,11 +1400,21 @@ export class Board {
     const { ctx, tile } = this;
     ctx.save();
     ctx.globalAlpha = line.alpha;
-    ctx.strokeStyle = "#c8503c";
-    ctx.lineWidth = Math.max(2, tile * 0.06);
+    const profile = line.profile ?? "rifle";
+    const color = profile === "mg" ? "#f0bd59" : profile === "mortar" || profile === "artillery" ? "#d5d0ba" : profile === "rocket" ? "#f27d3d" : "#c8503c";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, tile * (profile === "mg" ? 0.08 : 0.06));
+    if (profile === "mg") ctx.setLineDash([tile * 0.16, tile * 0.08]);
     ctx.beginPath();
-    ctx.moveTo(a.cx, a.cy);
-    ctx.lineTo(b.cx, b.cy);
+    if (profile === "mortar" || profile === "artillery") {
+      const midX = (a.cx + b.cx) / 2;
+      const midY = Math.min(a.cy, b.cy) - tile * (profile === "artillery" ? 0.8 : 0.5);
+      ctx.moveTo(a.cx, a.cy);
+      ctx.quadraticCurveTo(midX, midY, b.cx, b.cy);
+    } else {
+      ctx.moveTo(a.cx, a.cy);
+      ctx.lineTo(b.cx, b.cy);
+    }
     ctx.stroke();
     ctx.restore();
   }
@@ -1399,6 +1439,29 @@ export class Board {
     ctx.fillStyle = "#ffd9a0";
     ctx.fillText(impact.text, cx, y);
     ctx.restore();
+  }
+
+  private drawSecondaryImpacts(visual: VisualFrame): void {
+    const { ctx, tile } = this;
+    for (const impact of visual.secondaryImpacts) {
+      const cx = impact.x * tile + tile / 2;
+      const cy = impact.y * tile + tile / 2;
+      ctx.save();
+      ctx.globalAlpha = impact.alpha;
+      ctx.beginPath();
+      ctx.arc(cx, cy, tile * 0.2, 0, Math.PI * 2);
+      ctx.fillStyle = impact.friendly ? "#d88972" : "#e6c067";
+      ctx.fill();
+      ctx.font = `700 ${Math.round(tile * 0.34)}px "Noto Sans SC", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(20, 20, 20, 0.75)";
+      ctx.strokeText(impact.text, cx, cy - tile * 0.38);
+      ctx.fillStyle = impact.friendly ? "#ffb19d" : "#ffe2a3";
+      ctx.fillText(impact.text, cx, cy - tile * 0.38);
+      ctx.restore();
+    }
   }
 
   /** 溃散：红色横幅 + 叉号，确保单位消失前有明确交代 */

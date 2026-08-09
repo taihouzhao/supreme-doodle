@@ -41,7 +41,7 @@ import type {
   Weather,
 } from "../core/types";
 import { buildAttackPreview, type AttackPreview } from "./combatPreview";
-import { describeEvent } from "./format";
+import { describeEvent, unitDisplayName } from "./format";
 import { buildTimeline, Presentation } from "./presentation";
 import {
   appendReplay,
@@ -455,7 +455,7 @@ export class Session {
       endTurnArmed: false,
       selectedUnitId: unit && unit.alive && !unit.hasActed ? unit.id : null,
       inspectedTile: unit ? { x: unit.x, y: unit.y } : this.state.inspectedTile,
-      notice: unit ? `${unit.name} 已撤回移动` : null,
+      notice: unit ? `${unitDisplayName(unit)} 已撤回移动` : null,
     });
   }
 
@@ -767,7 +767,7 @@ export class Session {
         if (manhattan(unit, occupant) === 1) {
           this.update({
             inspectedTile: { ...pos },
-            notice: `${occupant.name} 暂无需补给（生命与疲劳已满）`,
+            notice: `${unitDisplayName(occupant)} 暂无需补给（生命与疲劳已满）`,
             endTurnArmed: false,
           });
           return;
@@ -966,6 +966,13 @@ export class Session {
   availableItems(): { id: ItemId; count: number }[] {
     const battle = this.state.battle;
     if (!battle) return [];
+    const unit = this.selectedUnit;
+    if (unit?.backpack) {
+      return ITEM_IDS.map((id) => ({
+        id,
+        count: unit.backpack!.filter((item) => item === id).length,
+      })).filter((entry) => entry.count > 0);
+    }
     return ITEM_IDS.map((id) => ({ id, count: battle.inventory[id] ?? 0 })).filter(
       (entry) => entry.count > 0,
     );
@@ -1012,10 +1019,17 @@ function combatNotice(state: GameState, events: GameEvent[]): string | null {
     .filter((e): e is Extract<GameEvent, { type: "levelUp" }> => e.type === "levelUp")
     .map((e) => {
       const unit = state.units.find((u) => u.id === e.unitId);
-      return unit && unit.faction === "player" ? `${unit.name} 提升至战斗 Lv.${e.to}` : null;
+      return unit && unit.faction === "player" ? `${unitDisplayName(unit)} 提升至战斗 Lv.${e.to}` : null;
     })
     .filter((text): text is string => Boolean(text));
   if (promotions.length > 0) parts.push(promotions.join("、"));
+
+  const prisoners = events
+    .filter((e): e is Extract<GameEvent, { type: "prisonersCaptured" }> => e.type === "prisonersCaptured")
+    .reduce((sum, event) => sum + event.amount, 0);
+  if (prisoners > 0) parts.push(`收容俘虏 ${prisoners} 人，已补入编制`);
+  const loot = events.filter((e): e is Extract<GameEvent, { type: "lootSecured" }> => e.type === "lootSecured");
+  if (loot.length > 0) parts.push(`战利品 ${loot.length} 件，战后统一结算`);
 
   return parts.length > 0 ? parts.join(" · ") : null;
 }

@@ -1,8 +1,8 @@
 import { BALANCE } from "../content/balance";
 import { ITEMS } from "../content/items";
 import { LOGISTICS, UNIT_TYPES, VETERANCY } from "../content/units";
-import { WEAPONS } from "../content/weapons";
-import { effectiveStats, syncLevelFromExp } from "./commander";
+import { WEAPONS, secondaryDamageMultiplier, weaponPattern } from "../content/weapons";
+import { effectiveStats, inventoryForUnit, syncLevelFromExp } from "./commander";
 import { COUNTER_RATIO, canCounter, computeDamage, itemDamage, refreshMaxHp } from "./combat";
 import {
   canAttack,
@@ -13,11 +13,12 @@ import {
   pathCost,
   resupplyOutcome,
   resupplyTargets,
+  secondaryAttackTiles,
   unitAt,
 } from "./grid";
 import { isEvacTile } from "./mission";
 import { nextInt, nextRange } from "./rng";
-import type { GameEvent, GameState, ItemId, Unit, Vec2 } from "./types";
+import type { AttackImpact, GameEvent, GameState, ItemId, Unit, Vec2 } from "./types";
 
 const FATIGUE = BALANCE.fatigue;
 
@@ -73,12 +74,9 @@ export function routUnit(state: GameState, unit: Unit, events: GameEvent[]): voi
     const draw = nextInt(state.rng, 0, unit.dropOptions.length - 1);
     state.rng = draw.state;
     const item = unit.dropOptions[draw.value]!;
-    state.fieldItems.push({
-      id: `elite-${unit.id}`,
-      item,
-      x: unit.x,
-      y: unit.y,
-    });
+    state.pendingLoot ??= [];
+    state.pendingLoot.push(item);
+    events.push({ type: "lootSecured", unitId: unit.id, item, source: "elite" });
   }
 }
 
@@ -108,8 +106,10 @@ function settleTileEntry(state: GameState, unit: Unit, events: GameEvent[]): voi
   const picked = state.fieldItems[pickedIndex];
   if (picked) {
     state.fieldItems.splice(pickedIndex, 1);
-    state.inventory[picked.item] += 1;
+    state.pendingLoot ??= [];
+    state.pendingLoot.push(picked.item);
     events.push({ type: "itemPicked", unitId: unit.id, item: picked.item });
+    events.push({ type: "lootSecured", unitId: unit.id, item: picked.item, source: "field" });
   }
 
   const weaponIndex = state.fieldWeapons.findIndex((i) => i.x === x && i.y === y);
@@ -205,6 +205,8 @@ export function performAttack(
   const attackerFrom = { x: attacker.x, y: attacker.y };
   const defenderFrom = { x: defender.x, y: defender.y };
   const pendingPromotes: GameEvent[] = [];
+  const secondaryImpacts: AttackImpact[] = [];
+  const secondaryRouted: Unit[] = [];
 
   const main = computeDamage(state, attacker, defender, state.rng);
   state.rng = main.rng;
@@ -233,6 +235,33 @@ export function performAttack(
   const defenderRouted = defender.hp <= 0;
   const attackerRouted = attacker.hp <= 0;
 
+  for (const tile of secondaryAttackTiles(state, attacker, defender)) {
+    const victim = unitAt(state, tile.x, tile.y);
+    if (!victim || !victim.alive || victim.id === defender.id) continue;
+    const { pattern } = weaponPattern(attacker.weapon, attacker.type);
+    const multiplier = pattern.kind === "single" ? 0 : pattern.multiplier;
+    const friendlyMultiplier = secondaryDamageMultiplier(attacker.faction, victim.faction);
+    const secondaryDamage = Math.max(
+      1,
+      Math.round(main.damage * multiplier * friendlyMultiplier),
+    );
+    const hpFrom = victim.hp;
+    victim.hp = Math.max(0, victim.hp - secondaryDamage);
+    const routed = victim.hp <= 0;
+    secondaryImpacts.push({
+      unitId: victim.id,
+      at: { ...tile },
+      damage: secondaryDamage,
+      hpFrom,
+      hpTo: victim.hp,
+      routed,
+      friendly: victim.faction === attacker.faction,
+    });
+    if (victim.faction === "player") state.stats.damageTaken += secondaryDamage;
+    else if (attacker.faction === "player") state.stats.damageDealt += secondaryDamage;
+    if (routed) secondaryRouted.push(victim);
+  }
+
   // 先发 attacked（带本击血量/溃散），再发晋升与 routed，保证 FX 时间线：命中→掉血→溃散→收容
   events.push({
     type: "attacked",
@@ -249,6 +278,9 @@ export function performAttack(
     attackerRouted,
     attackerFrom,
     defenderFrom,
+    weapon: attacker.weapon,
+    effectProfile: weaponPattern(attacker.weapon, attacker.type).profile,
+    secondaryHits: secondaryImpacts.length > 0 ? secondaryImpacts : undefined,
   });
   for (const promote of pendingPromotes) events.push(promote);
 
@@ -260,6 +292,14 @@ export function performAttack(
   if (attackerRouted) {
     routUnit(state, attacker, events);
     grantExp(defender, VETERANCY.expPerRout, state, events);
+  }
+  for (const victim of secondaryRouted) {
+    if (!victim.alive) continue;
+    routUnit(state, victim, events);
+    if (victim.faction === "enemy") {
+      grantExp(attacker, VETERANCY.expPerRout, state, events);
+      capturePrisoners(state, attacker, victim, events);
+    }
   }
 
   addFatigue(attacker, FATIGUE.perAttack);
@@ -339,6 +379,10 @@ export function performItem(
   events: GameEvent[],
 ): boolean {
   const def = ITEMS[usage.item];
+  const backpack = unit.backpack;
+  const backpackIndex = backpack?.indexOf(usage.item) ?? -1;
+  // 有明确背包时，道具所有权必须落在当前单位；旧存档无 backpack 才回退共享库存。
+  if (backpack && backpackIndex < 0) return false;
   if ((state.inventory[usage.item] ?? 0) <= 0) return false;
 
   let heal = 0;
@@ -381,7 +425,7 @@ export function performItem(
     if (manhattan(unit, center) > def.range) return false;
     const tiles = def.splash ? [center, ...orthogonalNeighbours(center)] : [center];
     const intellectScale =
-      1 + Math.max(0, effectiveStats(unit, state.inventory).intellect - 40) * 0.005;
+      1 + Math.max(0, effectiveStats(unit, inventoryForUnit(unit, state.inventory)).intellect - 40) * 0.005;
     for (const tile of tiles) {
       const victim = unitAt(state, tile.x, tile.y);
       if (!victim || victim.faction === unit.faction) continue;
@@ -399,6 +443,7 @@ export function performItem(
   }
 
   state.inventory[usage.item] -= 1;
+  if (backpack && backpackIndex >= 0) backpack.splice(backpackIndex, 1);
   if (unit.faction === "player") state.stats.damageDealt += damage;
   unit.hasActed = true;
   unit.mpLeft = 0;

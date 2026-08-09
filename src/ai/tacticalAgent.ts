@@ -2,6 +2,7 @@ import { ITEMS } from "../content/items";
 import { UNIT_TYPES } from "../content/units";
 import { getMission } from "../content/missions";
 import { COUNTER_RATIO, estimateDamageFrom, itemDamage } from "../core/combat";
+import { inventoryForUnit } from "../core/commander";
 import {
   encirclementStatus,
   livingUnits,
@@ -146,8 +147,10 @@ interface Plan {
 
 function planItem(state: GameState, unit: Unit): Plan | null {
   const hpRatio = unit.hp / unit.maxHp;
+  const available = inventoryForUnit(unit, state.inventory);
+  const hasItem = (item: keyof typeof ITEMS): boolean => (available[item] ?? 0) > 0;
 
-  if ((state.inventory.at_charge ?? 0) > 0) {
+  if (hasItem("at_charge")) {
     const armour = livingUnits(state, "enemy").filter(
       (e) => UNIT_TYPES[e.type].vehicle && manhattan(unit, e) <= ITEMS.at_charge.range,
     );
@@ -170,7 +173,7 @@ function planItem(state: GameState, unit: Unit): Plan | null {
     }
   }
 
-  if ((state.inventory.arty_support ?? 0) > 0) {
+  if (hasItem("arty_support")) {
     let best: { tile: Vec2; hits: number } | null = null;
     for (const enemy of livingUnits(state, "enemy")) {
       if (manhattan(unit, enemy) > ITEMS.arty_support.range) continue;
@@ -189,7 +192,7 @@ function planItem(state: GameState, unit: Unit): Plan | null {
     }
   }
 
-  if ((state.inventory.medkit ?? 0) > 0 && hpRatio < 0.5 && unit.hp < unit.maxHp - 20) {
+  if (hasItem("medkit") && hpRatio < 0.5 && unit.hp < unit.maxHp - 20) {
     return {
       score: ITEMS.medkit.heal * 0.9,
       action: { kind: "useItem", unitId: unit.id, item: "medkit" },
@@ -449,10 +452,11 @@ export const tacticalAgent: Agent = {
       }
       if (onPost || posts.some((post) => manhattan(unit, post) <= 1)) {
         const hpRatio = unit.hp / unit.maxHp;
-        if ((state.inventory.medkit ?? 0) > 0 && hpRatio < 0.6 && unit.hp < unit.maxHp - 15) {
+        const available = inventoryForUnit(unit, state.inventory);
+        if ((available.medkit ?? 0) > 0 && hpRatio < 0.6 && unit.hp < unit.maxHp - 15) {
           return { kind: "useItem", unitId: unit.id, item: "medkit" };
         }
-        if ((state.inventory.bandage ?? 0) > 0 && hpRatio < 0.75 && unit.hp < unit.maxHp - 8) {
+        if ((available.bandage ?? 0) > 0 && hpRatio < 0.75 && unit.hp < unit.maxHp - 8) {
           return { kind: "useItem", unitId: unit.id, item: "bandage" };
         }
         const options = attackOptions(state, unit).filter((option) => {

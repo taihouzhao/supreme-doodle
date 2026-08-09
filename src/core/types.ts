@@ -55,6 +55,25 @@ export type MissionStatus = "playing" | "won" | "lost";
 /** companion=伴随成长；story=剧情客串（不跨关继承）；enemy=敌军合成 */
 export type CommanderKind = "companion" | "story" | "enemy";
 
+/** 地图头像身份层级；boss 使用金色外环，普通精锐使用金色角标。 */
+export type EliteTier = "boss" | "elite" | null;
+
+export type WeaponEffectProfile =
+  | "rifle"
+  | "smg"
+  | "mg"
+  | "mortar"
+  | "artillery"
+  | "rocket"
+  | "tank"
+  | "support";
+
+export type AttackPattern =
+  | { kind: "single" }
+  | { kind: "line"; depth: number; multiplier: number }
+  | { kind: "cross"; radius: number; multiplier: number }
+  | { kind: "radius"; radius: number; multiplier: number };
+
 /** 普通战斗单位的历史阵营肖像池；具体人物由 portraitIndex 稳定区分。 */
 export type UnitPortraitGroup = "pva" | "rok" | "us" | "uk" | "fr";
 
@@ -143,6 +162,9 @@ export interface Unit {
   weapon: WeaponId;
   commanderKind: CommanderKind;
   commanderName: string;
+  eliteTier?: EliteTier;
+  /** 本单位可直接使用的战场物品；旧存档缺省时回退到共享库存。 */
+  backpack?: ItemId[];
   /** 地图与详情卡共用的稳定人物身份；旧存档缺省时由 UI 做兼容回退。 */
   portraitGroup?: UnitPortraitGroup;
   portraitIndex?: number;
@@ -253,6 +275,8 @@ export interface GameState {
   fieldWeapons: FieldWeapon[];
   /** 本关拾取、通关后并入战役军械库 */
   pendingWeapons: WeaponId[];
+  /** 本关已控制、战后统一整理的物品。 */
+  pendingLoot?: ItemId[];
   evacZone: Vec2[];
   /** 补给点：站上可恢复弹药窗口（与后勤补给共用 supplyRestoredUntil） */
   supplyPoints: Vec2[];
@@ -339,12 +363,16 @@ export type GameEvent =
       /** 开火瞬间攻方格子；击溃推进发生在本事件之后 */
       attackerFrom: Vec2;
       defenderFrom: Vec2;
+      weapon?: WeaponId;
+      effectProfile?: WeaponEffectProfile;
+      secondaryHits?: AttackImpact[];
     }
   | { type: "routed"; unitId: string; faction: Faction }
   | { type: "levelUp"; unitId: string; from: number; to: number; rank: string }
   | { type: "captured"; objectiveId: string; by: Faction }
   | { type: "itemUsed"; unitId: string; item: ItemId; targetIds: string[]; damage: number; heal: number }
   | { type: "itemPicked"; unitId: string; item: ItemId }
+  | { type: "lootSecured"; unitId: string; item: ItemId; source: "field" | "elite" }
   | { type: "weaponPicked"; unitId: string; weapon: WeaponId }
   | { type: "reinforced"; unitIds: string[] }
   | { type: "healed"; unitId: string; amount: number }
@@ -379,4 +407,14 @@ export type GameEvent =
 export interface ApplyResult {
   state: GameState;
   events: GameEvent[];
+}
+
+export interface AttackImpact {
+  unitId: string;
+  at: Vec2;
+  damage: number;
+  hpFrom: number;
+  hpTo: number;
+  routed: boolean;
+  friendly: boolean;
 }

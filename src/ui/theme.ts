@@ -41,7 +41,8 @@ export const HIGHLIGHT = {
   /** 邻接但暂无需补给的友军：淡青提示「点得到但无效」 */
   resupplyIdle: "rgba(46, 140, 110, 0.14)",
   resupplyIdleEdge: "rgba(20, 90, 68, 0.45)",
-  selected: "#f5d76e",
+  /** 选中使用冷白，保留金色只给 Boss 身份。 */
+  selected: "rgba(235, 243, 236, 0.82)",
   objectivePlayer: "#2f6f5e",
   objectiveEnemy: "#a8443a",
   objectiveNeutral: "#6b6355",

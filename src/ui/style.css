@@ -761,6 +761,19 @@ body {
   margin-top: 0.5rem;
 }
 
+.slots__capacity {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-soft);
+  font-size: 0.66rem;
+  letter-spacing: 0.02em;
+}
+
+.slots__capacity b {
+  color: var(--ink);
+}
+
 .slot {
   position: relative;
   aspect-ratio: 1;
@@ -886,6 +899,41 @@ body {
 .attack-preview__head span {
   color: var(--enemy);
   font-weight: 700;
+}
+
+.attack-preview__pattern {
+  margin: 0.32rem 0;
+  color: var(--ink-soft);
+  font-size: 0.64rem;
+}
+
+.attack-preview__affected {
+  display: grid;
+  gap: 0.18rem;
+  margin: 0.35rem 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.62rem;
+}
+
+.attack-preview__affected li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.28rem;
+  border-radius: 4px;
+  background: rgba(218, 183, 91, 0.12);
+}
+
+.attack-preview__affected li.is-friendly {
+  background: rgba(190, 91, 72, 0.14);
+}
+
+.attack-preview__affected em {
+  color: var(--enemy);
+  font-style: normal;
+  font-size: 0.56rem;
 }
 
 .attack-preview__numbers {
@@ -2192,6 +2240,10 @@ body {
   font-size: 0.78rem;
   line-height: 1.45;
   color: var(--ink-soft);
+}
+
+.result-detail--warning {
+  color: var(--enemy);
 }
 
 button:focus-visible,

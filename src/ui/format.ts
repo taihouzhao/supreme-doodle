@@ -10,7 +10,12 @@ export function factionLabel(faction: "player" | "enemy"): string {
 export function unitLabel(state: GameState, unitId: string): string {
   const unit = state.units.find((u) => u.id === unitId);
   if (!unit) return unitId;
-  return `${factionLabel(unit.faction)}·${unit.name}`;
+  return `${factionLabel(unit.faction)}·${unitDisplayName(unit)}`;
+}
+
+/** 用户决策面统一显示将领名；编制番号保留在 duty/兵种副标题中。 */
+export function unitDisplayName(unit: Pick<Unit, "name" | "commanderName">): string {
+  return unit.commanderName?.trim() || unit.name;
 }
 
 export function unitTypeName(unit: Unit): string {
@@ -84,7 +89,9 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
       return `抵达${event.placeName}：战地注记已解锁${hint}`;
     }
     case "itemPicked":
-      return `${unitLabel(state, event.unitId)} 拾取了${ITEMS[event.item].name}`;
+      return `${unitLabel(state, event.unitId)} 控制了${ITEMS[event.item].name}，战后结算`;
+    case "lootSecured":
+      return `${unitLabel(state, event.unitId)} 缴获${ITEMS[event.item].name}（${event.source === "elite" ? "精英掉落" : "地图物资"}）`;
     case "weaponPicked":
       return `${unitLabel(state, event.unitId)} 缴获了${WEAPONS[event.weapon].name}`;
     case "reinforced":

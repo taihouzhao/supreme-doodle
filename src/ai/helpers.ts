@@ -12,6 +12,7 @@ import {
   unitAt,
 } from "../core/grid";
 import { movementBudget } from "../core/mission";
+import { inventoryForUnit } from "../core/commander";
 import type { ReachableTile } from "../core/grid";
 import type { GameState, Unit, Vec2 } from "../core/types";
 
@@ -127,7 +128,7 @@ export function routeCost(
   to: Vec2,
 ): number | null {
   const key = (x: number, y: number) => y * state.width + x;
-  const fullTurnBudget = movementBudget(unit, state.weather, state.inventory);
+  const fullTurnBudget = movementBudget(unit, state.weather, inventoryForUnit(unit, state.inventory));
   const best = new Map<number, number>([[key(from.x, from.y), 0]]);
   const frontier: Array<{ x: number; y: number; cost: number }> = [
     { x: from.x, y: from.y, cost: 0 },

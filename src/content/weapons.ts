@@ -1,4 +1,11 @@
-import type { CommanderStats, UnitTypeId, WeaponId } from "../core/types";
+import type {
+  AttackPattern,
+  CommanderStats,
+  Faction,
+  UnitTypeId,
+  WeaponEffectProfile,
+  WeaponId,
+} from "../core/types";
 
 export type { WeaponId };
 
@@ -25,6 +32,9 @@ export interface WeaponDef {
   /** 军械评分，用于自动换装 */
   score: number;
   era: "early" | "late" | "enemy";
+  /** 只影响表现与多目标范围，不改变既有基础伤害公式。 */
+  effectProfile?: WeaponEffectProfile;
+  pattern?: AttackPattern;
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
@@ -340,6 +350,45 @@ export const WEAPON_HISTORY: Record<WeaponId, WeaponHistory> = {
 };
 
 export const WEAPON_IDS = Object.keys(WEAPONS) as WeaponId[];
+
+/** 武器物理表现与命中形状的单一来源，旧内容未填写时按兵种兼容回退。 */
+export function weaponPattern(weapon: WeaponId, type: UnitTypeId): {
+  profile: WeaponEffectProfile;
+  pattern: AttackPattern;
+} {
+  const def = WEAPONS[weapon];
+  if (def.pattern && def.effectProfile) return { profile: def.effectProfile, pattern: def.pattern };
+  if (weapon === "ppsh50" || weapon === "m1_carbine") {
+    return { profile: "smg", pattern: { kind: "single" } };
+  }
+  if (type === "mg") {
+    return { profile: "mg", pattern: { kind: "line", depth: 1, multiplier: 0.3 } };
+  }
+  if (type === "mortar") {
+    return { profile: "mortar", pattern: { kind: "cross", radius: 1, multiplier: 0.16 } };
+  }
+  if (type === "artillery") {
+    return { profile: "artillery", pattern: { kind: "radius", radius: 1, multiplier: 0.2 } };
+  }
+  if (weapon === "bazooka") {
+    return { profile: "rocket", pattern: { kind: "cross", radius: 1, multiplier: 0.15 } };
+  }
+  if (type === "tank") {
+    return { profile: "tank", pattern: { kind: "cross", radius: 1, multiplier: 0.15 } };
+  }
+  if (type === "logistics") {
+    return { profile: "support", pattern: { kind: "single" } };
+  }
+  return { profile: "rifle", pattern: { kind: "single" } };
+}
+
+/** 多格攻击的阵营倍率：玩家友伤按需求保留 50%；敌军友伤收敛到 15%，
+ * 敌军对玩家的溅射则保留一半主目标伤害，避免新增 AOE 让守点关变成纯随机减员。 */
+export function secondaryDamageMultiplier(attacker: Faction, victim: Faction): number {
+  const friendly = attacker === victim ? (attacker === "enemy" ? 0.15 : 0.5) : 1;
+  const enemySpread = attacker === "enemy" && victim !== attacker ? 0.5 : 1;
+  return friendly * enemySpread;
+}
 
 export function defaultWeaponFor(type: UnitTypeId, era: "early" | "late" | "enemy"): WeaponId {
   const pool = WEAPON_IDS.filter((id) => {

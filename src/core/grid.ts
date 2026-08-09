@@ -1,7 +1,7 @@
 import { TERRAIN } from "../content/terrain";
 import { BALANCE } from "../content/balance";
 import { LOGISTICS, UNIT_TYPES } from "../content/units";
-import { WEAPONS } from "../content/weapons";
+import { WEAPONS, weaponPattern } from "../content/weapons";
 import type { GameState, TerrainDef, Unit, Vec2 } from "./types";
 
 export function inBounds(state: GameState, x: number, y: number): boolean {
@@ -279,6 +279,36 @@ export function canAttack(state: GameState, attacker: Unit, defender: Unit): boo
   if (max < min) return false;
   const distance = manhattan(attacker, defender);
   return distance >= min && distance <= max;
+}
+
+/** 返回主目标之外的真实受影响格；边界外格子会被裁剪。 */
+export function secondaryAttackTiles(state: GameState, attacker: Unit, defender: Unit): Vec2[] {
+  const { pattern } = weaponPattern(attacker.weapon, attacker.type);
+  if (pattern.kind === "single") return [];
+  const tiles: Vec2[] = [];
+  const add = (x: number, y: number) => {
+    if (!inBounds(state, x, y)) return;
+    if (x === defender.x && y === defender.y) return;
+    if (!tiles.some((tile) => tile.x === x && tile.y === y)) tiles.push({ x, y });
+  };
+  if (pattern.kind === "line") {
+    const stepX = Math.sign(defender.x - attacker.x);
+    const stepY = Math.sign(defender.y - attacker.y);
+    for (let i = 1; i <= pattern.depth; i += 1) add(defender.x + stepX * i, defender.y + stepY * i);
+  } else if (pattern.kind === "cross") {
+    for (let y = defender.y - pattern.radius; y <= defender.y + pattern.radius; y += 1) {
+      for (let x = defender.x - pattern.radius; x <= defender.x + pattern.radius; x += 1) {
+        if (Math.abs(x - defender.x) + Math.abs(y - defender.y) <= pattern.radius) add(x, y);
+      }
+    }
+  } else if (pattern.kind === "radius") {
+    for (let y = defender.y - pattern.radius; y <= defender.y + pattern.radius; y += 1) {
+      for (let x = defender.x - pattern.radius; x <= defender.x + pattern.radius; x += 1) {
+        if (Math.max(Math.abs(x - defender.x), Math.abs(y - defender.y)) <= pattern.radius) add(x, y);
+      }
+    }
+  }
+  return tiles;
 }
 
 /** 后勤正交相邻的存活友军（含已满员，供 UI 提示） */

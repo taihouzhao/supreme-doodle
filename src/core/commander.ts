@@ -1,4 +1,4 @@
-import { ITEM_PASSIVES } from "../content/items";
+import { ITEM_IDS, ITEM_PASSIVES } from "../content/items";
 import {
   BASE_STATS,
   GROWTH_WEIGHTS,
@@ -37,6 +37,14 @@ export function effectiveStats(unit: Unit, inventory?: Record<ItemId, number>): 
     }
   }
   return stats;
+}
+
+/** 已有背包时只读取该单位携带的被动；旧状态无背包则回退共享库存。 */
+export function inventoryForUnit(unit: Unit, shared?: Record<ItemId, number>): Record<ItemId, number> {
+  if (!unit.backpack) return shared ?? ({} as Record<ItemId, number>);
+  const result = {} as Record<ItemId, number>;
+  for (const item of ITEM_IDS) result[item] = unit.backpack.filter((entry) => entry === item).length;
+  return result;
 }
 
 export function effectiveMaxHp(

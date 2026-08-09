@@ -30,12 +30,35 @@ export interface MissionOutcome {
   replacements: string[];
   replacementNames: string[];
   weaponsGained: WeaponId[];
+  itemsGained?: ItemId[];
+  itemsDiscarded?: ItemId[];
   rosterAfter: number;
   veteransAfter: number;
   landmarksDiscovered: string[];
 }
 
 export type ItemLoadout = Partial<Record<ItemId, number>>;
+
+export const UNIT_BACKPACK_CAP = 3;
+export const WAREHOUSE_CAP = 6;
+
+function inventoryItems(inventory: Record<ItemId, number>): ItemId[] {
+  const items: ItemId[] = [];
+  for (const item of ITEM_IDS) {
+    for (let i = 0; i < Math.max(0, Math.floor(inventory[item] ?? 0)); i += 1) items.push(item);
+  }
+  return items;
+}
+
+function inventoryFromItems(items: ItemId[]): Record<ItemId, number> {
+  const result = emptyInventory();
+  for (const item of items) result[item] += 1;
+  return result;
+}
+
+function normalizeBackpack(items: ItemId[] | undefined): ItemId[] {
+  return (items ?? []).filter((item) => ITEM_IDS.includes(item)).slice(0, UNIT_BACKPACK_CAP);
+}
 
 export interface CampaignState {
   chapterId: string;
@@ -52,6 +75,8 @@ export interface CampaignState {
   pendingDeploy?: string[];
   /** 出击前为各单位分配的携行物资（按 rosterId）；空则整库带入 */
   pendingLoadout?: Record<string, ItemLoadout>;
+  /** 旧存档仍使用 inventory 字典；该字段用于明确显示仓库语义。 */
+  warehouse?: ItemId[];
 }
 
 export interface PersonnelTransferBounds {
@@ -160,6 +185,7 @@ function rosterFromSpec(
     baseStats,
     stats,
     weapon,
+    backpack: [],
   };
   draft.maxHp = effectiveMaxHp(draft);
   draft.hp = draft.maxHp;
@@ -185,6 +211,7 @@ export function createCampaign(chapterId: string, seed: number): CampaignState {
     status: "running",
     pendingDeploy: roster.map((unit) => unit.id),
     pendingLoadout: {},
+    warehouse: inventoryItems({ ...emptyInventory(), ...chapter.startingInventory }),
   };
 }
 
@@ -425,6 +452,73 @@ export interface MissionStart {
   replacements: string[];
 }
 
+interface PreparedMissionInventory {
+  battle: Record<ItemId, number>;
+  remaining: Record<ItemId, number>;
+  loadout: Record<string, ItemLoadout>;
+  backpacks: Record<string, ItemId[]>;
+}
+
+/** 将仓库物资装入本关出战单位的 3 格背包；不改变旧 inventory 字典的公开形状。 */
+function prepareMissionInventory(
+  campaign: CampaignState,
+  deployedIds: string[],
+): PreparedMissionInventory {
+  const warehouse = inventoryItems({ ...emptyInventory(), ...campaign.inventory });
+  const remaining = [...warehouse];
+  const pending = campaign.pendingLoadout ?? {};
+  const hasManual = Object.values(pending).some((bag) =>
+    ITEM_IDS.some((id) => (bag[id] ?? 0) > 0),
+  );
+  const backpacks: Record<string, ItemId[]> = {};
+  const loadout: Record<string, ItemLoadout> = {};
+
+  const take = (item: ItemId): boolean => {
+    const index = remaining.indexOf(item);
+    if (index < 0) return false;
+    remaining.splice(index, 1);
+    return true;
+  };
+
+  for (const id of deployedIds) {
+    const unit = campaign.roster.find((entry) => entry.id === id);
+    if (!unit) continue;
+    const requested: ItemId[] = [];
+    const manual = pending[id];
+    if (hasManual && manual) {
+      for (const item of ITEM_IDS) {
+        for (let i = 0; i < Math.max(0, Math.floor(manual[item] ?? 0)); i += 1) {
+          requested.push(item);
+        }
+      }
+    } else {
+      requested.push(...normalizeBackpack(unit.backpack));
+    }
+    const bag: ItemId[] = [];
+    for (const item of requested) {
+      if (bag.length >= UNIT_BACKPACK_CAP || !take(item)) continue;
+      bag.push(item);
+    }
+    if (!hasManual) {
+      for (const item of ITEM_IDS) {
+        while (bag.length < UNIT_BACKPACK_CAP && take(item)) bag.push(item);
+        if (bag.length >= UNIT_BACKPACK_CAP) break;
+      }
+    }
+    backpacks[id] = bag;
+    const counts = inventoryFromItems(bag);
+    if (Object.keys(counts).some((item) => counts[item as ItemId] > 0)) loadout[id] = counts;
+  }
+
+  const battleItems = deployedIds.flatMap((id) => backpacks[id] ?? []);
+  return {
+    battle: inventoryFromItems(battleItems),
+    remaining: inventoryFromItems(remaining),
+    loadout,
+    backpacks,
+  };
+}
+
 export function startMission(campaign: CampaignState): MissionStart {
   const chapter = chapterOf(campaign.chapterId);
   const mission = currentMission(campaign);
@@ -435,20 +529,22 @@ export function startMission(campaign: CampaignState): MissionStart {
   autoEquip(next.roster, next.armory);
 
   const deployedIds = normalizeDeployIds(next, mission, next.pendingDeploy);
-  const deployed = deployedIds
-    .map((id) => next.roster.find((unit) => unit.id === id)!)
-    .filter(Boolean);
-
-  const { battle, remaining, loadout } = resolveMissionInventory(next, deployedIds);
-  next.inventory = remaining;
+  const prepared = prepareMissionInventory(next, deployedIds);
+  next.inventory = prepared.remaining;
+  next.warehouse = inventoryItems(prepared.remaining);
+  next.roster = next.roster.map((unit) =>
+    prepared.backpacks[unit.id] ? { ...unit, backpack: prepared.backpacks[unit.id] } : unit,
+  );
   next.pendingDeploy = deployedIds;
-  next.pendingLoadout = loadout;
+  next.pendingLoadout = prepared.loadout;
 
   const state = createMissionState({
     mission,
     seed: deriveSeed(next.seed, mission.id),
-    roster: deployed,
-    inventory: battle,
+    roster: deployedIds
+      .map((id) => next.roster.find((unit) => unit.id === id)!)
+      .filter(Boolean),
+    inventory: prepared.battle,
   });
 
   return { campaign: next, state, mission, replacements };
@@ -489,6 +585,7 @@ export function finishMission(
         rank: deployed.rank,
         stats: deployed.stats,
         weapon: deployed.weapon,
+        backpack: normalizeBackpack(deployed.backpack),
         missionsSurvived: rosterUnit.missionsSurvived + 1,
       });
       continue;
@@ -514,6 +611,7 @@ export function finishMission(
             )
           : deployed.stats,
         weapon: deployed.weapon,
+        backpack: normalizeBackpack(deployed.backpack),
         fatigue: deployed.fatigue,
         missionsSurvived: rosterUnit.missionsSurvived + 1,
         maxHp: 1,
@@ -551,6 +649,7 @@ export function finishMission(
           )
         : deployed.stats,
       weapon: deployed.weapon,
+      backpack: normalizeBackpack(deployed.backpack),
       fatigue: deployed.fatigue,
       missionsSurvived: rosterUnit.missionsSurvived + 1,
       maxHp: 1,
@@ -577,14 +676,16 @@ export function finishMission(
   autoEquip(roster, next.armory);
 
   next.roster = roster;
-  const merged = emptyInventory();
-  for (const itemId of ITEM_IDS) {
-    merged[itemId] = (next.inventory[itemId] ?? 0) + (finalState.inventory[itemId] ?? 0);
-  }
-  next.inventory = merged;
+  const warehouseItems = inventoryItems(next.inventory);
+  warehouseItems.push(...inventoryItems(finalState.inventory));
+  warehouseItems.push(...(finalState.pendingLoot ?? []));
   for (const [item, amount] of Object.entries(chapter.resupply)) {
-    next.inventory[item as ItemId] = (next.inventory[item as ItemId] ?? 0) + (amount ?? 0);
+    for (let i = 0; i < (amount ?? 0); i += 1) warehouseItems.push(item as ItemId);
   }
+  const retainedWarehouse = warehouseItems.slice(0, WAREHOUSE_CAP);
+  const discardedWarehouse = warehouseItems.slice(WAREHOUSE_CAP);
+  next.inventory = inventoryFromItems(retainedWarehouse);
+  next.warehouse = retainedWarehouse;
   next.pendingDeploy = roster.map((unit) => unit.id);
   next.pendingLoadout = {};
 
@@ -605,6 +706,8 @@ export function finishMission(
       .map((id) => next.roster.find((unit) => unit.id === id)?.name)
       .filter((name): name is string => Boolean(name)),
     weaponsGained,
+    itemsGained: finalState.pendingLoot ?? [],
+    itemsDiscarded: discardedWarehouse,
     rosterAfter: roster.length,
     veteransAfter: roster.filter((u) => veterancyLevel(u.exp) >= 3).length,
     landmarksDiscovered: finalState.places

@@ -6,7 +6,7 @@ import { PROGRESS, levelFromExp } from "../content/progress";
 import { LOGISTICS, UNIT_TYPES } from "../content/units";
 import { WEAPONS, WEAPON_HISTORY } from "../content/weapons";
 import { equippableWeapons } from "../core/campaign";
-import { effectiveStats } from "../core/commander";
+import { effectiveStats, inventoryForUnit } from "../core/commander";
 import { attackRange, livingUnits, unitAt } from "../core/grid";
 import { isEvacTile, movementBudget, type RosterUnit } from "../core/mission";
 import type { GameState, ItemId, Unit, WeaponId, Weather } from "../core/types";
@@ -20,7 +20,7 @@ import {
   unitPortrait,
 } from "./assets";
 import { Board, terrainName } from "./board";
-import { breakdownFactors } from "./format";
+import { breakdownFactors, unitDisplayName } from "./format";
 import { briefVictoryLines, objectiveLines } from "./objectives";
 import type { BriefTab, Session, SessionState } from "./session";
 import { downloadReplay, loadReplays } from "./storage";
@@ -77,7 +77,7 @@ interface StatCell {
 function combatSummary(battle: GameState, unit: Unit): StatCell[] {
   const def = UNIT_TYPES[unit.type];
   const weapon = WEAPONS[unit.weapon];
-  const stats = effectiveStats(unit, battle.inventory);
+  const stats = effectiveStats(unit, inventoryForUnit(unit, battle.inventory));
   const range = attackRange(battle, unit);
   const terrain = TERRAIN[battle.tiles[unit.y * battle.width + unit.x]!];
 
@@ -103,7 +103,7 @@ function combatSummary(battle: GameState, unit: Unit): StatCell[] {
     { label: "射程", value: `${range.min}–${range.max}`, hint: "含地形与武器修正" },
     {
       label: "移动",
-      value: `${unit.mpLeft}/${movementBudget(unit, battle.weather)}`,
+      value: `${unit.mpLeft}/${movementBudget(unit, battle.weather, inventoryForUnit(unit, battle.inventory))}`,
       hint: "剩余移动力 / 本回合上限（受疲劳与天气影响）",
     },
   ];
@@ -394,6 +394,12 @@ export class View {
         moveTiles: this.session.moveTiles(),
         attackTiles: this.session.attackTiles(),
         attackTargets: this.session.attackTargets(),
+        attackImpactTiles: new Set(
+          (this.session.attackPreview()?.affected ?? []).map((impact) => {
+            const unit = battle.units.find((candidate) => candidate.id === impact.unitId);
+            return unit ? unit.y * battle.width + unit.x : -1;
+          }).filter((index) => index >= 0),
+        ),
         resupplyTiles: this.session.resupplyTargets(),
         resupplyIdleTiles: this.session.resupplyIdleTiles(),
         itemTiles: this.session.itemTiles(),
@@ -509,16 +515,19 @@ export class View {
     const objective = battle.objectives.find((o) => o.x === x && o.y === y);
     const place = battle.places.find((entry) => entry.x === x && entry.y === y);
     const fieldItem = battle.fieldItems.find((i) => i.x === x && i.y === y);
+    const supplyPoint = battle.supplyPoints.some((point) => point.x === x && point.y === y);
     const evac = isEvacTile(battle, x, y);
 
     const title = occupant
-      ? occupant.name
+      ? unitDisplayName(occupant)
       : place
         ? place.name
         : objective
         ? objective.name
-        : evac
-          ? "撤离带"
+          : evac
+            ? "撤离带"
+            : supplyPoint
+              ? "补给点"
           : terrain.name;
 
     const titleIcon = occupant
@@ -529,10 +538,12 @@ export class View {
           : UI_ICON.objPending
         : evac
           ? UI_ICON.evac
+          : supplyPoint
+            ? UI_ICON.fieldItem
           : TERRAIN_ICON[terrainId];
 
     const extras = [
-      fieldItem ? `补给${ITEMS[fieldItem.item].name}` : "",
+      fieldItem ? `战利品${ITEMS[fieldItem.item].name}（战后结算）` : "",
       objective
         ? objective.owner === "player"
           ? "己方控制"
@@ -540,6 +551,7 @@ export class View {
             ? "敌方控制"
             : "中立"
         : "",
+      supplyPoint ? "站上后恢复弹药窗口" : "",
     ]
       .filter(Boolean)
       .map((t) => ` · ${t}`)
@@ -586,18 +598,24 @@ export class View {
     const combat = combatSummary(battle, unit);
     const slots = !isMine
       ? ""
-      : `<div class="slots" role="group" aria-label="随行物资">
+      : `<div class="slots" role="group" aria-label="${unit.backpack ? `随行物资 ${unit.backpack.length}/3` : "随行物资"}">
+          ${unit.backpack ? `<div class="slots__capacity">随行物资 <b>${unit.backpack.length}/3</b></div>` : ""}
           ${renderItemSlots(items, state.pendingItem, locked || unit.hasActed)}
         </div>`;
 
     const attackPreview = previewForUnit && previewTarget
       ? `<section class="attack-preview" aria-label="攻击预测">
-          <div class="attack-preview__head"><strong>攻击预测 · ${esc(previewTarget.name)}</strong><span>${previewForUnit.rout === "certain" ? "确定击溃" : previewForUnit.rout === "possible" ? "可能击溃" : "无法击溃"}</span></div>
+          <div class="attack-preview__head"><strong>攻击预测 · ${esc(unitDisplayName(previewTarget))}</strong><span>${previewForUnit.rout === "certain" ? "确定击溃" : previewForUnit.rout === "possible" ? "可能击溃" : "无法击溃"}</span></div>
+          ${previewForUnit.affected.length > 0 ? `<p class="attack-preview__pattern">${previewForUnit.effectProfile === "mg" ? "机枪火力走廊" : previewForUnit.effectProfile === "mortar" ? "迫击炮溅射" : previewForUnit.effectProfile === "artillery" ? "炮击范围" : previewForUnit.effectProfile === "rocket" ? "爆炸范围" : "多目标攻击"} · 已标记 ${previewForUnit.affected.length} 个次级格</p>` : ""}
           <div class="attack-preview__numbers">
             <span>预计伤害 <b>${previewForUnit.damage.min}–${previewForUnit.damage.max}</b><small>中值 ${previewForUnit.damage.expected}</small></span>
             <span>目标剩余 <b>${previewForUnit.defenderHpAfter.min}–${previewForUnit.defenderHpAfter.max}</b><small>当前 ${previewTarget.hp}</small></span>
             <span>预计反击 <b>${previewForUnit.counter ? `${previewForUnit.counter.min}–${previewForUnit.counter.max}` : "无"}</b><small>${previewForUnit.counterConditional ? "若未被击溃" : previewForUnit.counter ? "射程可及" : "无法反击"}</small></span>
           </div>
+          ${previewForUnit.affected.length > 0 ? `<ul class="attack-preview__affected">${previewForUnit.affected.map((impact) => {
+            const affectedUnit = battle.units.find((candidate) => candidate.id === impact.unitId);
+            return `<li class="${impact.friendly ? "is-friendly" : ""}"><span>${esc(unitDisplayName(affectedUnit ?? { name: impact.unitId, commanderName: impact.unitId }))}</span><b>−${impact.damage.min}–${impact.damage.max}</b>${impact.friendly ? "<em>友军次级伤害</em>" : ""}</li>`;
+          }).join("")}</ul>` : ""}
           <ul class="factors">${breakdownFactors(previewForUnit.breakdown).slice(0, 8).map((factor) =>
             `<li class="${factor.favourable ? "is-up" : "is-down"}"><span>${esc(factor.label)}</span><strong>×${factor.value.toFixed(2)}</strong></li>`,
           ).join("")}</ul>
@@ -624,7 +642,7 @@ export class View {
       <div class="card__row">
         <img class="card__avatar" src="${portrait}" alt="" />
         <div class="card__id">
-          <div class="card__name">${esc(unit.name)}${unit.keyUnit ? " ★" : ""}</div>
+          <div class="card__name">${esc(unitDisplayName(unit))}${unit.keyUnit ? " ★" : ""}</div>
           <div class="card__meta"><span>${esc(duty)}</span><span>战斗 Lv.${unit.level}</span><span>${esc(def.name)}</span><span>${esc(kind)}</span></div>
         </div>
         <button class="card__more" data-action="toggle-detail" type="button" title="详细说明">${state.detailExpanded ? "收起" : "详"}</button>
@@ -693,7 +711,7 @@ export class View {
     const buttons: string[] = [];
     for (const ally of resupplyAllies) {
       buttons.push(
-        `<button class="btn btn--primary" data-action="unit-resupply" data-value="${esc(ally.id)}" ${locked ? "disabled" : ""} title="回复生命、降低疲劳，并恢复弹药">补充 ${esc(ally.name)}</button>`,
+        `<button class="btn btn--primary" data-action="unit-resupply" data-value="${esc(ally.id)}" ${locked ? "disabled" : ""} title="回复生命、降低疲劳，并恢复弹药">补充 ${esc(unitDisplayName(ally))}</button>`,
       );
     }
     if (canCapture) {
@@ -717,7 +735,7 @@ export class View {
 
     dock.hidden = false;
     dock.innerHTML = `
-      <div class="action-dock__label">${esc(unit.name)}</div>
+      <div class="action-dock__label">${esc(unitDisplayName(unit))}</div>
       ${hint}
       <div class="action-dock__row">${buttons.join("")}</div>`;
   }
@@ -860,7 +878,7 @@ export class View {
         <small>${esc(unit.duty ?? "直属作战分队")} · ${esc(UNIT_TYPES[unit.type].name)}</small>
       </div>
       <div class="armory__pick">
-        <select data-action="equip-weapon" data-value="${esc(unit.id)}" aria-label="${esc(unit.name)}的武器">
+        <select data-action="equip-weapon" data-value="${esc(unit.id)}" aria-label="${esc(unitDisplayName(unit))}的武器">
           ${options
             .map((id) => {
               const w = WEAPONS[id];
@@ -949,9 +967,10 @@ export class View {
     const stockLine = ITEM_IDS.filter((id) => (state.campaign.inventory[id] ?? 0) > 0)
       .map((id) => `${ITEMS[id].name}×${state.campaign.inventory[id]}`)
       .join("、");
+    const warehouseCount = ITEM_IDS.reduce((sum, id) => sum + (state.campaign.inventory[id] ?? 0), 0);
     return `
-      <p class="sheet__hint">为各将领分配武器与本关携行。不分配物资时默认整库带入；未带出的物资留在库存。</p>
-      <p class="sheet__hint">战役库存：${stockLine || "空"} · ${
+      <p class="sheet__hint">战役库存（战役仓库）：为各将领分配武器与本关携行；每名将领最多携带 3 件，仓库最多保留 6 件。</p>
+      <p class="sheet__hint">战役仓库 ${warehouseCount}/6：${stockLine || "空"} · ${
         hasManualLoadout
           ? `已分配：${ITEM_IDS.filter((id) => (loadoutUsed[id] ?? 0) > 0)
               .map((id) => `${ITEMS[id].name}×${loadoutUsed[id]}`)
@@ -982,7 +1001,7 @@ export class View {
       </label>
       <button type="button" class="org-unit-row__select" data-action="select-personnel-target" data-value="${esc(unit.id)}" ${unit.type === "logistics" ? "disabled" : ""} aria-pressed="${target}">
         <span class="org-unit-row__identity">
-          <strong>${esc(unit.name)}${unit.keyUnit ? " ★" : ""}</strong>
+          <strong>${esc(unitDisplayName(unit))}${unit.keyUnit ? " ★" : ""}</strong>
           <small>${esc(role)} · ${esc(status)}</small>
         </span>
         <span class="org-unit-row__personnel"><b>${unit.hp}</b> / ${unit.maxHp}<i style="width:${hpPct}%"></i></span>
@@ -1176,6 +1195,8 @@ export class View {
           ${outcome.returningUnitNames.length > 0 ? `<p class="result-detail"><strong>重伤归队：</strong>${esc(outcome.returningUnitNames.join("、"))}</p>` : ""}
           ${outcome.replacementNames.length > 0 ? `<p class="result-detail"><strong>补充编入：</strong>${esc(outcome.replacementNames.join("、"))}</p>` : ""}
           ${outcome.weaponsGained.length > 0 ? `<p class="result-detail"><strong>缴获/奖励：</strong>${esc(outcome.weaponsGained.map((id) => WEAPONS[id].name).join("、"))}</p>` : ""}
+          ${(outcome.itemsGained?.length ?? 0) > 0 ? `<p class="result-detail"><strong>战利品：</strong>${esc((outcome.itemsGained ?? []).map((id) => ITEMS[id].name).join("、"))} · 已放入战役仓库（上限 6 件）</p>` : ""}
+          ${(outcome.itemsDiscarded?.length ?? 0) > 0 ? `<p class="result-detail result-detail--warning"><strong>仓库已满：</strong>${esc((outcome.itemsDiscarded ?? []).map((id) => ITEMS[id].name).join("、"))} 未能保留</p>` : ""}
           <p class="result-detail"><strong>抵达地标：</strong>${landmarks.length > 0 ? esc(landmarks.join("、")) : "本关未抵达已登记地标"}</p>
           <p class="sheet__note">${
             outcome.permanentLosses.length > 0
@@ -1201,7 +1222,7 @@ export class View {
             ${state.campaign.roster
               .map(
                 (unit, index) =>
-                  `<li>${ico(unit.keyUnit ? COMMANDER_PORTRAIT["gao-daquan"]! : unitIdentityPortrait("pva", index), "ico ico--sm")}<span>${esc(unit.name)}</span><span>${esc(unit.duty ?? "直属作战分队")} · 战斗 Lv.${unit.level} · 参战 ${unit.missionsSurvived} 次</span></li>`,
+                  `<li>${ico(unit.keyUnit ? COMMANDER_PORTRAIT["gao-daquan"]! : unitIdentityPortrait("pva", index), "ico ico--sm")}<span>${esc(unitDisplayName(unit))}</span><span>${esc(unit.duty ?? "直属作战分队")} · 战斗 Lv.${unit.level} · 参战 ${unit.missionsSurvived} 次</span></li>`,
               )
               .join("")}
           </ul>
