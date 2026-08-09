@@ -5,6 +5,7 @@ import {
   rosterUnitName,
   type ChapterConfig,
 } from "../content/chapter";
+import { ITEM_IDS } from "../content/items";
 import type { MissionConfig } from "../content/missions/schema";
 import { BASE_STATS } from "../content/progress";
 import { levelFromExp, rankName, veterancyLevel } from "../content/units";
@@ -33,6 +34,8 @@ export interface MissionOutcome {
   veteransAfter: number;
 }
 
+export type ItemLoadout = Partial<Record<ItemId, number>>;
+
 export interface CampaignState {
   chapterId: string;
   seed: number;
@@ -44,6 +47,10 @@ export interface CampaignState {
   history: MissionOutcome[];
   serial: number;
   status: "running" | "complete";
+  /** 出击前勾选的伴随单位 id；空则自动老兵优先 */
+  pendingDeploy?: string[];
+  /** 出击前为各单位分配的携行物资（按 rosterId）；空则整库带入 */
+  pendingLoadout?: Record<string, ItemLoadout>;
 }
 
 function chapterOf(chapterId: string): ChapterConfig {
@@ -59,6 +66,7 @@ function rosterFromSpec(
     type: RosterUnit["type"];
     level: number;
     duty?: string;
+    bio?: string;
     baseStats?: Parameters<typeof buildCompanionStats>[0]["baseStats"];
     weapon?: WeaponId;
     keyUnit?: boolean;
@@ -92,6 +100,7 @@ function rosterFromSpec(
     level: spec.level,
     rank: rankName(spec.level),
     duty: spec.duty ?? "直属作战分队指挥员",
+    bio: spec.bio,
     baseStats,
     stats,
     weapon,
@@ -118,6 +127,8 @@ export function createCampaign(chapterId: string, seed: number): CampaignState {
     history: [],
     serial: roster.length,
     status: "running",
+    pendingDeploy: roster.map((unit) => unit.id),
+    pendingLoadout: {},
   };
 }
 
@@ -126,7 +137,158 @@ export function currentMission(campaign: CampaignState): MissionConfig | null {
   return chapter.missions[campaign.missionIndex] ?? null;
 }
 
-/** 自动换装只兜底：玩家手动挑过的武器（且仍然适配）保持不动 */
+/** 本关伴随单位出战名额（出生点减去临时配属） */
+export function companionDeployCap(mission: MissionConfig): number {
+  return Math.max(1, mission.playerSpawns.length - (mission.storyAllies?.length ?? 0));
+}
+
+export function autoDeployIds(campaign: CampaignState, mission: MissionConfig): string[] {
+  const cap = companionDeployCap(mission);
+  return campaign.roster
+    .slice()
+    .sort((a, b) => Number(b.keyUnit) - Number(a.keyUnit) || b.exp - a.exp || a.id.localeCompare(b.id))
+    .slice(0, cap)
+    .map((unit) => unit.id);
+}
+
+/** 规范化出战名单：保证主力在列、不超名额 */
+export function normalizeDeployIds(
+  campaign: CampaignState,
+  mission: MissionConfig,
+  selected: string[] | undefined,
+): string[] {
+  const cap = companionDeployCap(mission);
+  const valid = new Set(campaign.roster.map((unit) => unit.id));
+  const keyId = campaign.roster.find((unit) => unit.keyUnit)?.id;
+  const picked: string[] = [];
+  for (const id of selected ?? []) {
+    if (!valid.has(id) || picked.includes(id)) continue;
+    picked.push(id);
+    if (picked.length >= cap) break;
+  }
+  if (keyId && !picked.includes(keyId)) {
+    if (picked.length >= cap) picked[picked.length - 1] = keyId;
+    else picked.unshift(keyId);
+  }
+  if (picked.length === 0) return autoDeployIds(campaign, mission);
+  if (picked.length < cap) {
+    for (const id of autoDeployIds(campaign, mission)) {
+      if (picked.includes(id)) continue;
+      picked.push(id);
+      if (picked.length >= cap) break;
+    }
+  }
+  return picked.slice(0, cap);
+}
+
+export function toggleDeployUnit(campaign: CampaignState, unitId: string): CampaignState {
+  const mission = currentMission(campaign);
+  if (!mission) return campaign;
+  const cap = companionDeployCap(mission);
+  const unit = campaign.roster.find((entry) => entry.id === unitId);
+  if (!unit) return campaign;
+  if (unit.keyUnit) return campaign;
+
+  const current = normalizeDeployIds(campaign, mission, campaign.pendingDeploy);
+  const exists = current.includes(unitId);
+  let next = exists ? current.filter((id) => id !== unitId) : [...current, unitId];
+  if (!exists && next.length > cap) {
+    const droppable = next
+      .filter((id) => id !== unitId)
+      .map((id) => campaign.roster.find((entry) => entry.id === id)!)
+      .filter((entry) => entry && !entry.keyUnit)
+      .sort((a, b) => a.exp - b.exp || a.id.localeCompare(b.id));
+    const victim = droppable[0];
+    if (!victim) return campaign;
+    next = next.filter((id) => id !== victim.id);
+  }
+  next = normalizeDeployIds(campaign, mission, next);
+  return { ...campaign, pendingDeploy: next };
+}
+
+function clampLoadout(
+  inventory: Record<ItemId, number>,
+  loadout: Record<string, ItemLoadout>,
+): Record<string, ItemLoadout> {
+  const used = emptyInventory();
+  const result: Record<string, ItemLoadout> = {};
+  for (const [rosterId, bag] of Object.entries(loadout)) {
+    const nextBag: ItemLoadout = {};
+    for (const itemId of ITEM_IDS) {
+      const want = Math.max(0, Math.floor(bag[itemId] ?? 0));
+      if (want <= 0) continue;
+      const remain = (inventory[itemId] ?? 0) - used[itemId];
+      const take = Math.min(want, Math.max(0, remain));
+      if (take <= 0) continue;
+      nextBag[itemId] = take;
+      used[itemId] += take;
+    }
+    if (Object.keys(nextBag).length > 0) result[rosterId] = nextBag;
+  }
+  return result;
+}
+
+export function sumLoadout(loadout: Record<string, ItemLoadout>): Record<ItemId, number> {
+  const total = emptyInventory();
+  for (const bag of Object.values(loadout)) {
+    for (const itemId of ITEM_IDS) {
+      total[itemId] += Math.max(0, bag[itemId] ?? 0);
+    }
+  }
+  return total;
+}
+
+/** 未手动配额时：整库带入（保持模拟门槛与旧存档行为） */
+export function resolveMissionInventory(
+  campaign: CampaignState,
+  deployedIds: string[],
+): { battle: Record<ItemId, number>; remaining: Record<ItemId, number>; loadout: Record<string, ItemLoadout> } {
+  const pending = campaign.pendingLoadout ?? {};
+  const hasManual = Object.values(pending).some((bag) =>
+    ITEM_IDS.some((id) => (bag[id] ?? 0) > 0),
+  );
+  if (!hasManual) {
+    return {
+      battle: { ...emptyInventory(), ...campaign.inventory },
+      remaining: emptyInventory(),
+      loadout: {},
+    };
+  }
+  const filtered: Record<string, ItemLoadout> = {};
+  for (const id of deployedIds) {
+    if (pending[id]) filtered[id] = pending[id]!;
+  }
+  const loadout = clampLoadout(campaign.inventory, filtered);
+  const battle = sumLoadout(loadout);
+  const remaining = emptyInventory();
+  for (const itemId of ITEM_IDS) {
+    remaining[itemId] = Math.max(0, (campaign.inventory[itemId] ?? 0) - battle[itemId]);
+  }
+  return { battle, remaining, loadout };
+}
+
+export function adjustLoadoutItem(
+  campaign: CampaignState,
+  rosterId: string,
+  itemId: ItemId,
+  delta: number,
+): CampaignState {
+  if (!campaign.roster.some((unit) => unit.id === rosterId)) return campaign;
+  const loadout = { ...(campaign.pendingLoadout ?? {}) };
+  const bag = { ...(loadout[rosterId] ?? {}) };
+  const current = bag[itemId] ?? 0;
+  const nextVal = Math.max(0, current + delta);
+  const usedElsewhere = sumLoadout(
+    Object.fromEntries(Object.entries(loadout).filter(([id]) => id !== rosterId)),
+  )[itemId];
+  const maxTake = Math.max(0, (campaign.inventory[itemId] ?? 0) - usedElsewhere);
+  bag[itemId] = Math.min(nextVal, maxTake);
+  if (bag[itemId] === 0) delete bag[itemId];
+  if (Object.keys(bag).length === 0) delete loadout[rosterId];
+  else loadout[rosterId] = bag;
+  return { ...campaign, pendingLoadout: loadout };
+}
+
 function autoEquip(roster: RosterUnit[], armory: WeaponId[]): void {
   for (const unit of roster) {
     const keepManual = unit.manualWeapon && weaponFits(unit.weapon, unit.type);
@@ -139,7 +301,6 @@ function autoEquip(roster: RosterUnit[], armory: WeaponId[]): void {
   }
 }
 
-/** 军械库里这位将领可以换的武器（含当前装备），按评分从高到低 */
 export function equippableWeapons(campaign: CampaignState, unitId: string): WeaponId[] {
   const unit = campaign.roster.find((u) => u.id === unitId);
   if (!unit) return [];
@@ -149,7 +310,6 @@ export function equippableWeapons(campaign: CampaignState, unitId: string): Weap
     .sort((a, b) => WEAPONS[b].score - WEAPONS[a].score);
 }
 
-/** 手动换装：只在出击前可用，落在花名册上跨关保留 */
 export function equipWeapon(
   campaign: CampaignState,
   unitId: string,
@@ -169,7 +329,6 @@ export function equipWeapon(
   return { ...campaign, roster };
 }
 
-/** 补充新兵，保证前一关重创后仍有可行解；每位主将仍只带一支部队 */
 function replenish(campaign: CampaignState, chapter: ChapterConfig): string[] {
   const added: string[] = [];
   let budget = chapter.maxReplacementsPerMission;
@@ -219,21 +378,21 @@ export function startMission(campaign: CampaignState): MissionStart {
   const replacements = replenish(next, chapter);
   autoEquip(next.roster, next.armory);
 
-  // 老兵优先上阵；剧情将领另占剩余出生点
-  const companionSlots = Math.max(
-    1,
-    mission.playerSpawns.length - (mission.storyAllies?.length ?? 0),
-  );
-  const deployed = next.roster
-    .slice()
-    .sort((a, b) => b.exp - a.exp || a.id.localeCompare(b.id))
-    .slice(0, companionSlots);
+  const deployedIds = normalizeDeployIds(next, mission, next.pendingDeploy);
+  const deployed = deployedIds
+    .map((id) => next.roster.find((unit) => unit.id === id)!)
+    .filter(Boolean);
+
+  const { battle, remaining, loadout } = resolveMissionInventory(next, deployedIds);
+  next.inventory = remaining;
+  next.pendingDeploy = deployedIds;
+  next.pendingLoadout = loadout;
 
   const state = createMissionState({
     mission,
     seed: deriveSeed(next.seed, mission.id),
     roster: deployed,
-    inventory: next.inventory,
+    inventory: battle,
   });
 
   return { campaign: next, state, mission, replacements };
@@ -279,7 +438,6 @@ export function finishMission(
       continue;
     }
 
-    // 高大全是连续战役主角：单关被击溃会导致该关失败，但叙事上按重伤后送处理
     if (rosterUnit.keyUnit) {
       const exp = Math.round(deployed.exp * 0.9);
       const level = levelFromExp(exp);
@@ -346,7 +504,6 @@ export function finishMission(
     roster.push(restored);
   }
 
-  // 关卡之间的休整
   for (const unit of roster) {
     unit.maxHp = effectiveMaxHp(unit);
     const recovered = Math.round(unit.maxHp * chapter.restRecovery.hp);
@@ -364,10 +521,16 @@ export function finishMission(
   autoEquip(roster, next.armory);
 
   next.roster = roster;
-  next.inventory = { ...finalState.inventory };
+  const merged = emptyInventory();
+  for (const itemId of ITEM_IDS) {
+    merged[itemId] = (next.inventory[itemId] ?? 0) + (finalState.inventory[itemId] ?? 0);
+  }
+  next.inventory = merged;
   for (const [item, amount] of Object.entries(chapter.resupply)) {
     next.inventory[item as ItemId] = (next.inventory[item as ItemId] ?? 0) + (amount ?? 0);
   }
+  next.pendingDeploy = roster.map((unit) => unit.id);
+  next.pendingLoadout = {};
 
   const outcome: MissionOutcome = {
     missionId: finalState.missionId,

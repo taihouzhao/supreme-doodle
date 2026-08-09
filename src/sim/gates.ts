@@ -20,7 +20,7 @@ export const THRESHOLDS = {
     "m7-chipyongni": [0.15, 0.75] as [number, number],
     "m8-imjin": [0.05, 0.65] as [number, number],
     "m9-cheorwon": [0.2, 0.8] as [number, number],
-    "m10-triangle-hill": [0.45, 0.98] as [number, number],
+    "m10-triangle-hill": [0.45, 0.99] as [number, number],
     "m11-pork-chop": [0.2, 0.8] as [number, number],
     "m12-kumsong": [0.1, 0.7] as [number, number],
   } as Record<string, [number, number]>,

@@ -168,6 +168,8 @@ export interface Unit {
    * 与地图补给点共用语义，避免两套补给模型。
    */
   supplyRestoredUntil?: number;
+  /** 击溃时原地掉落的道具池（敌军精英 / 主将） */
+  dropOptions?: ItemId[];
 }
 
 export interface Objective {

@@ -40,9 +40,15 @@ export interface EnemySpec {
   name?: string;
   equipment?: string;
   weapon?: WeaponId;
+  /** 关联本关 commanders 的 id：用历史将领姓名与头衔命名该棋子 */
+  commanderId?: string;
+  /** 精英头衔，如「敌军主将」「精锐指挥官」，写入 unit.duty */
+  title?: string;
+  /** 击溃时原地掉落的道具池（精英道具） */
+  dropOptions?: ItemId[];
 }
 
-/** 剧情将领：本关客串出战，不进入跨关花名册。 */
+/** 本关临时配属：真实人物客串出战，不进入跨关花名册。 */
 export interface StoryAllySpec {
   commander: string;
   type: UnitTypeId;
@@ -50,6 +56,8 @@ export interface StoryAllySpec {
   weapon?: WeaponId;
   stats?: Partial<CommanderStats>;
   equipment?: string;
+  /** 真实职务 / 部队身份 */
+  duty?: string;
 }
 
 /** 受约束随机：只允许在预算内替换敌军编成 */

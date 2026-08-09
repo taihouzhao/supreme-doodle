@@ -16,6 +16,8 @@ export interface StartingUnitSpec {
   level: number;
   /** 战时职务/单位身份，不随战斗等级自动晋升。 */
   duty?: string;
+  /** 史实简介（简报 / 军械库展示） */
+  bio?: string;
   /** 底板属性（未含等级成长） */
   baseStats?: Partial<CommanderStats>;
   weapon?: WeaponId;
@@ -55,8 +57,8 @@ export interface ChapterConfig {
 }
 
 /**
- * 历史战役篇：主角与直属伴随部队均为虚构；
- * 各关另有剧情将领客串出战，不跨关继承。
+ * 历史战役篇：仅主角高大全为虚构连接；
+ * 常驻伴随与各关临时配属均为真实志愿军人物（选集式叙事）。
  */
 export const CHAPTER_ONE: ChapterConfig = {
   id: "chapter-one",
@@ -64,7 +66,7 @@ export const CHAPTER_ONE: ChapterConfig = {
   protagonist: {
     name: "高大全",
     title: "志司直属加强营指挥员",
-    bio: "虚构人物。出身东北野战军，擅长夜战穿插和山地防御；作为志愿军司令部直属机动指挥员，被派往不同军团协同关键战斗。直属班底精干，每战另有当地协同部队临时配属。",
+    bio: "虚构人物，作为战役选集的指挥连接。身旁常驻班底与各关临时配属均为真实志愿军战斗英雄与部队指挥员；敌军历史主将也会以精英单位出现在战场上。",
     portrait: "gao-daquan",
   },
   missions: MISSION_LIST,
@@ -74,54 +76,59 @@ export const CHAPTER_ONE: ChapterConfig = {
       type: "rifle",
       level: 2,
       duty: "志司直属加强营指挥员",
+      bio: "虚构主角：串联十二场关键战役的机动指挥员。",
       keyUnit: true,
       baseStats: { leadership: 48, intellect: 44, might: 45, stamina: 46, agility: 42 },
       weapon: "zhongzheng",
     },
     {
-      commander: "王铁山",
+      commander: "郭恩志",
       type: "rifle",
       level: 1,
-      duty: "直属步兵分队指挥员",
-      baseStats: { leadership: 40, intellect: 36, might: 42, stamina: 44, agility: 40 },
+      duty: "188师563团8连指挥员",
+      bio: "铁原阻击战中率部坚守，志愿军战斗英雄。",
+      baseStats: { leadership: 42, intellect: 38, might: 44, stamina: 45, agility: 40 },
       weapon: "type38",
     },
     {
-      commander: "刘黑牛",
+      commander: "胡修道",
       type: "mg",
       level: 1,
-      duty: "直属机枪分队指挥员",
-      baseStats: { leadership: 42, intellect: 38, might: 40, stamina: 40, agility: 36 },
+      duty: "12军31师91团机枪班长",
+      bio: "上甘岭战役机枪阵地英雄，以火力压制著称。",
+      baseStats: { leadership: 44, intellect: 40, might: 42, stamina: 42, agility: 36 },
       weapon: "zb26",
     },
     {
-      commander: "孙有田",
+      commander: "唐章洪",
       type: "mortar",
       level: 1,
-      duty: "直属迫击炮分队指挥员",
-      baseStats: { leadership: 38, intellect: 44, might: 38, stamina: 38, agility: 38 },
+      duty: "炮兵迫击炮分队指挥员",
+      bio: "志愿军炮兵战斗骨干，擅长山地迫击火力协同。",
+      baseStats: { leadership: 38, intellect: 46, might: 38, stamina: 40, agility: 38 },
       weapon: "mortar60",
     },
     {
-      commander: "周粮草",
+      commander: "柴云振",
       type: "logistics",
       level: 1,
-      duty: "直属辎重分队指挥员",
-      baseStats: { leadership: 42, intellect: 40, might: 34, stamina: 46, agility: 40 },
+      duty: "直属火力与辎重协同分队",
+      bio: "朴达峰战斗英雄；本篇以其韧劲与补给穿插能力编入加强营。",
+      baseStats: { leadership: 44, intellect: 40, might: 36, stamina: 48, agility: 40 },
       weapon: "supply_cart",
     },
   ],
   reserveCommanders: [
-    "谢大勇",
-    "马振东",
-    "曹立新",
-    "冯树林",
-    "顾平安",
-    "石大川",
-    "罗成武",
-    "丁海峰",
-    "孔庆元",
-    "许长胜",
+    "杨育才",
+    "张桃芳",
+    "李玉安",
+    "孙生禄",
+    "王兆才",
+    "刘维汉",
+    "陈德忠",
+    "周厚刚",
+    "高玉宝",
+    "倪恩德",
   ],
   startingInventory: {
     medkit: 1,
