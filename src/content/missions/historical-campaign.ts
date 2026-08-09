@@ -214,7 +214,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；关卡聚焦军隅里以南的敌后道路网。三所里与龙源里位于横向撤退道路上，南北山路是第38军急行穿插轴；清川江只作为北缘战役背景。",
     weather: { options: ["snow", "overcast"], label: "初雪与冻土", detail: "寒潮到来，山路结冰，部队移动与远射均受影响。" },
     playerEquipment: PVA_EARLY,
-    maxTurns: 19,
+    maxTurns: 16,
     map: [
       "~~~~~~~~~..~~~~~~~~~",
       "~~~~~~~~~==~~~~~~~~~",
@@ -240,15 +240,15 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     equipmentEra: "early" as const,
     weaponRewards: ["mortar60" as const],
     enemies: [
-      { type: "rifle", x: 5, y: 5, name: "美2师后卫", equipment: "M1加兰德步枪", exp: 70 },
+      { type: "rifle", x: 5, y: 5, name: "美2师后卫", equipment: "M1加兰德步枪", exp: 85 },
       { type: "rifle", x: 14, y: 5, name: "韩军警戒营", equipment: "M1卡宾枪", exp: 45 },
-      { type: "mg", x: 10, y: 5, name: "公路护卫火力组", equipment: "勃朗宁M1919机枪", exp: 70 },
+      { type: "mg", x: 10, y: 5, name: "公路护卫火力组", equipment: "勃朗宁M1919机枪", exp: 95 },
       { type: "mortar", x: 12, y: 2, name: "美军迫击炮组", equipment: "M1型81毫米迫击炮", exp: 55 },
       { type: "rifle", x: 10, y: 4, name: "军隅里后卫", equipment: "M1加兰德步枪", exp: 50 },
     
     ],
     variantSlots: [],
-    waves: [{ window: [5, 6], units: [{ type: "rifle", x: 10, y: 1, name: "南撤公路纵队", equipment: "M1加兰德步枪", exp: 50 }] }],
+    waves: [{ window: [3, 4], units: [{ type: "rifle", x: 10, y: 1, name: "南撤公路纵队", equipment: "M1加兰德步枪", exp: 80 }] }],
     objectives: [
       { id: "samsori", name: "三所里", kind: "capture", x: 5, y: 5, owner: "enemy" },
       { id: "yongwon", name: "龙源里", kind: "capture", x: 14, y: 5, owner: "enemy" },
@@ -264,7 +264,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { kind: "nightAssault", turns: [1, 3], attackBonus: 0.15, note: "穿插夜战：近战加成" },
       { kind: "supplyWindow", untilTurn: 6, penalty: 0.16, note: "携行弹药见底：攻击衰减" },
     ],
-    victory: { requiredCaptures: 2, holdTurns: 2, minSurvivors: 1 },
+    victory: { requiredCaptures: 2, holdTurns: 3, minSurvivors: 2 },
   },
   {
     id: "m4-chosin",
@@ -422,7 +422,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；中央南北公路穿过韩军突出部，南侧道路通向横城—原州撤退轴。玩家从北侧及两翼山路进入，目标沿撤退方向前后排列。",
     weather: { options: ["snow", "fog"], label: "雪夜低云", detail: "积雪与低云降低双方机动和远程观察。" },
     playerEquipment: PVA_EARLY,
-    maxTurns: 17,
+    maxTurns: 18,
     map: [
       "^^^^^F........F^^^^^",
       "^^^^^F...==...F^^^^^",
@@ -449,12 +449,12 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     enemies: [
       { type: "rifle", x: 10, y: 6, name: "韩军第8师步兵", equipment: "M1加兰德步枪", exp: 50 },
       { type: "rifle", x: 7, y: 10, name: "美军交通警戒队", equipment: "M1卡宾枪", exp: 55 },
-      { type: "mg", x: 9, y: 6, name: "突出部公路火力点", equipment: "勃朗宁M1919机枪", exp: 70 },
+      { type: "mg", x: 9, y: 6, name: "突出部公路火力点", equipment: "勃朗宁M1919机枪", exp: 60 },
       { type: "mortar", x: 13, y: 8, name: "美军迫击炮组", equipment: "M1型81毫米迫击炮", exp: 55 },
     
     ],
     variantSlots: [],
-    waves: [{ window: [8, 9], units: [{ type: "rifle", x: 10, y: 12, name: "横城后卫", equipment: "M1加兰德步枪", exp: 40 }] }],
+    waves: [{ window: [9, 10], units: [{ type: "rifle", x: 10, y: 12, name: "横城后卫", equipment: "M1加兰德步枪", exp: 35 }] }],
     objectives: [
       { id: "hoengsong-north", name: "横城北侧公路节点", kind: "capture", x: 10, y: 6, owner: "enemy" },
       { id: "wonju-road", name: "横城—原州南撤公路口", kind: "capture", x: 7, y: 10, owner: "enemy" },
@@ -644,13 +644,13 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     enemies: [
       { type: "rifle", x: 8, y: 12, name: "美3师追击步兵", equipment: "M1加兰德步枪", exp: 80 },
       { type: "rifle", x: 11, y: 12, name: "美骑1师步兵", equipment: "M1加兰德步枪", exp: 80 },
-      { type: "mg", x: 9, y: 12, name: "美军支援火力组", equipment: "勃朗宁M1919机枪", exp: 90 },
+      { type: "mg", x: 9, y: 12, name: "美军支援火力组", equipment: "勃朗宁M1919机枪", exp: 80 },
       { type: "artillery", x: 15, y: 13, name: "追击纵队炮兵", equipment: "M2A1 105毫米榴弹炮", exp: 60 },
       { type: "rifle", x: 10, y: 10, name: "美军公路步兵", equipment: "M1加兰德步枪", exp: 60 },
     ],
     variantSlots: [],
     waves: [
-      { window: [3, 4], units: [{ type: "rifle", x: 9, y: 12, name: "追击步兵", equipment: "M1加兰德步枪", exp: 90 }, { type: "mg", x: 8, y: 12, name: "追击火力", equipment: "勃朗宁M1919机枪", exp: 75 }] },
+      { window: [3, 4], units: [{ type: "rifle", x: 9, y: 12, name: "追击步兵", equipment: "M1加兰德步枪", exp: 75 }, { type: "mg", x: 8, y: 12, name: "追击火力", equipment: "勃朗宁M1919机枪", exp: 75 }] },
       { window: [6, 7], units: [{ type: "rifle", x: 10, y: 12, name: "第二梯队", equipment: "M1加兰德步枪", exp: 80 }] },
     ],
     objectives: [],
@@ -662,7 +662,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 10, y: 12, name: "涟川追击方向" },
     ],
     scripted: [
-      { kind: "barrage", turns: [3, 7], damage: 3, note: "联合国军炮火准备" },
+      { kind: "barrage", turns: [3, 7], damage: 2, note: "联合国军炮火准备" },
     ],
     victory: { minEvacuated: 4, evacuateRatio: 0.5, requireKeyUnit: true, minEnemiesRouted: 1 },
   },
@@ -827,7 +827,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；本图仅表现中央集团轿岩山切片。西峰主峰与中、东峰构成连续山体，南侧金城川是战役纵深线；北汉江位于画外东翼。",
     weather: { options: ["rain"], label: "盛夏暴雨", detail: "季风暴雨造成河水上涨、道路泥泞，远程火力效果下降。" },
     playerEquipment: PVA_LATE,
-    maxTurns: 22,
+    maxTurns: 23,
     map: [
       "FF^^^F........F^^^FF",
       "FF^^^F...==...F^^^FF",
@@ -854,12 +854,12 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     enemies: [
       { type: "rifle", x: 7, y: 7, name: "韩军第6师主峰守备连", equipment: "M1加兰德步枪", exp: 70 },
       { type: "rifle", x: 11, y: 6, name: "韩军第6师中东峰守备连", equipment: "M1加兰德步枪", exp: 70 },
-      { type: "mg", x: 9, y: 6, name: "韩军地堡火力组", equipment: "勃朗宁M1919机枪", exp: 80 },
+      { type: "mg", x: 9, y: 6, name: "韩军地堡火力组", equipment: "勃朗宁M1919机枪", exp: 65 },
       { type: "artillery", x: 15, y: 11, name: "韩军纵深炮兵组", equipment: "M2A1 105毫米榴弹炮", exp: 60 },
       { type: "rifle", x: 10, y: 9, name: "韩军纵深警戒队", equipment: "M1加兰德步枪", exp: 40 },
     ],
     variantSlots: [],
-    waves: [{ window: [4, 5], units: [{ type: "rifle", x: 10, y: 12, name: "韩军预备队", equipment: "M1加兰德步枪", exp: 70 }] }, { window: [7, 8], units: [{ type: "mg", x: 9, y: 12, name: "金城川机枪队", equipment: "勃朗宁M1919机枪", exp: 80 }, { type: "rifle", x: 11, y: 12, name: "韩军纵深反击队", equipment: "M1加兰德步枪", exp: 70 }] }],
+    waves: [{ window: [5, 6], units: [{ type: "rifle", x: 10, y: 12, name: "韩军预备队", equipment: "M1加兰德步枪", exp: 65 }] }, { window: [9, 10], units: [{ type: "mg", x: 9, y: 12, name: "金城川机枪队", equipment: "勃朗宁M1919机枪", exp: 75 }, { type: "rifle", x: 11, y: 12, name: "韩军纵深反击队", equipment: "M1加兰德步枪", exp: 70 }] }],
     objectives: [
       { id: "kyoyam-east", name: "轿岩山中东峰", kind: "capture", x: 11, y: 6, owner: "enemy" },
       { id: "kyoyam-main", name: "轿岩山主峰", kind: "capture", x: 7, y: 7, owner: "enemy" },
@@ -873,7 +873,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     scripted: [
       { kind: "barrage", turns: [1], damage: 8, target: "enemy", note: "志愿军开局炮火准备" },
-      { kind: "barrage", turns: [5, 8], damage: 2, note: "联合国军拦阻炮火" },
+      { kind: "barrage", turns: [7, 11], damage: 2, note: "联合国军拦阻炮火" },
       { kind: "supplyWindow", untilTurn: 9, penalty: 0.1, note: "金城反击弹药窗口" },
     ],
     victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 2 },

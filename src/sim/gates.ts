@@ -13,20 +13,20 @@ export const THRESHOLDS = {
   basicWinRateByMission: {
     "m1-onjong": [0.05, 0.75] as [number, number],
     "m2-unsan": [0.0, 0.65] as [number, number],
-    "m3-chongchon": [0.0, 0.85] as [number, number],
+    "m3-chongchon": [0.0, 0.7] as [number, number],
     "m4-chosin": [0.15, 1.0] as [number, number],
     "m5-third-offensive": [0.0, 0.8] as [number, number],
     "m6-hoengsong": [0.0, 0.85] as [number, number],
     "m7-chipyongni": [0.05, 0.75] as [number, number],
     "m8-imjin": [0.0, 0.65] as [number, number],
-    "m9-cheorwon": [0.0, 1.0] as [number, number],
+    "m9-cheorwon": [0.0, 1.0] as [number, number], // temporary: basic withdraw stays ~95%+; harder m9 creates dead seeds / tactical <52%
     "m10-triangle-hill": [0.1, 1.0] as [number, number],
     "m11-pork-chop": [0.0, 0.85] as [number, number],
-    "m12-kumsong": [0.0, 1.0] as [number, number],
+    "m12-kumsong": [0.1, 1.0] as [number, number],
   } as Record<string, [number, number]>,
   minChallengingMissions: 7,
   /** 基础策略胜率低于此值才算「非碾压」 */
-  challengingWinRateCeiling: 0.72,
+  challengingWinRateCeiling: 0.68,
   /** 战术策略目标带约 55–65%，门槛取下沿 */
   tacticalMinWinRate: 0.52,
   /**
@@ -36,7 +36,7 @@ export const THRESHOLDS = {
    */
   playerCampaignWinTarget: 0.35,
   playerCampaignWinTolerance: 0.15,
-  playerCampaignWinBand: [0.2, 0.58] as [number, number],
+  playerCampaignWinBand: [0.2, 0.55] as [number, number],
   /** 阻击关战术 AI 更敢交火，伤亡比放宽；基础策略蹲点时比值易失真 */
   casualtyAdvantage: 3.5,
   /**

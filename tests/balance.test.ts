@@ -52,7 +52,7 @@ describe("能力梯度", () => {
     const basic = result.campaigns.find((row) => row.agentId === "basic");
     expect(basic).toBeTruthy();
     expect(basic!.avgCompletionRate).toBeGreaterThanOrEqual(0.2);
-    expect(basic!.avgCompletionRate).toBeLessThanOrEqual(0.58);
+    expect(basic!.avgCompletionRate).toBeLessThanOrEqual(0.55);
   });
 
   it("不存在所有策略都无法完成核心目标的种子", () => {
