@@ -102,6 +102,14 @@ export const CHAPTER_ONE: ChapterConfig = {
       baseStats: { leadership: 38, intellect: 44, might: 38, stamina: 38, agility: 38 },
       weapon: "mortar60",
     },
+    {
+      commander: "周粮草",
+      type: "logistics",
+      level: 1,
+      duty: "直属辎重分队指挥员",
+      baseStats: { leadership: 42, intellect: 40, might: 34, stamina: 46, agility: 40 },
+      weapon: "supply_cart",
+    },
   ],
   reserveCommanders: [
     "谢大勇",
@@ -124,8 +132,8 @@ export const CHAPTER_ONE: ChapterConfig = {
     arty_support: 0,
     field_manual: 1,
   },
-  startingArmory: ["type38", "zhongzheng", "zb26", "mortar60"],
-  minRoster: 4,
+  startingArmory: ["type38", "zhongzheng", "zb26", "mortar60", "supply_cart", "type75"],
+  minRoster: 5,
   maxReplacementsPerMission: 2,
   permanentLossChance: { won: 0.18, lost: 0.35 },
   returningUnit: { hp: 40, expPenalty: 0.25 },
@@ -139,7 +147,7 @@ export function rosterUnitName(spec: StartingUnitSpec): string {
 
 /** 从番号反推主将名（番号 = 主将 + 兵种名） */
 export function commanderFromUnitName(name: string): string {
-  for (const label of ["迫击炮", "机枪", "步兵", "坦克"]) {
+  for (const label of ["迫击炮", "机枪", "步兵", "坦克", "炮兵", "后勤"]) {
     if (name.endsWith(label)) return name.slice(0, -label.length);
   }
   return name;

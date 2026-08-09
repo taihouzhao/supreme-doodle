@@ -83,8 +83,11 @@ function combatSummary(battle: GameState, unit: Unit): StatCell[] {
   const terrain = TERRAIN[battle.tiles[unit.y * battle.width + unit.x]!];
 
   const primary = def.indirect ? stats.intellect : stats.might;
+  // 武器进攻已并入 effectiveStats；统率常驻微幅与战斗公式一致
   const attack = Math.round(
-    def.attack * (1 + (primary - 40) * 0.005) * (1 + weapon.attackBonus) *
+    def.attack *
+      (1 + (primary - 40) * 0.005) *
+      (1 + Math.max(0, stats.leadership - 40) * 0.001) *
       (1 + (unit.level - 1) * PROGRESS.attackPerLevel),
   );
   const defence = Math.round(
@@ -349,6 +352,7 @@ export class View {
         moveTiles: this.session.moveTiles(),
         attackTiles: this.session.attackTiles(),
         attackTargets: this.session.attackTargets(),
+        resupplyTiles: this.session.resupplyTargets(),
         itemTiles: this.session.itemTiles(),
         inspected: state.inspectedTile,
         highlightObjectiveId: state.highlightObjectiveId,
@@ -545,6 +549,7 @@ export class View {
         : `<div class="actions">
           ${canCapture ? `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}" ${locked ? "disabled" : ""}>${ico(UI_ICON.actCapture, "ico ico--btn")}占领</button>` : ""}
           ${canUndo ? `<button class="btn" data-action="unit-undo-move" ${locked ? "disabled" : ""} title="退回本次移动前的位置">撤销</button>` : ""}
+          ${unit.type === "logistics" ? `<p class="card__state">点击相邻友军可补充兵员（回复生命、降低疲劳）</p>` : ""}
           <button class="btn" data-action="unit-wait" data-value="${unit.id}" ${locked ? "disabled" : ""} title="结束本单位行动并降低疲劳">休整</button>
         </div>`;
 
@@ -621,7 +626,6 @@ export class View {
       current.stats.leadership ? `统+${current.stats.leadership}` : "",
       current.stats.stamina ? `耐+${current.stats.stamina}` : "",
       current.stats.agility ? `敏+${current.stats.agility}` : "",
-      current.attackBonus ? `攻+${Math.round(current.attackBonus * 100)}%` : "",
       current.rangeBonus ? `射程+${current.rangeBonus}` : "",
       current.defenseBonus ? `减伤+${Math.round(current.defenseBonus * 100)}%` : "",
     ]

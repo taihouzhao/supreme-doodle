@@ -21,7 +21,9 @@ export const UNIT_GLYPH: Record<UnitTypeId, string> = {
   rifle: "步枪",
   mg: "机枪",
   mortar: "迫击炮",
+  artillery: "炮兵",
   tank: "坦克",
+  logistics: "后勤",
 };
 
 export const HIGHLIGHT = {
@@ -32,6 +34,10 @@ export const HIGHLIGHT = {
   attackEdge: "rgba(150, 30, 20, 0.95)",
   item: "rgba(214, 158, 46, 0.32)",
   itemHatch: "rgba(224, 176, 62, 0.9)",
+  /** 后勤补充目标：青绿底+斜线，区别于移动蓝与攻击红 */
+  resupply: "rgba(46, 140, 110, 0.34)",
+  resupplyHatch: "rgba(36, 150, 112, 0.9)",
+  resupplyEdge: "rgba(20, 90, 68, 0.95)",
   selected: "#f5d76e",
   objectivePlayer: "#2f6f5e",
   objectiveEnemy: "#a8443a",

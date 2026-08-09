@@ -1,6 +1,6 @@
 export type Faction = "player" | "enemy";
 
-export type UnitTypeId = "rifle" | "mg" | "mortar" | "tank";
+export type UnitTypeId = "rifle" | "mg" | "mortar" | "artillery" | "tank" | "logistics";
 
 export type TerrainId =
   | "road"
@@ -30,6 +30,8 @@ export type WeaponId =
   | "dp28"
   | "mortar60"
   | "mortar82"
+  | "type75"
+  | "m2a1_howitzer"
   | "bazooka"
   | "t34_85"
   | "m1_garand"
@@ -41,7 +43,8 @@ export type WeaponId =
   | "lee_enfield"
   | "bren"
   | "mac24"
-  | "centurion";
+  | "centurion"
+  | "supply_cart";
 
 export type Weather = "clear" | "overcast" | "rain" | "snow" | "fog";
 
@@ -143,6 +146,8 @@ export interface Unit {
   rank: string;
   /** 叙事中的固定职务/单位身份；与战斗等级分离。 */
   duty?: string;
+  /** 1 级绝对底板（不含等级成长）；归队/降级时重算五维 */
+  baseStats?: CommanderStats;
   /** 已含成长、不含武器/物资被动的将领五维 */
   stats: CommanderStats;
   x: number;
@@ -248,6 +253,7 @@ export interface GameState {
 export type Action =
   | { kind: "move"; unitId: string; to: Vec2 }
   | { kind: "attack"; unitId: string; targetId: string }
+  | { kind: "resupply"; unitId: string; targetId: string }
   | { kind: "useItem"; unitId: string; item: ItemId; targetId?: string; to?: Vec2 }
   | { kind: "capture"; unitId: string }
   | { kind: "wait"; unitId: string }
@@ -311,6 +317,13 @@ export type GameEvent =
   | { type: "weaponPicked"; unitId: string; weapon: WeaponId }
   | { type: "reinforced"; unitIds: string[] }
   | { type: "healed"; unitId: string; amount: number }
+  | {
+      type: "resupplied";
+      unitId: string;
+      targetId: string;
+      heal: number;
+      fatigueRelief: number;
+    }
   | { type: "scripted"; kind: ScriptedRule["kind"]; note: string; unitIds: string[]; damage: number }
   | { type: "evacuated"; unitId: string }
   | { type: "phaseChanged"; phase: Faction; turn: number }

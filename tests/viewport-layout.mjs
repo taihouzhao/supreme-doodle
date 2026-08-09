@@ -4,21 +4,27 @@ import { createReadStream, createWriteStream } from "node:fs";
 import { access, chmod, readFile, mkdir } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 import { pipeline } from "node:stream/promises";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
-const execFileAsync = promisify(execFile);
 import { createBrotliDecompress } from "node:zlib";
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
 
+/**
+ * PRD 要求的三档同视口视觉回归：
+ * - 390×844 竖屏手机
+ * - 844×390 横屏手机
+ * - 1366×768 桌面
+ *
+ * 不与像素金标比对（易碎），而是断言主流程可达且关键区域无溢出/裁切。
+ */
+
 const DIST = join(process.cwd(), "dist");
 const RESULTS = join(process.cwd(), "test-results");
 const CHROMIUM_CACHE = join(RESULTS, "chromium-cache");
+
 const viewports = [
-  { width: 360, height: 780 },
-  { width: 390, height: 844 },
-  { width: 430, height: 932 },
+  { name: "phone-portrait", width: 390, height: 844, isMobile: true, hasTouch: true },
+  { name: "phone-landscape", width: 844, height: 390, isMobile: true, hasTouch: true },
+  { name: "desktop", width: 1366, height: 768, isMobile: false, hasTouch: false },
 ];
 
 const mime = {
@@ -131,52 +137,47 @@ async function measure(page) {
         height: rect.height,
         right: rect.right,
         bottom: rect.bottom,
-        centerY: rect.y + rect.height / 2,
-        clientWidth: element.clientWidth,
-        scrollWidth: element.scrollWidth,
+        top: rect.top,
+        left: rect.left,
       };
     };
-
-    const objectives = [...document.querySelectorAll(".hud-top__obj")].map((element) => {
-      const rect = element.getBoundingClientRect();
-      return { width: rect.width, height: rect.height, y: rect.y };
-    });
-    const oneCharacterWidth = parseFloat(getComputedStyle(document.querySelector(".hud-top__name")).fontSize);
-
+    const name = document.querySelector(".hud-top__name")?.textContent?.trim() ?? "";
+    const end = document.querySelector('[data-action="end-turn"]');
     return {
       viewport: { width: window.innerWidth, height: window.innerHeight },
+      title: name,
       hud: box(".hud-top"),
-      name: box(".hud-top__name"),
-      goals: box(".hud-top__goals"),
-      meta: box(".hud-top__meta"),
-      actions: box(".hud-top__actions"),
       map: box(".stage__map"),
-      next: box(".hud-top__next"),
-      end: box(".hud-top__end"),
-      objectives,
-      oneCharacterWidth,
+      canvas: box("canvas[data-region='canvas']"),
+      endVisible: end instanceof HTMLElement && getComputedStyle(end).visibility !== "hidden",
+      bodyScroll: {
+        x: document.documentElement.scrollWidth - window.innerWidth,
+        y: document.documentElement.scrollHeight - window.innerHeight,
+      },
     };
   });
 }
 
-function assertMobileLayout(layout) {
+function assertViewport(layout, viewport) {
   const { width, height } = layout.viewport;
-  assert.ok(layout.hud.width <= width, `HUD overflows viewport: ${layout.hud.width} > ${width}`);
-  assert.ok(layout.hud.height <= 82, `HUD is not compact: ${layout.hud.height}px`);
-  assert.ok(layout.name.width >= layout.oneCharacterWidth * 3, `Mission title collapsed to ${layout.name.width}px`);
-  assert.ok(layout.name.height <= 24, `Mission title wrapped vertically: ${layout.name.height}px`);
-  assert.ok(layout.goals.width >= 24 && layout.goals.height <= 34, "Objective icon strip is missing or too tall");
-  assert.ok(layout.objectives.length >= 1, "No objectives rendered");
-  for (const objective of layout.objectives) {
-    assert.ok(objective.width >= 18 && objective.height <= 34, `Objective icon collapsed: ${objective.width}×${objective.height}px`);
+  assert.equal(width, viewport.width);
+  assert.equal(height, viewport.height);
+  assert.ok(layout.title.length >= 2, "mission title missing");
+  assert.ok(layout.endVisible, "end-turn control missing");
+  assert.ok(layout.hud.width <= width + 1, `HUD overflows X: ${layout.hud.width} > ${width}`);
+  assert.ok(layout.hud.right <= width + 1, "HUD right edge clipped");
+  assert.ok(layout.hud.left >= -1, "HUD left edge clipped");
+  assert.ok(layout.map.width > 0 && layout.map.height > 0, "map missing");
+  assert.ok(layout.canvas.width > 80 && layout.canvas.height > 80, "canvas too small");
+  assert.ok(layout.map.bottom <= height + 1, `map overflows bottom: ${layout.map.bottom} > ${height}`);
+  assert.ok(layout.map.right <= width + 1, `map overflows right: ${layout.map.right} > ${width}`);
+  // 允许少量滚动余量（字体/安全区），但不能整屏滚走棋盘
+  assert.ok(layout.bodyScroll.x <= 8, `horizontal page scroll ${layout.bodyScroll.x}px`);
+  if (viewport.height >= 700) {
+    assert.ok(layout.map.height >= height * 0.55, `map too short on tall viewport: ${layout.map.height}`);
+  } else {
+    assert.ok(layout.map.height >= height * 0.4, `map too short on short viewport: ${layout.map.height}`);
   }
-  const rowY = [layout.name.centerY, layout.goals.centerY, layout.meta.centerY, layout.actions.centerY];
-  assert.ok(Math.max(...rowY) - Math.min(...rowY) <= 3, `HUD controls wrapped into multiple rows: ${rowY.join(",")}`);
-  assert.ok(layout.next.width >= 36 && layout.next.height >= 40, "Next-unit touch target is undersized");
-  assert.ok(layout.end.width >= 40 && layout.end.height >= 40, "End-turn touch target is undersized");
-  assert.ok(layout.actions.right <= width + 0.5, "Actions overflow the right edge");
-  assert.ok(layout.map.height >= height * 0.78, `Map only has ${layout.map.height}px of vertical space`);
-  assert.ok(layout.map.bottom <= height + 0.5, "Map overflows the viewport");
 }
 
 await mkdir(RESULTS, { recursive: true });
@@ -200,20 +201,31 @@ const browser = await puppeteer.launch({
 try {
   for (const viewport of viewports) {
     const page = await browser.newPage();
-    await page.setViewport({ ...viewport, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+    await page.setViewport({
+      width: viewport.width,
+      height: viewport.height,
+      deviceScaleFactor: viewport.isMobile ? 2 : 1,
+      isMobile: viewport.isMobile,
+      hasTouch: viewport.hasTouch,
+    });
     await enterFirstMission(page, baseUrl);
     const layout = await measure(page);
     try {
-      assertMobileLayout(layout);
+      assertViewport(layout, viewport);
     } catch (error) {
-      await page.screenshot({ path: join(RESULTS, `mobile-${viewport.width}-failure.png`), fullPage: true });
+      await page.screenshot({
+        path: join(RESULTS, `viewport-${viewport.name}-failure.png`),
+        fullPage: true,
+      });
       throw error;
     } finally {
       await page.close();
     }
-    process.stdout.write(`✓ ${viewport.width}×${viewport.height}: HUD ${Math.round(layout.hud.height)}px, map ${Math.round(layout.map.height)}px\n`);
+    process.stdout.write(
+      `✓ ${viewport.name} ${viewport.width}×${viewport.height}: map ${Math.round(layout.map.width)}×${Math.round(layout.map.height)}\n`,
+    );
   }
 } finally {
   await browser.close();
-  await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
 }

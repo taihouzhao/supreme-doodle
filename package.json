@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:mobile": "node tests/mobile-layout.mjs",
+    "test:viewport": "node tests/viewport-layout.mjs",
+    "test:playtest": "node tests/playtest-smoke.mjs",
     "test:watch": "vitest",
     "sim": "node --import tsx src/sim/cli.ts",
     "balance:tune": "node --import tsx src/sim/tune.ts",

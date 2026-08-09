@@ -2,7 +2,14 @@ import { ITEMS } from "../content/items";
 import { UNIT_TYPES } from "../content/units";
 import { getMission } from "../content/missions";
 import { COUNTER_RATIO, estimateDamageFrom, itemDamage } from "../core/combat";
-import { livingUnits, manhattan, orthogonalNeighbours, tileAt, unitAt } from "../core/grid";
+import {
+  livingUnits,
+  manhattan,
+  orthogonalNeighbours,
+  resupplyTargets,
+  tileAt,
+  unitAt,
+} from "../core/grid";
 import type { ReachableTile } from "../core/grid";
 import type { Rng } from "../core/rng";
 import type { Action, GameState, Unit, Vec2 } from "../core/types";
@@ -279,6 +286,8 @@ function priority(state: GameState, unit: Unit): number {
   if (unit.keyUnit) score += state.missionKind === "withdraw" ? 60 : 40;
   if (UNIT_TYPES[unit.type].indirect) score += 30;
   if (unit.type === "mg") score += 20;
+  if (unit.type === "artillery") score += 15;
+  if (unit.type === "logistics") score += 8;
   if (unit.type === "tank") score += 10;
   return score;
 }
@@ -301,6 +310,66 @@ export const tacticalAgent: Agent = {
 
     if (standingObjective(state, unit)) {
       return { kind: "capture", unitId: unit.id };
+    }
+
+    // 后勤：优先补充重伤/高疲劳友军；阻击关不追到火线送死，改靠后补给
+    if (unit.type === "logistics") {
+      const needy = resupplyTargets(state, unit)
+        .slice()
+        .sort(
+          (a, b) =>
+            a.hp / a.maxHp - b.hp / b.maxHp ||
+            b.fatigue - a.fatigue ||
+            a.id.localeCompare(b.id),
+        );
+      if (needy[0]) return { kind: "resupply", unitId: unit.id, targetId: needy[0].id };
+      const holdMission = state.missionKind === "hold";
+      const wounded = livingUnits(state, unit.faction)
+        .filter((ally) => {
+          if (ally.id === unit.id) return false;
+          const hurt =
+            ally.hp < ally.maxHp * (holdMission ? 0.55 : 0.75) ||
+            ally.fatigue >= (holdMission ? 40 : 25);
+          if (!hurt) return false;
+          // 阻击关：只接近仍靠近己方据点的伤员，避免后勤冲进南侧突击走廊
+          if (!holdMission) return true;
+          const posts = state.objectives.filter((o) => o.kind === "hold");
+          return posts.some((post) => manhattan(ally, post) <= 2);
+        })
+        .sort(
+          (a, b) =>
+            a.hp / a.maxHp - b.hp / b.maxHp ||
+            b.fatigue - a.fatigue ||
+            a.id.localeCompare(b.id),
+        )[0];
+      if (wounded && unit.mpLeft > 0) {
+        let best: { x: number; y: number; dist: number } | null = null;
+        for (const tile of stoppableTiles(state, unit)) {
+          if (tile.cost === 0) continue;
+          const dist = manhattan(tile, wounded);
+          if (!best || dist < best.dist) best = { x: tile.x, y: tile.y, dist };
+        }
+        if (best && best.dist < manhattan(unit, wounded)) {
+          return { kind: "move", unitId: unit.id, to: { x: best.x, y: best.y } };
+        }
+      }
+      // 阻击关无伤员可补时，撤回己方据点后方待机
+      if (holdMission && unit.mpLeft > 0) {
+        const posts = state.objectives.filter((o) => o.kind === "hold");
+        const anchor = nearest(unit, posts);
+        if (anchor && manhattan(unit, anchor) > 2) {
+          let best: { x: number; y: number; dist: number } | null = null;
+          for (const tile of stoppableTiles(state, unit)) {
+            if (tile.cost === 0) continue;
+            const dist = manhattan(tile, anchor);
+            if (!best || dist < best.dist) best = { x: tile.x, y: tile.y, dist };
+          }
+          if (best && best.dist < manhattan(unit, anchor)) {
+            return { kind: "move", unitId: unit.id, to: { x: best.x, y: best.y } };
+          }
+        }
+      }
+      return { kind: "wait", unitId: unit.id };
     }
 
     // 突破关后半段：能占领的部队优先压向未占目标，避免清场后超时
@@ -360,6 +429,10 @@ export const tacticalAgent: Agent = {
           if (unit.keyUnit && canBeCountered(state, unit, option.target)) return false;
           // 满血守军可以利用工事主动压低突击梯队；低血量单位只补刀，避免无谓换血。
           if (hpRatio < 0.35 && !option.lethal) return false;
+          // 中残血时避免无反击换血，保全阻击关存活门槛。
+          if (hpRatio < 0.55 && canBeCountered(state, unit, option.target) && !option.lethal) {
+            return false;
+          }
           return true;
         });
         if (options.length > 0) {

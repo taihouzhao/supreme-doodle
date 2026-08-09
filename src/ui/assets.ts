@@ -54,9 +54,17 @@ export const UNIT_ICON: Record<UnitTypeId, Record<Faction, string>> = {
     player: `/assets/units/mortar-player-v3.png${V}`,
     enemy: `/assets/units/mortar-enemy-v3.png${V}`,
   },
+  artillery: {
+    player: `/assets/units/mortar-player-v3.png${V}`,
+    enemy: `/assets/units/mortar-enemy-v3.png${V}`,
+  },
   tank: {
     player: `/assets/units/tank-player-v3.png${V}`,
     enemy: `/assets/units/tank-enemy-v3.png${V}`,
+  },
+  logistics: {
+    player: `/assets/units/rifle-player-v3.png${V}`,
+    enemy: `/assets/units/rifle-enemy-v3.png${V}`,
   },
 };
 
@@ -65,7 +73,9 @@ export const UNIT_ROLE_ICON: Record<UnitTypeId, string> = {
   rifle: `/assets/roles/rifle.svg${V}`,
   mg: `/assets/roles/mg.svg${V}`,
   mortar: `/assets/roles/mortar.svg${V}`,
+  artillery: `/assets/roles/artillery.svg${V}`,
   tank: `/assets/roles/tank.svg${V}`,
+  logistics: `/assets/roles/logistics.svg${V}`,
 };
 
 export const WEAPON_ICON: Record<WeaponId, string> = {
@@ -77,6 +87,8 @@ export const WEAPON_ICON: Record<WeaponId, string> = {
   dp28: `/assets/weapons/dp28.svg${V}`,
   mortar60: `/assets/weapons/mortar60.svg${V}`,
   mortar82: `/assets/weapons/mortar82.svg${V}`,
+  type75: `/assets/weapons/mortar82.svg${V}`,
+  m2a1_howitzer: `/assets/weapons/m1_mortar.svg${V}`,
   bazooka: `/assets/weapons/bazooka.svg${V}`,
   t34_85: `/assets/weapons/t34_85.svg${V}`,
   m1_garand: `/assets/weapons/m1_garand.svg${V}`,
@@ -90,6 +102,7 @@ export const WEAPON_ICON: Record<WeaponId, string> = {
   bren: `/assets/weapons/zb26.svg${V}`,
   mac24: `/assets/weapons/zb26.svg${V}`,
   centurion: `/assets/weapons/sherman.svg${V}`,
+  supply_cart: `/assets/weapons/type38.svg${V}`,
 };
 
 export const RANK_INSIGNIA: Record<string, string> = {

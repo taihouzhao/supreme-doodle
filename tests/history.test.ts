@@ -41,7 +41,7 @@ describe("历史战役内容", () => {
       expect(mission.mapNote).toBeTruthy();
       expect(mission.commanders?.length).toBeGreaterThanOrEqual(2);
       expect(mission.weather?.options.length).toBeGreaterThan(0);
-      expect(Object.keys(mission.playerEquipment ?? {}).length).toBe(4);
+      expect(Object.keys(mission.playerEquipment ?? {}).length).toBe(6);
       expect(mission.places?.length ?? 0).toBeGreaterThan(0);
       expect(mission.scripted?.length ?? 0).toBeGreaterThan(0);
     }
@@ -176,7 +176,7 @@ describe("历史战役内容", () => {
     const keyUnits = CHAPTER_ONE.startingRoster.filter((unit) => unit.keyUnit);
     expect(keyUnits).toHaveLength(1);
     expect(keyUnits[0]?.commander).toBe("高大全");
-    expect(CHAPTER_ONE.startingRoster).toHaveLength(4);
+    expect(CHAPTER_ONE.startingRoster).toHaveLength(5);
   });
 
   it("每关都有剧情将领客串", () => {
@@ -202,8 +202,10 @@ describe("历史战役内容", () => {
     const cheorwon = MISSION_LIST.find((mission) => mission.id === "m9-cheorwon")!;
     const porkChop = MISSION_LIST.find((mission) => mission.id === "m11-pork-chop")!;
     const kumsong = MISSION_LIST.find((mission) => mission.id === "m12-kumsong")!;
+    const triangle = MISSION_LIST.find((mission) => mission.id === "m10-triangle-hill")!;
 
     expect(onjong.commanders?.some((commander) => commander.id === "kim-jong-oh" && commander.formation.includes("第6"))).toBe(true);
+    expect(onjong.enemies.some((enemy) => (enemy.name ?? "").includes("炮兵中队"))).toBe(true);
     expect(JSON.stringify(unsan)).not.toContain("诸仁桥");
     expect(unsan.commanders?.find((commander) => commander.id === "paik-sun-yup")?.historicalRank).toContain("准将");
     const bridge = unsan.objectives.find((objective) => objective.id === "south-road-bridge")!;
@@ -211,12 +213,44 @@ describe("历史战役内容", () => {
     expect(hoengsong.commanders?.find((commander) => commander.id === "edward-almond")?.historicalRank).toContain("少将");
     expect(cheorwon.kind).toBe("withdraw");
     expect(cheorwon.evacZone.length).toBeGreaterThan(0);
-    expect(porkChop.commanders?.some((commander) => commander.id === "zhong-guochu" && commander.formation.includes("第23军"))).toBe(true);
+    expect(porkChop.commanders?.some((commander) => commander.id === "zhong-guochu" && commander.formation.includes("第67师"))).toBe(true);
     expect(porkChop.storyAllies?.some((ally) => ally.weapon === "t34_85")).toBe(true);
+    expect(porkChop.playerEquipment?.tank).toContain("T-34");
+    expect(triangle.playerEquipment?.tank).not.toContain("T-34");
+    expect(kumsong.playerEquipment?.tank).not.toContain("T-34");
     expect(kumsong.storyAllies?.some((ally) => ally.type === "tank")).toBe(false);
     expect(kumsong.enemies.some((enemy) => enemy.type === "tank")).toBe(false);
     expect(kumsong.waves.flatMap((wave) => wave.units).some((enemy) => enemy.type === "tank")).toBe(false);
     expect(kumsong.scripted?.some((rule) => rule.kind === "barrage" && rule.target === "enemy" && rule.turns.includes(1))).toBe(true);
+    expect(kumsong.historicalOutcome).toContain("轿岩山");
+  });
+
+  it("硬史实门禁锁定清川江、三八线、砥平里与临津江切片边界", () => {
+    const chongchon = MISSION_LIST.find((mission) => mission.id === "m3-chongchon")!;
+    const third = MISSION_LIST.find((mission) => mission.id === "m5-third-offensive")!;
+    const chipyong = MISSION_LIST.find((mission) => mission.id === "m7-chipyongni")!;
+    const imjin = MISSION_LIST.find((mission) => mission.id === "m8-imjin")!;
+
+    expect(chongchon.objectives.map((o) => o.name).sort()).toEqual(["三所里", "龙源里"].sort());
+    expect((chongchon.places ?? []).some((p) => p.name.includes("清川江"))).toBe(true);
+    expect(chongchon.objectives.some((o) => o.name.includes("清川江"))).toBe(false);
+    expect(chongchon.commanders?.some((c) => c.id === "liang-xingchu" && c.formation.includes("113"))).toBe(true);
+
+    const crossing = third.objectives.find((o) => o.id === "imjin-crossing")!;
+    const pass = third.objectives.find((o) => o.id === "uigongbu-pass")!;
+    expect(crossing.y).toBeLessThan(pass.y);
+    expect(JSON.stringify(third.objectives)).not.toContain("汉城");
+
+    expect(chipyong.kind).toBe("withdraw");
+    expect(chipyong.objectives).toHaveLength(0);
+    expect((chipyong.places ?? []).some((p) => p.name === "砥平里")).toBe(true);
+    expect(chipyong.waves.flatMap((w) => w.units).some((u) => u.type === "tank")).toBe(true);
+    expect(chipyong.historicalNote).toContain("不允许");
+
+    const bridgehead = imjin.objectives.find((o) => o.id.includes("bridge") || o.name.includes("桥头"))!;
+    const hill = imjin.objectives.find((o) => o.name.includes("235"))!;
+    expect(bridgehead.y).toBeLessThan(hill.y);
+    expect(imjin.commanders?.some((c) => c.id === "james-carne")).toBe(true);
   });
 
   it("所有写入战场的装备名称都解析为适配兵种的真实机械型号", () => {

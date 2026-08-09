@@ -59,15 +59,36 @@ export function agilityMoveBonus(stats: CommanderStats): number {
   return Math.floor((stats.agility - 40) / 18);
 }
 
-/** 同步等级；发生晋升时返回前后等级，供上层播提示 */
+/** 从绝对底板按开局同一套 `statsAtLevel` 重算（归队/降级用）。 */
+export function recomputeStatsAtLevel(
+  baseStats: CommanderStats,
+  type: UnitTypeId,
+  level: number,
+  commanderName: string,
+): CommanderStats {
+  return statsAtLevel(baseStats, type, level, commanderName.length);
+}
+
+/**
+ * 同步等级与属性。
+ * - 升级：沿用增量加点（盐 = name.length + 原等级），保持既有成长手感与平衡。
+ * - 降级：若有 baseStats，按开局公式重算，避免经验回撤后属性虚高。
+ */
 export function syncLevelFromExp(unit: Unit): { from: number; to: number } | null {
   const nextLevel = levelFromExp(unit.exp);
-  if (nextLevel <= unit.level) {
-    unit.level = Math.max(unit.level, nextLevel);
+  if (nextLevel === unit.level) {
     unit.rank = rankName(unit.level);
     return null;
   }
   const from = unit.level;
+  if (nextLevel < from) {
+    if (unit.baseStats) {
+      unit.stats = recomputeStatsAtLevel(unit.baseStats, unit.type, nextLevel, unit.commanderName);
+    }
+    unit.level = nextLevel;
+    unit.rank = rankName(nextLevel);
+    return null;
+  }
   const gained = (nextLevel - unit.level) * PROGRESS.pointsPerLevel;
   const salt = unit.commanderName.length + unit.level;
   unit.stats = addStats(unit.stats, allocatePoints(GROWTH_WEIGHTS[unit.type], gained, salt));
@@ -81,7 +102,10 @@ export function makeEnemyCommander(
   exp: number,
   weapon: WeaponId,
   name: string,
-): Pick<Unit, "commanderKind" | "commanderName" | "level" | "rank" | "stats" | "weapon" | "exp"> {
+): Pick<
+  Unit,
+  "commanderKind" | "commanderName" | "level" | "rank" | "stats" | "baseStats" | "weapon" | "exp"
+> {
   const profile = enemyProfileFromExp(type, exp, name.length);
   return {
     commanderKind: "enemy",
@@ -89,6 +113,7 @@ export function makeEnemyCommander(
     level: profile.level,
     rank: profile.rank,
     stats: profile.stats,
+    baseStats: profile.baseStats,
     weapon,
     exp,
   };
@@ -100,7 +125,10 @@ export function makeStoryCommander(
   level: number,
   weapon: WeaponId,
   extra?: Partial<CommanderStats>,
-): Pick<Unit, "commanderKind" | "commanderName" | "level" | "rank" | "stats" | "weapon" | "exp"> {
+): Pick<
+  Unit,
+  "commanderKind" | "commanderName" | "level" | "rank" | "stats" | "baseStats" | "weapon" | "exp"
+> {
   const base = addStats(BASE_STATS, {
     leadership: 0,
     intellect: 0,
@@ -114,6 +142,7 @@ export function makeStoryCommander(
     commanderName: commander,
     level,
     rank: rankName(level),
+    baseStats: base,
     stats: statsAtLevel(base, type, level, commander.length),
     weapon,
     exp: PROGRESS.expForLevel(level),

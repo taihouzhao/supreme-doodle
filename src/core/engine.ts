@@ -2,7 +2,14 @@ import { ITEMS, ITEM_IDS } from "../content/items";
 import { getMission } from "../content/missions";
 import { UNIT_TYPES } from "../content/units";
 import { runEnemyPhase } from "./enemyAi";
-import { attackableTargets, livingUnits, manhattan, reachableTiles, unitAt } from "./grid";
+import {
+  attackableTargets,
+  livingUnits,
+  manhattan,
+  reachableTiles,
+  resupplyTargets,
+  unitAt,
+} from "./grid";
 import {
   arriveWaves,
   beginPhase,
@@ -11,7 +18,14 @@ import {
   runUpkeep,
   updateCaptureStreak,
 } from "./mission";
-import { performAttack, performCapture, performItem, performMove, performWait } from "./resolve";
+import {
+  performAttack,
+  performCapture,
+  performItem,
+  performMove,
+  performResupply,
+  performWait,
+} from "./resolve";
 import type { Action, ApplyResult, GameEvent, GameState, Unit } from "./types";
 
 export class IllegalActionError extends Error {
@@ -93,6 +107,14 @@ export function applyAction(state: GameState, action: Action): ApplyResult {
       }
       break;
     }
+    case "resupply": {
+      const unit = requireActivePlayerUnit(next, action.unitId);
+      const target = findUnit(next, action.targetId);
+      if (!performResupply(next, unit, target, events)) {
+        throw new IllegalActionError(`${unit.name} 无法补充 ${target.name}`);
+      }
+      break;
+    }
     case "capture": {
       const unit = requireActivePlayerUnit(next, action.unitId);
       if (!performCapture(next, unit, events)) {
@@ -145,6 +167,10 @@ export function legalActions(state: GameState): Action[] {
 
     for (const target of attackableTargets(state, unit)) {
       actions.push({ kind: "attack", unitId: unit.id, targetId: target.id });
+    }
+
+    for (const ally of resupplyTargets(state, unit)) {
+      actions.push({ kind: "resupply", unitId: unit.id, targetId: ally.id });
     }
 
     if (UNIT_TYPES[unit.type].canCapture) {
