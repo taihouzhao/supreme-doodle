@@ -337,7 +337,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     scripted: [
       { kind: "coldAttrition", fromTurn: 1, damage: 1, note: "极寒冻伤：双方持续减员" },
     ],
-    victory: { minEvacuated: 3, evacuateRatio: 0.35, requireKeyUnit: true, minEnemiesRouted: 1 },
+    victory: { minEvacuated: 3, evacuateRatio: 0.3, requireKeyUnit: true, minEnemiesRouted: 0 },
   },
   {
     id: "m5-third-offensive",
@@ -355,7 +355,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；玩家由北向南推进。临津江横贯北部，中央公路依次通过渡河带和议政府北侧山口，目标呈前后梯次。",
     weather: { options: ["snow", "clear"], label: "隆冬冻江", detail: "河面部分冻结，夜间严寒，部队体力消耗明显。" },
     playerEquipment: PVA_EARLY,
-    maxTurns: 15,
+    maxTurns: 18,
     map: [
       "...^^F........F^^...",
       "...^^F.==..==.F^^...",
@@ -404,7 +404,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { kind: "nightAssault", turns: [1, 3], attackBonus: 0.12, note: "三八线夜袭" },
       { kind: "supplyWindow", untilTurn: 7, penalty: 0.14, note: "礼拜攻势：弹药见底" },
     ],
-    victory: { requiredCaptures: 2, holdTurns: 3, minSurvivors: 2 },
+    victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 2 },
   },
   {
     id: "m6-hoengsong",
