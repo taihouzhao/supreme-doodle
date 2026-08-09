@@ -47,6 +47,8 @@ export interface RosterUnit {
   level: number;
   rank: string;
   duty?: string;
+  /** 史实简介（花名册 / 简报） */
+  bio?: string;
   /** 1 级绝对底板；归队/降级时按此重算 */
   baseStats: CommanderStats;
   stats: CommanderStats;
@@ -102,6 +104,7 @@ function makeUnit(params: {
   hp?: number;
   fatigue?: number;
   keyUnit?: boolean;
+  dropOptions?: ItemId[];
 }): Unit {
   const draft: Unit = {
     id: params.id,
@@ -132,6 +135,7 @@ function makeUnit(params: {
     alive: true,
     evacuated: false,
     keyUnit: params.keyUnit ?? false,
+    dropOptions: params.dropOptions,
   };
   const maxHp = effectiveMaxHp(draft);
   draft.maxHp = maxHp;
@@ -233,7 +237,7 @@ export function createMissionState(setup: MissionSetup): GameState {
         ...profile,
         portraitGroup: "pva",
         portraitIndex: nextPortrait("pva"),
-        duty: `临时配属${UNIT_TYPES[ally.type].name}分队`,
+        duty: ally.duty ?? `临时配属${UNIT_TYPES[ally.type].name}分队`,
         x: spawn.x,
         y: spawn.y,
         keyUnit: false,
@@ -241,55 +245,54 @@ export function createMissionState(setup: MissionSetup): GameState {
     );
   }
 
-  enemySpecs.forEach((spec, index) => {
-    const name = spec.name ?? UNIT_TYPES[spec.type].name;
+  const commandersById = new Map((mission.commanders ?? []).map((c) => [c.id, c]));
+
+  const buildEnemyUnit = (
+    spec: (typeof enemySpecs)[number],
+    id: string,
+    defaultDuty: string,
+  ): Unit => {
+    const linked = spec.commanderId ? commandersById.get(spec.commanderId) : undefined;
+    const elite = Boolean(spec.commanderId || spec.title || (spec.dropOptions?.length ?? 0) > 0);
+    const name = linked
+      ? `${linked.name}指挥部`
+      : (spec.name ?? UNIT_TYPES[spec.type].name);
     const weapon = spec.weapon ?? weaponForEquipment(spec.type, spec.equipment, "enemy");
-    const exp = scaleEnemyExp(mission.id, spec.exp ?? 0);
+    const baseExp = scaleEnemyExp(mission.id, spec.exp ?? 0);
+    // 精英只做轻度强化，避免制造全策略死种子
+    const exp = elite ? baseExp + 22 : baseExp;
     const profile = makeEnemyCommander(spec.type, exp, weapon, name);
-    const portraitGroup = enemyPortraitGroup(name);
-    units.push(
-      makeUnit({
-        id: `e${index}`,
-        rosterId: null,
-        faction: "enemy",
-        type: spec.type,
-        name,
-        equipment: spec.equipment ?? WEAPONS[weapon].name,
-        ...profile,
-        portraitGroup,
-        portraitIndex: nextPortrait(portraitGroup),
-        duty: "敌军作战分队",
-        x: spec.x,
-        y: spec.y,
-        hp: spec.hp,
-      }),
+    const portraitGroup = enemyPortraitGroup(
+      linked ? `${linked.formation} ${linked.name}` : name,
     );
+    const duty = spec.title ?? (linked ? "敌军主将" : defaultDuty);
+    return makeUnit({
+      id,
+      rosterId: null,
+      faction: "enemy",
+      type: spec.type,
+      name,
+      equipment: spec.equipment ?? WEAPONS[weapon].name,
+      ...profile,
+      portraitGroup,
+      portraitIndex: nextPortrait(portraitGroup),
+      duty,
+      x: spec.x,
+      y: spec.y,
+      hp: spec.hp,
+      dropOptions: spec.dropOptions,
+    });
+  };
+
+  enemySpecs.forEach((spec, index) => {
+    units.push(buildEnemyUnit(spec, `e${index}`, "敌军作战分队"));
   });
 
   const pending = mission.waves.map((wave, waveIndex) => {
     const turn = waveRng.int(wave.window[0], wave.window[1]);
-    const waveUnits = wave.units.map((spec, unitIndex) => {
-      const name = spec.name ?? UNIT_TYPES[spec.type].name;
-      const weapon = spec.weapon ?? weaponForEquipment(spec.type, spec.equipment, "enemy");
-      const exp = scaleEnemyExp(mission.id, spec.exp ?? 0);
-      const profile = makeEnemyCommander(spec.type, exp, weapon, name);
-      const portraitGroup = enemyPortraitGroup(name);
-      return makeUnit({
-        id: `w${waveIndex}_${unitIndex}`,
-        rosterId: null,
-        faction: "enemy",
-        type: spec.type,
-        name,
-        equipment: spec.equipment ?? WEAPONS[weapon].name,
-        ...profile,
-        portraitGroup,
-        portraitIndex: nextPortrait(portraitGroup),
-        duty: "敌军增援分队",
-        x: spec.x,
-        y: spec.y,
-        hp: spec.hp,
-      });
-    });
+    const waveUnits = wave.units.map((spec, unitIndex) =>
+      buildEnemyUnit(spec, `w${waveIndex}_${unitIndex}`, "敌军增援分队"),
+    );
     return { turn, units: waveUnits };
   });
 

@@ -7,6 +7,12 @@ import {
   equipWeapon,
   finishMission,
   startMission,
+  toggleDeployUnit,
+  adjustLoadoutItem,
+  companionDeployCap,
+  currentMission,
+  normalizeDeployIds,
+  sumLoadout,
   type CampaignState,
   type MissionOutcome,
 } from "../core/campaign";
@@ -233,6 +239,37 @@ export class Session {
     if (campaign === this.state.campaign) return;
     writeSave(campaign);
     this.update({ campaign });
+  }
+
+  toggleDeploy(unitId: string): void {
+    if (this.state.screen !== "brief") return;
+    const campaign = toggleDeployUnit(this.state.campaign, unitId);
+    if (campaign === this.state.campaign) return;
+    writeSave(campaign);
+    this.update({ campaign });
+  }
+
+  adjustLoadout(rosterId: string, itemId: ItemId, delta: number): void {
+    if (this.state.screen !== "brief") return;
+    const campaign = adjustLoadoutItem(this.state.campaign, rosterId, itemId, delta);
+    if (campaign === this.state.campaign) return;
+    writeSave(campaign);
+    this.update({ campaign });
+  }
+
+  deployCap(): number {
+    const mission = currentMission(this.state.campaign);
+    return mission ? companionDeployCap(mission) : 0;
+  }
+
+  deployedIds(): string[] {
+    const mission = currentMission(this.state.campaign);
+    if (!mission) return [];
+    return normalizeDeployIds(this.state.campaign, mission, this.state.campaign.pendingDeploy);
+  }
+
+  loadoutTotals(): Record<ItemId, number> {
+    return sumLoadout(this.state.campaign.pendingLoadout ?? {});
   }
 
   continueCampaign(): void {

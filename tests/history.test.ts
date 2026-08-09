@@ -171,12 +171,39 @@ describe("历史战役内容", () => {
     }
   });
 
-  it("高大全是唯一且跨关稳定的虚构主角", () => {
+  it("高大全是唯一虚构主角，伴随将领为真实人物", () => {
     expect(CHAPTER_ONE.protagonist.name).toBe("高大全");
     const keyUnits = CHAPTER_ONE.startingRoster.filter((unit) => unit.keyUnit);
     expect(keyUnits).toHaveLength(1);
     expect(keyUnits[0]?.commander).toBe("高大全");
     expect(CHAPTER_ONE.startingRoster).toHaveLength(5);
+    const companions = CHAPTER_ONE.startingRoster.filter((unit) => !unit.keyUnit);
+    expect(companions.map((unit) => unit.commander)).toEqual([
+      "郭恩志",
+      "胡修道",
+      "唐章洪",
+      "柴云振",
+    ]);
+  });
+
+  it("每关都有真实人物临时配属，且至少一名敌军精英/主将", () => {
+    for (const mission of MISSION_LIST) {
+      expect(mission.storyAllies?.length ?? 0).toBeGreaterThan(0);
+      for (const ally of mission.storyAllies ?? []) {
+        expect(ally.commander.length).toBeGreaterThan(1);
+        expect(["韩卫东", "外线鹰", "坑道龙", "温井尖兵"]).not.toContain(ally.commander);
+      }
+      const elites = mission.enemies.filter(
+        (enemy) => enemy.commanderId || enemy.title || (enemy.dropOptions?.length ?? 0) > 0,
+      );
+      expect(elites.length).toBeGreaterThan(0);
+      for (const elite of elites) {
+        if (elite.commanderId) {
+          expect(mission.commanders?.some((c) => c.id === elite.commanderId)).toBe(true);
+        }
+        if (elite.dropOptions) expect(elite.dropOptions.length).toBeGreaterThan(0);
+      }
+    }
   });
 
   it("每关都有剧情将领客串", () => {

@@ -16,7 +16,6 @@ import {
   TERRAIN_ICON,
   UI_ICON,
   WEAPON_ICON,
-  rankInsignia,
   unitIdentityPortrait,
   unitPortrait,
 } from "./assets";
@@ -281,6 +280,16 @@ export class View {
         case "download-replay":
           this.downloadLatestReplay();
           break;
+        case "toggle-deploy":
+          if (value) this.session.toggleDeploy(value);
+          break;
+        case "loadout-adj": {
+          const rosterId = target.dataset.roster;
+          const item = target.dataset.item as ItemId | undefined;
+          const delta = Number(target.dataset.delta ?? "0");
+          if (rosterId && item && delta) this.session.adjustLoadout(rosterId, item, delta);
+          break;
+        }
         default:
           break;
       }
@@ -716,8 +725,8 @@ export class View {
     dock.style.top = `${Math.round(top)}px`;
   }
 
-  /** 花名册一行：将领 + 可选武器下拉 + 该武器带来的加成 */
-  private armoryRow(state: SessionState, unit: RosterUnit): string {
+  /** 花名册一行：出战勾选 + 武器对比 + 携行配额 */
+  private armoryRow(state: SessionState, unit: RosterUnit, deployed: Set<string>): string {
     const options = equippableWeapons(state.campaign, unit.id);
     const current = WEAPONS[unit.weapon];
     const history = WEAPON_HISTORY[unit.weapon];
@@ -732,24 +741,50 @@ export class View {
     ]
       .filter(Boolean)
       .join(" · ");
+    const selected = deployed.has(unit.id);
+    const loadout = state.campaign.pendingLoadout?.[unit.id] ?? {};
+    const stock = state.campaign.inventory;
+    const used = this.session.loadoutTotals();
+    const itemControls = ITEM_IDS.filter((id) => (stock[id] ?? 0) > 0 || (loadout[id] ?? 0) > 0)
+      .map((id) => {
+        const count = loadout[id] ?? 0;
+        const remain = Math.max(0, (stock[id] ?? 0) - (used[id] ?? 0));
+        return `<div class="loadout__item">
+          <span>${esc(ITEMS[id].name)} ×${count}</span>
+          <button type="button" class="btn btn--tiny" data-action="loadout-adj" data-roster="${esc(unit.id)}" data-item="${id}" data-delta="-1" data-value="${esc(unit.id)}:${id}:-" ${count <= 0 ? "disabled" : ""}>−</button>
+          <button type="button" class="btn btn--tiny" data-action="loadout-adj" data-roster="${esc(unit.id)}" data-item="${id}" data-delta="1" data-value="${esc(unit.id)}:${id}:+" ${remain <= 0 || !selected ? "disabled" : ""}>+</button>
+        </div>`;
+      })
+      .join("");
 
-    return `<li class="armory__row">
+    return `<li class="armory__row${selected ? " is-deployed" : ""}">
+      <label class="armory__deploy">
+        <input type="checkbox" data-action="toggle-deploy" data-value="${esc(unit.id)}" ${selected ? "checked" : ""} ${unit.keyUnit ? "disabled" : ""} />
+        <span>${unit.keyUnit ? "主力" : selected ? "出战" : "待命"}</span>
+      </label>
       ${ico(WEAPON_ICON[unit.weapon], "armory__weapon")}
       <div class="armory__who">
-        <strong>${esc(unit.name)}${unit.keyUnit ? " · 主角" : ""}</strong>
+        <strong>${esc(unit.commanderName)}${unit.keyUnit ? " · 主角" : " · 真实人物"}</strong>
         <small>${esc(unit.duty ?? "直属作战分队")} · 战斗 Lv.${unit.level} · ${esc(UNIT_TYPES[unit.type].name)}</small>
+        ${unit.bio ? `<small class="armory__bio">${esc(unit.bio)}</small>` : ""}
       </div>
       <div class="armory__pick">
         <select data-action="equip-weapon" data-value="${esc(unit.id)}" aria-label="${esc(unit.name)}的武器">
           ${options
-            .map(
-              (id) =>
-                `<option value="${id}"${id === unit.weapon ? " selected" : ""}>${esc(WEAPONS[id].name)}（评分 ${WEAPONS[id].score}）</option>`,
-            )
+            .map((id) => {
+              const w = WEAPONS[id];
+              const h = WEAPON_HISTORY[id];
+              const mark = id === unit.weapon ? "✓ " : "";
+              return `<option value="${id}"${id === unit.weapon ? " selected" : ""}>${mark}${esc(w.name)} · 评分${w.score} · 射程修正${w.rangeBonus >= 0 ? "+" : ""}${w.rangeBonus} · ${esc(h.caliber)}</option>`;
+            })
             .join("")}
         </select>
-        <small>${esc(`${history.origin} · ${history.caliber}`)}</small>
+        <small>${esc(`${history.origin} · ${history.caliber}`)} · 当前评分 ${current.score}</small>
         <small>${esc(bonus || "无额外加成")}${unit.manualWeapon ? " · 手动锁定" : ""}</small>
+        <div class="loadout" title="从战役库存分配本关携行；不分配则默认整库带入">
+          <strong>本关携行</strong>
+          ${itemControls || "<small>库存为空，或保持默认整库带入</small>"}
+        </div>
       </div>
     </li>`;
   }
@@ -789,7 +824,7 @@ export class View {
             <img class="title-hero__portrait" src="${COMMANDER_PORTRAIT[CHAPTER_ONE.protagonist.portrait]}" alt="高大全肖像" />
             <div><p class="sheet__eyebrow">历史战役篇 · 1950—1953</p><h1>高大全</h1><p class="title-hero__rank">${esc(CHAPTER_ONE.protagonist.title)}</p></div>
           </div>
-          <p class="sheet__lead">沿十二场关键战役走过运动战与阵地战。高大全和直属部队是虚构角色；章节采用战史选集式叙事，连续成长不代表真实人物能按日跨越东西战区。战役时间、主要地形、参战编制、历史将领与代表性装备按公开战史还原。</p>
+          <p class="sheet__lead">${esc(CHAPTER_ONE.protagonist.bio)} 你要做的不是旁观历史，而是打完眼前这一战。</p>
           <div class="sheet__actions">
             <button class="btn btn--primary" data-action="new-campaign">新的战役</button>
             ${state.hasSave ? `<button class="btn" data-action="continue">继续（第 ${state.campaign.missionIndex + 1} 关）</button>` : ""}
@@ -801,53 +836,92 @@ export class View {
         if (!mission) return null;
         const goals = briefVictoryLines(mission);
         const weather = mission.weather ?? { options: ["clear" as Weather], label: "晴", detail: "" };
-        const historicalCommanders = mission.commanders ?? [];
+        const commandersById = new Map((mission.commanders ?? []).map((c) => [c.id, c]));
+        const eliteEnemies = mission.enemies.filter(
+          (enemy) => enemy.commanderId || enemy.title || (enemy.dropOptions?.length ?? 0) > 0,
+        );
+        const deployed = new Set(this.session.deployedIds());
+        const cap = this.session.deployCap();
+        const loadoutUsed = this.session.loadoutTotals();
+        const hasManualLoadout = ITEM_IDS.some((id) => (loadoutUsed[id] ?? 0) > 0);
         return `<div class="sheet sheet--brief">
           <div class="brief-head">
             <img class="brief-head__portrait" src="${COMMANDER_PORTRAIT[CHAPTER_ONE.protagonist.portrait]}" alt="高大全肖像" />
             <div class="brief-head__copy">
-              <p class="sheet__eyebrow">第 ${state.campaign.missionIndex + 1} / ${CHAPTER_ONE.missions.length} 关 · ${esc(mission.date ?? "")}</p>
+              <p class="sheet__eyebrow">作战简报 · 第 ${state.campaign.missionIndex + 1} / ${CHAPTER_ONE.missions.length} 关 · ${esc(mission.date ?? "")}</p>
               <h1>${esc(mission.name)}</h1>
               <p class="brief-head__location">${esc(mission.location ?? "")}</p>
               <p class="sheet__lead">${esc(mission.brief)}</p>
             </div>
           </div>
-          <div class="brief-facts">
-            <article><strong>天气</strong><span>${esc(weather.label)}</span><small>${esc(weather.detail)}</small></article>
-            <article><strong>地图</strong><span>${esc(mission.mapNote ?? "战术抽象地图")}</span></article>
-            <article><strong>史实结局</strong><span>${esc(mission.historicalOutcome ?? "")}</span></article>
-            ${(mission.scripted ?? []).length
-              ? `<article><strong>战史规则</strong><span>${esc(
-                  (mission.scripted ?? []).map((rule) => rule.note).join("；"),
-                )}</span></article>`
-              : ""}
-          </div>
-          <h3>历史指挥体系</h3>
-          <div class="commander-strip">
-            ${historicalCommanders.map((commander) => `<article class="commander-card">
-              ${commander.portrait && COMMANDER_PORTRAIT[commander.portrait] ? `<img src="${COMMANDER_PORTRAIT[commander.portrait]}" alt="${esc(commander.name)}肖像" />` : `<span class="commander-card__fallback">${esc(commander.name.slice(0, 1))}</span>`}
-              <div><strong>${esc(commander.name)}</strong><small>${esc(commander.formation)} · ${esc(commander.role)}</small><span class="commander-card__rank">${commander.rankInsignia ? `<img src="${rankInsignia(commander.rankInsignia)}" alt="" />` : ""}<em>${esc(commander.historicalRank ?? "职务资料待核")}</em></span></div>
-            </article>`).join("")}
-          </div>
-          <h3>任务目标</h3>
-          <ul class="sheet__goals">
-            ${goals.map((goal) => `<li>${ico(UI_ICON.objPending, "ico ico--sm")}${esc(goal)}</li>`).join("")}
-          </ul>
-          <h3>军械库配装</h3>
-          <p class="sheet__hint">缴获的武器会进军械库，出击前可以自行分配；手动选过的武器之后不会被自动换装顶掉。</p>
-          <ul class="armory">
-            ${state.campaign.roster.map((unit) => this.armoryRow(state, unit)).join("")}
-          </ul>
-          <h3>本关虚构配属角色</h3>
-          <p class="sheet__hint">以下角色只用于战术抽象，不是历史人物；真实指挥体系见上方资料卡。</p>
-          <ul class="sheet__roster">
-            ${(mission.storyAllies ?? [])
-              .map(
-                (ally, index) =>
-                  `<li>${ico(unitIdentityPortrait("pva", state.campaign.roster.length + index), "ico ico--sm")}<span>${esc(ally.commander)}${esc(UNIT_TYPES[ally.type].name)} · 剧情</span><span>Lv.${ally.level} · 本关配属</span></li>`,
-              )
-              .join("")}
-          </ul>
+
+          <section class="brief-block">
+            <h3>任务</h3>
+            <ul class="sheet__goals">
+              ${goals.map((goal) => `<li>${ico(UI_ICON.objPending, "ico ico--sm")}${esc(goal)}</li>`).join("")}
+            </ul>
+            <div class="brief-facts">
+              <article><strong>天气</strong><span>${esc(weather.label)}</span><small>${esc(weather.detail)}</small></article>
+              <article><strong>地图</strong><span>${esc(mission.mapNote ?? "战术抽象地图")}</span></article>
+              <article><strong>时间压力</strong><span>${mission.maxTurns} 回合</span><small>${esc(mission.historicalOutcome ?? "")}</small></article>
+              ${(mission.scripted ?? []).length
+                ? `<article><strong>战场规则</strong><span>${esc(
+                    (mission.scripted ?? []).map((rule) => rule.note).join("；"),
+                  )}</span></article>`
+                : ""}
+            </div>
+          </section>
+
+          <section class="brief-block">
+            <h3>敌军威胁</h3>
+            <p class="sheet__hint">下列主将与精锐就在本关棋盘上；击溃后可在原地缴获精英道具。</p>
+            <div class="threat-strip">
+              ${eliteEnemies
+                .map((enemy) => {
+                  const linked = enemy.commanderId ? commandersById.get(enemy.commanderId) : undefined;
+                  const name = linked?.name ?? enemy.name ?? UNIT_TYPES[enemy.type].name;
+                  const role = enemy.title ?? linked?.role ?? "精锐部队";
+                  const formation = linked?.formation ?? enemy.equipment ?? UNIT_TYPES[enemy.type].name;
+                  const portrait =
+                    linked?.portrait && COMMANDER_PORTRAIT[linked.portrait]
+                      ? COMMANDER_PORTRAIT[linked.portrait]
+                      : null;
+                  const drops = (enemy.dropOptions ?? []).map((id) => ITEMS[id].name).join(" / ");
+                  return `<article class="threat-card">
+                    ${portrait ? `<img src="${portrait}" alt="${esc(name)}肖像" />` : `<span class="threat-card__fallback">${esc(name.slice(0, 1))}</span>`}
+                    <div>
+                      <strong>${esc(name)}</strong>
+                      <small>${esc(formation)} · ${esc(role)}</small>
+                      <em>${drops ? `缴获：${esc(drops)}` : "精锐编制"}</em>
+                    </div>
+                  </article>`;
+                })
+                .join("")}
+            </div>
+          </section>
+
+          <section class="brief-block">
+            <h3>我方兵力</h3>
+            <p class="sheet__hint">出战名额 ${deployed.size} / ${cap}（含主力高大全）。本关临时配属为真实人物，战后不进入花名册。</p>
+            <ul class="sheet__roster">
+              ${(mission.storyAllies ?? [])
+                .map(
+                  (ally, index) =>
+                    `<li>${ico(unitIdentityPortrait("pva", state.campaign.roster.length + index), "ico ico--sm")}<span>${esc(ally.commander)}${esc(UNIT_TYPES[ally.type].name)} · 临时配属</span><span>${esc(ally.duty ?? `Lv.${ally.level}`)}</span></li>`,
+                )
+                .join("")}
+            </ul>
+          </section>
+
+          <section class="brief-block brief-block--armory">
+            <h3>军械库 · 编制与携行</h3>
+            <p class="sheet__hint">勾选出战、分配武器与携行物资。不分配物资时默认把战役库存整库带入本关；分配后未带出的物资会留在库存。</p>
+            <p class="sheet__hint">${hasManualLoadout ? `已分配携行：${ITEM_IDS.filter((id) => (loadoutUsed[id] ?? 0) > 0).map((id) => `${ITEMS[id].name}×${loadoutUsed[id]}`).join("、")}` : "当前：默认整库带入"}</p>
+            <ul class="armory">
+              ${state.campaign.roster.map((unit) => this.armoryRow(state, unit, deployed)).join("")}
+            </ul>
+          </section>
+
           <p class="sheet__note">${esc(mission.historicalNote ?? "地图和单位数量均为战术抽象。")}</p>
           <div class="sheet__actions"><button class="btn btn--primary" data-action="begin-mission">进入战场</button></div>
         </div>`;

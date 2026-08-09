@@ -16,6 +16,7 @@ import {
   unitAt,
 } from "./grid";
 import { isEvacTile } from "./mission";
+import { nextInt } from "./rng";
 import type { GameEvent, GameState, ItemId, Unit, Vec2 } from "./types";
 
 const FATIGUE = BALANCE.fatigue;
@@ -66,6 +67,19 @@ export function routUnit(state: GameState, unit: Unit, events: GameEvent[]): voi
   if (unit.faction === "player") state.stats.playerRouted += 1;
   else state.stats.enemyRouted += 1;
   events.push({ type: "routed", unitId: unit.id, faction: unit.faction });
+
+  // 敌军精英 / 主将击溃后在原地掉落精英道具，供友军拾取
+  if (unit.faction === "enemy" && unit.dropOptions && unit.dropOptions.length > 0) {
+    const draw = nextInt(state.rng, 0, unit.dropOptions.length - 1);
+    state.rng = draw.state;
+    const item = unit.dropOptions[draw.value]!;
+    state.fieldItems.push({
+      id: `elite-${unit.id}`,
+      item,
+      x: unit.x,
+      y: unit.y,
+    });
+  }
 }
 
 /** 落地结算：战场拾取与撤离带判定，移动与击溃推进共用 */
