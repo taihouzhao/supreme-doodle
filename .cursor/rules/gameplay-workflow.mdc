@@ -17,13 +17,15 @@ alwaysApply: true
 
 纯表现层（贴图、动画、文案、布局）可不跑完整调参，但若顺带改了规则数值则必须跑。
 
-## 2. 变更后直接部署（方便试玩）
+## 2. 变更后直接部署并合入主线（默认完成动作）
 
-玩法或可感知内容变更完成后：
+玩法、可感知内容、或用户交付的需求完成后，**默认自动走完发布闭环**，无需再等用户说 merge：
 
 1. **提交并推送**当前工作分支（`cursor/*-eb04`）
-2. GitHub Actions **Deploy to R2** 会对 `cursor/**` 与 `main` 自动构建上传
-3. 试玩地址：https://korea-tactics.dashjie.net/index.html （强制刷新）
-4. 可用 `npm run ship` 一键：模拟门槛 → 构建检查 → 提醒推送部署
+2. 开 PR（若尚无），等 CI 绿（或已绿）后 **自动 merge 进 `main`**（本仓默认分支是 `main`，不是 `master`；可用 `gh pr merge --merge --delete-branch`）
+3. 本地切回并 `git pull` 同步 `main`
+4. GitHub Actions **Deploy to R2** 会对 `cursor/**` 与 `main` 自动构建上传
+5. 试玩地址：https://korea-tactics.dashjie.net/index.html （强制刷新）
+6. 可用 `npm run ship` 一键：模拟门槛 → 构建检查 → 提醒推送部署
 
-不要把「只开了 PR、没推送/没进部署白名单」当成已上线。
+不要把「只开了 PR、没推送/没进部署白名单/没 merge」当成已完成。CI 红则先修再合；用户明确说不要 merge 时才停在 PR。
