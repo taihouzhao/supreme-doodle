@@ -291,7 +291,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "在极寒中依托主补给路北、南两段临时路障，反复迟滞由柳潭里向下碣隅里收缩的陆战队纵队。敌军会从公路两端夹击清障；坚持到脱离命令下达并保存高大全。",
     mapNote: "北在上；道路由西北柳潭里方向斜向东南下碣隅里，长津湖占据东侧。两处目标是主补给路沿线临时路障；Fox连控制的死鹰岭高地仍属美军通路防御体系。",
     weather: { options: ["snow"], label: "极寒暴雪", detail: "约零下二三十摄氏度的严寒；积雪降低移动力与远程火力。" },
-    enemyDamageMultiplier: 1.05,
+    enemyDamageMultiplier: 1.15,
     playerEquipment: PVA_EARLY,
     maxTurns: 20,
     map: [
@@ -438,6 +438,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；中央南北公路穿过韩军突出部，南侧道路通向横城—原州撤退轴。玩家从北侧及两翼山路进入，目标沿撤退方向前后排列。",
     weather: { options: ["snow", "fog"], label: "雪夜低云", detail: "积雪与低云降低双方机动和远程观察。" },
     playerEquipment: PVA_EARLY,
+    enemyDamageMultiplier: 1.02,
     maxTurns: 18,
     map: [
       "^^^^^F........F^^^^^",
@@ -504,6 +505,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "村镇与连续堡垒环代表砥平里防御圈；北侧整行是脱离地域，南侧道路是克伦贝装甲特遣队解围方向。",
     weather: { options: ["snow", "overcast"], label: "残雪与低云", detail: "夜间寒冷，天亮后能见度逐步改善。" },
     playerEquipment: PVA_EARLY,
+    enemyDamageMultiplier: 1.3,
     maxTurns: 18,
     map: [
       "FF................FF",
@@ -709,7 +711,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；五圣山纵深在北，597.9与537.7北山紧凑相邻，堡垒格表示坑道后口；美7师与韩2师从南侧进攻。",
     weather: { options: ["overcast", "rain", "snow"], label: "深秋转初冬", detail: "战斗持续43天，经历阴雨、低云和初雪。" },
     playerEquipment: PVA_LATE,
-    enemyDamageMultiplier: 0.65,
+    enemyDamageMultiplier: 0.75,
     maxTurns: 17,
     map: [
       "FF^^^FFF....FFF^^^FF",
@@ -784,7 +786,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "借雨雾接近猪排山，夺取东、西两个前沿支撑点并顶住反击。壕沟和高地减伤明显，迫击炮与炮火支援是打开缺口的关键。",
     mapNote: "北在上；东西支撑点位于同一条连续猪排山前哨山脊，由壕沟与地堡相连。玩家从志愿军北侧阵地接近，美军由南侧主抵抗线增援。",
     weather: { options: ["rain", "fog"], label: "季风雨雾", detail: "持续降雨与山雾削弱远程火力，谷地泥泞。" },
-    enemyDamageMultiplier: 0.8,
+    enemyDamageMultiplier: 0.75,
     playerEquipment: PVA_LATE_ARMOR,
     maxTurns: 17,
     map: [
@@ -858,7 +860,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "在炮火准备后由北向南突破轿岩山三峰阵地：先撕开中、东峰结合部，再夺主峰。暴雨掩护接近也会拖慢机动；最后一关仍以保存主力为硬约束。",
     mapNote: "北在上；本图仅表现中央集团轿岩山切片。西峰主峰与中、东峰构成连续山体，南侧金城川是战役纵深线；北汉江位于画外东翼。",
     weather: { options: ["rain"], label: "盛夏暴雨", detail: "季风暴雨造成河水上涨、道路泥泞，远程火力效果下降。" },
-    enemyDamageMultiplier: 1.03,
+    enemyDamageMultiplier: 1.05,
     playerEquipment: PVA_LATE,
     maxTurns: 23,
     map: [
