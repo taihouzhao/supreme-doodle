@@ -154,7 +154,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       "^^^^^F...==...F^^^^^",
       "FFFF.....==.....FFFF",
       "~~~~~~~~~==~~~~~~~~~",
-      "FFFFF^^..==..^^FFFFF",
+      "FFFFF^^.B==B.^^FFFFF",
       "FFFF..F..===..F.FFFF",
       "^^^^^....==....^^^^^",
       "^^^^^....==....^^^^^",
@@ -193,8 +193,10 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 10, y: 10, name: "城南公路桥" },
       { x: 4, y: 8, name: "清川支流" },
     ],
+    supplyPoints: [{ x: 5, y: 5 }, { x: 14, y: 9 }],
     scripted: [
       { kind: "nightAssault", turns: [1, 4], attackBonus: 0.2, note: "夜袭换防间隙：近战加成" },
+      { kind: "supplyWindow", untilTurn: 8, penalty: 0.1, note: "合围后弹药见底" },
     ],
     victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 2 },
   },
@@ -335,6 +337,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 15, y: 12, name: "下碣隅里方向" },
       { x: 16, y: 4, name: "长津湖" },
     ],
+    supplyPoints: [{ x: 5, y: 7 }, { x: 12, y: 8 }],
     scripted: [
       { kind: "coldAttrition", fromTurn: 4, damage: 1, note: "极寒冻伤：双方持续减员" },
     ],
@@ -668,6 +671,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 7, y: 6, name: "前沿公路口" },
       { x: 10, y: 12, name: "涟川追击方向" },
     ],
+    supplyPoints: [{ x: 9, y: 5 }, { x: 11, y: 3 }],
     scripted: [
       { kind: "barrage", turns: [5, 8], damage: 2, note: "联合国军炮火准备" },
     ],
@@ -740,6 +744,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 8, y: 5, name: "坑道后口" },
       { x: 10, y: 2, name: "五圣山纵深" },
     ],
+    supplyPoints: [{ x: 8, y: 5 }, { x: 11, y: 5 }],
     scripted: [
       { kind: "barrage", turns: [3, 6, 9, 12, 15], damage: 5, note: "上甘岭炮火准备" },
       { kind: "supplyWindow", untilTurn: 5, penalty: 0.16, note: "坑道外弹药耗尽" },

@@ -351,6 +351,7 @@ export class Board {
     }
 
     this.drawPlaceLabels(state, x0, y0, x1, y1);
+    this.drawSupplyPoints(state, x0, y0, x1, y1);
 
     for (const objective of state.objectives) {
       this.drawObjective(objective);
@@ -433,6 +434,34 @@ export class Board {
       ctx.fill();
       ctx.fillStyle = "rgba(240, 236, 214, 0.92)";
       ctx.fillText(place.name, cx, cy);
+    }
+    ctx.restore();
+  }
+
+  /** 补给点：青绿角标，提示站上可恢复弹药窗口 */
+  private drawSupplyPoints(
+    state: GameState,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): void {
+    if (state.supplyPoints.length === 0) return;
+    const { ctx, tile } = this;
+    ctx.save();
+    for (const point of state.supplyPoints) {
+      if (point.x < x0 || point.x > x1 || point.y < y0 || point.y > y1) continue;
+      const cx = point.x * tile + tile * 0.78;
+      const cy = point.y * tile + tile * 0.22;
+      ctx.fillStyle = "rgba(46, 140, 110, 0.85)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, tile * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(240, 248, 240, 0.95)";
+      ctx.font = `700 ${Math.round(tile * 0.14)}px "Noto Sans SC", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("补", cx, cy);
     }
     ctx.restore();
   }

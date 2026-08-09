@@ -88,10 +88,12 @@ export const UNIT_TYPES: Record<UnitTypeId, UnitTypeDef> = {
   },
 };
 
-/** 后勤补充：回复生命与疲劳（正交相邻） */
+/** 后勤补充：回复生命、疲劳，并短暂恢复供给窗口内的弹药 */
 export const LOGISTICS = {
   heal: 28,
   fatigueRelief: 18,
+  /** 邻接补给后，目标无视 supplyWindow 惩罚的持续回合数 */
+  ammoRestoreTurns: 3,
 };
 
 /** 克制系数：MATCHUP[攻方][守方] */

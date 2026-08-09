@@ -788,6 +788,13 @@ function missionStartNotice(mission: MissionConfig, weather: Weather): string | 
   }
   const scripted = (mission.scripted ?? []).map((rule) => rule.note);
   if (scripted.length > 0) parts.push(`战史规则：${scripted.join("；")}`);
+  // 首关引导：点选单位 → 蓝格移动 → 红格攻击（可撤销移动）
+  if (mission.id === "m1-onjong") {
+    parts.push("操作：点选部队 → 蓝格移动 → 红格攻击；移动后可用「撤销移动」");
+  }
+  if ((mission.supplyPoints?.length ?? 0) > 0) {
+    parts.push("地图补给点可恢复弹药；后勤邻接友军亦可短暂补弹");
+  }
   return parts.length > 0 ? parts.join(" · ") : null;
 }
 

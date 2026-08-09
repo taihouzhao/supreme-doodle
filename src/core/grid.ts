@@ -219,14 +219,22 @@ export function canAttack(state: GameState, attacker: Unit, defender: Unit): boo
   return distance >= min && distance <= max;
 }
 
-/** 后勤可补充的正交相邻友军（未满员或仍有疲劳） */
+/** 后勤可补充的正交相邻友军（未满员、仍有疲劳，或我方弹药窗口已过期） */
 export function resupplyTargets(state: GameState, unit: Unit): Unit[] {
   if (unit.type !== "logistics" || !unit.alive || unit.evacuated) return [];
+  const ammoActive = state.scripted.some(
+    (rule) => rule.kind === "supplyWindow" && state.turn > rule.untilTurn,
+  );
   const out: Unit[] = [];
   for (const step of NEIGHBOURS) {
     const other = unitAt(state, unit.x + step.x, unit.y + step.y);
     if (!other || other.faction !== unit.faction || !other.alive || other.evacuated) continue;
-    if (other.hp >= other.maxHp && other.fatigue <= 0) continue;
+    // 仅玩家受 supplyWindow 惩罚；弹药补给人机都可选，但 AI 侧另有优先级过滤
+    const needsAmmo =
+      ammoActive &&
+      other.faction === "player" &&
+      (other.supplyRestoredUntil ?? 0) < state.turn;
+    if (other.hp >= other.maxHp && other.fatigue <= 0 && !needsAmmo) continue;
     out.push(other);
   }
   return out;

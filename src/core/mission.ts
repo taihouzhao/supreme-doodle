@@ -334,6 +334,7 @@ export function createMissionState(setup: MissionSetup): GameState {
     fieldWeapons,
     pendingWeapons: [],
     evacZone: mission.evacZone.map((v) => ({ ...v })),
+    supplyPoints: (mission.supplyPoints ?? []).map((v) => ({ ...v })),
     inventory: { ...emptyInventory(), ...inventory },
     weather: mission.weather
       ? weatherRng.pick(mission.weather.options)
@@ -434,6 +435,13 @@ export function runUpkeep(state: GameState, faction: Unit["faction"], events: Ga
       unit.hp += amount;
       events.push({ type: "healed", unitId: unit.id, amount });
     }
+    // 补给点：站上恢复弹药窗口（与后勤邻接补给共用 supplyRestoredUntil）
+    if (
+      faction === "player" &&
+      state.supplyPoints.some((p) => p.x === unit.x && p.y === unit.y)
+    ) {
+      unit.supplyRestoredUntil = Math.max(unit.supplyRestoredUntil ?? 0, state.turn + 1);
+    }
   }
 
   for (const objective of state.objectives) {
@@ -518,14 +526,20 @@ export function nightAssaultBonus(state: GameState, unit: Unit, distance: number
   return 1;
 }
 
-/** 补给窗口：携行弹药打完之后攻击衰减 */
+/** 补给窗口：携行弹药打完之后攻击衰减；后勤邻接补给可短暂恢复 */
 export function supplyPenalty(state: GameState, unit: Unit): number {
   if (unit.faction !== "player") return 1;
+  if ((unit.supplyRestoredUntil ?? 0) >= state.turn) return 1;
   for (const rule of state.scripted) {
     if (rule.kind !== "supplyWindow") continue;
     if (state.turn > rule.untilTurn) return 1 - rule.penalty;
   }
   return 1;
+}
+
+/** 单位当前是否处于弹药短缺（有 supplyWindow 且未被后勤/补给点恢复） */
+export function isAmmoStarved(state: GameState, unit: Unit): boolean {
+  return supplyPenalty(state, unit) < 1 - 1e-9;
 }
 
 /** 回合结束时统计「全部目标是否仍在手里」的连续回合数 */

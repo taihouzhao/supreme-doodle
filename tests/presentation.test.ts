@@ -76,6 +76,7 @@ function stateWith(units: Unit[]): GameState {
     weather: "clear",
     pending: [],
     places: [],
+    supplyPoints: [],
     scripted: [],
     resultReason: "",
     rng: 1,

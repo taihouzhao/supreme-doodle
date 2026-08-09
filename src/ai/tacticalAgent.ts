@@ -312,9 +312,19 @@ export const tacticalAgent: Agent = {
       return { kind: "capture", unitId: unit.id };
     }
 
-    // 后勤：优先补充重伤/高疲劳友军；阻击关不追到火线送死，改靠后补给
+    // 后勤：优先治疗/消疲；纯补弹只服务关键单位，避免满编刷弹药拖死回合
     if (unit.type === "logistics") {
+      const ammoActive = state.scripted.some(
+        (rule) => rule.kind === "supplyWindow" && state.turn > rule.untilTurn,
+      );
+      const combatNeed = (ally: Unit) =>
+        ally.hp < ally.maxHp || ally.fatigue > 0;
+      const ammoOnlyOk = (ally: Unit) =>
+        ammoActive &&
+        ally.keyUnit &&
+        (ally.supplyRestoredUntil ?? 0) < state.turn;
       const needy = resupplyTargets(state, unit)
+        .filter((ally) => combatNeed(ally) || ammoOnlyOk(ally))
         .slice()
         .sort(
           (a, b) =>
@@ -331,7 +341,6 @@ export const tacticalAgent: Agent = {
             ally.hp < ally.maxHp * (holdMission ? 0.55 : 0.75) ||
             ally.fatigue >= (holdMission ? 40 : 25);
           if (!hurt) return false;
-          // 阻击关：只接近仍靠近己方据点的伤员，避免后勤冲进南侧突击走廊
           if (!holdMission) return true;
           const posts = state.objectives.filter((o) => o.kind === "hold");
           return posts.some((post) => manhattan(ally, post) <= 2);

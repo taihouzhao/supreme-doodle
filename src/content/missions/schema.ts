@@ -145,6 +145,8 @@ export interface MissionConfig {
   waves: WaveSpec[];
   objectives: ObjectiveSpec[];
   evacZone: Vec2[];
+  /** 补给点坐标；站上可恢复 supplyWindow 弹药（与后勤共用模型） */
+  supplyPoints?: Vec2[];
   itemDrops: ItemDropSpec[];
   weaponDrops?: WeaponDropSpec[];
   /** 通关后写入军械库的武器 */

@@ -43,12 +43,14 @@ interface AttackPlan {
 function bestAttackPlan(state: GameState, unit: Unit, tiles: ReachableTile[]): AttackPlan | null {
   const targets = livingUnits(state, "player");
   let best: AttackPlan | null = null;
+  const artillery = unit.type === "artillery";
 
   for (const tile of tiles) {
     const occupant = unitAt(state, tile.x, tile.y);
     if (occupant && occupant.id !== unit.id) continue;
     const range = rangeFrom(state, unit, tile);
     const moved = tile.cost > 0;
+    const terrain = tileAt(state, tile.x, tile.y);
 
     for (const target of targets) {
       const distance = manhattan(tile, target);
@@ -61,9 +63,18 @@ function bestAttackPlan(state: GameState, unit: Unit, tiles: ReachableTile[]): A
         : 0;
 
       let score = damage - counter * 0.7;
-      score += tileAt(state, tile.x, tile.y).defense * 25;
+      score += terrain.defense * 25;
       score -= tile.cost * 0.2;
       if (target.hp <= damage) score += 30;
+
+      // 敌炮：偏好阵地（高地/工事）、架设射击，避免贴脸；移动会丢掉 setupBonus
+      if (artillery) {
+        if (!moved) score += 18;
+        if (terrain.id === "hill" || terrain.id === "fort") score += 22;
+        if (distance <= 2) score -= 25;
+        // 脆弱窗口：刚移动的炮更怕被近战摸到，优先远距离目标
+        if (moved && distance <= 3) score -= 12;
+      }
 
       if (
         !best ||
@@ -96,6 +107,66 @@ function goalFor(state: GameState, unit: Unit): Vec2 | null {
   const nearestPlayer = players.reduce((closest, candidate) =>
     manhattan(unit, candidate) < manhattan(unit, closest) ? candidate : closest,
   );
+
+  // —— 战役专属敌 AI 指纹（≥4 关可辨识行为）——
+  const mid = state.missionId;
+
+  // m2 云山：能占领的单位优先夺回城南公路桥；其余按通用逻辑
+  if (mid === "m2-unsan") {
+    const bridge = state.objectives.find((o) => o.id === "south-road-bridge");
+    if (bridge && bridge.owner === "player" && UNIT_TYPES[unit.type].canCapture) {
+      return { x: bridge.x, y: bridge.y };
+    }
+  }
+
+  // m4 长津：沿 MSR 清障，优先靠近路障目标
+  if (mid === "m4-chosin") {
+    const blocks = state.objectives.filter((o) => o.kind === "hold");
+    if (blocks.length > 0 && unit.type !== "artillery") {
+      const target = blocks.reduce((closest, candidate) =>
+        manhattan(unit, candidate) < manhattan(unit, closest) ? candidate : closest,
+      );
+      return { x: target.x, y: target.y };
+    }
+  }
+
+  // m8 临津：机枪/坦克钉桥头轴；步兵偏 235——可辨识但不封死双目标种子
+  if (mid === "m8-imjin") {
+    const bridge = state.objectives.find((o) => o.id === "imjin-bridgehead");
+    const hill = state.objectives.find((o) => o.id === "gloster-hill");
+    if ((unit.type === "mg" || unit.type === "tank") && bridge) {
+      return { x: bridge.x, y: bridge.y };
+    }
+    if (hill && unit.type === "rifle" && state.turn >= 5 && unit.y <= 9) {
+      return { x: hill.x, y: hill.y };
+    }
+  }
+
+  // m9 铁原：前两波优先压公路口（hold），后期才追北撤轴——避免堵死撤离造成无解种子
+  if (mid === "m9-cheorwon" && unit.type !== "artillery" && unit.type !== "mortar") {
+    const roadMouth = state.objectives.find((o) => o.kind === "hold");
+    if (roadMouth && state.turn <= 6) {
+      return { x: roadMouth.x, y: roadMouth.y };
+    }
+    // 后期：略偏北追，但仍落在最近玩家邻域，保留交火
+    const northernmost = players.reduce((best, candidate) =>
+      candidate.y < best.y || (candidate.y === best.y && candidate.x < best.x) ? candidate : best,
+    );
+    if (manhattan(unit, northernmost) <= manhattan(unit, nearestPlayer) + 1) {
+      return { x: northernmost.x, y: northernmost.y };
+    }
+  }
+
+  // m10 上甘岭：步兵压玩家据点；炮兵偏好南缘高地但保持可射击最近目标（由 bestAttackPlan 主导）
+  if (mid === "m10-triangle-hill" && unit.type !== "artillery") {
+    const posts = state.objectives.filter((o) => o.kind === "hold" && o.owner === "player");
+    if (posts.length > 0) {
+      const target = posts.reduce((closest, candidate) =>
+        manhattan(unit, candidate) < manhattan(unit, closest) ? candidate : closest,
+      );
+      return { x: target.x, y: target.y };
+    }
+  }
 
   if (state.missionKind === "hold") {
     const held = state.objectives.filter((o) => o.kind === "hold" && o.owner === "player");
