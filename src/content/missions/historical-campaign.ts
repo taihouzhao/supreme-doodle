@@ -154,7 +154,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       "^^^^^F...==...F^^^^^",
       "FFFF.....==.....FFFF",
       "~~~~~~~~~==~~~~~~~~~",
-      "FFFFF^^..==..^^FFFFF",
+      "FFFFF^^.B==B.^^FFFFF",
       "FFFF..F..===..F.FFFF",
       "^^^^^....==....^^^^^",
       "^^^^^....==....^^^^^",
@@ -193,8 +193,10 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 10, y: 10, name: "城南公路桥" },
       { x: 4, y: 8, name: "清川支流" },
     ],
+    supplyPoints: [{ x: 5, y: 5 }, { x: 14, y: 9 }],
     scripted: [
       { kind: "nightAssault", turns: [1, 4], attackBonus: 0.2, note: "夜袭换防间隙：近战加成" },
+      { kind: "supplyWindow", untilTurn: 8, penalty: 0.1, note: "合围后弹药见底" },
     ],
     victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 2 },
   },
@@ -309,15 +311,15 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     equipmentEra: "early" as const,
     weaponRewards: ["mosin" as const],
     enemies: [
-      { type: "rifle", x: 6, y: 1, name: "陆战5团先头分队", equipment: "M1加兰德步枪", exp: 100 },
-      { type: "rifle", x: 15, y: 12, name: "下碣隅里接应队", equipment: "M1加兰德步枪", exp: 100 },
-      { type: "mg", x: 7, y: 3, name: "陆战7团2营F连通路警戒", equipment: "BAR／勃朗宁M1919机枪", exp: 85 },
-    
+      { type: "rifle", x: 6, y: 1, name: "陆战5团先头分队", equipment: "M1加兰德步枪", exp: 75 },
+      { type: "rifle", x: 15, y: 12, name: "下碣隅里接应队", equipment: "M1加兰德步枪", exp: 75 },
+      { type: "mg", x: 7, y: 3, name: "陆战7团2营F连通路警戒", equipment: "BAR／勃朗宁M1919机枪", exp: 60 },
+      { type: "rifle", x: 8, y: 8, name: "公路搜索班", equipment: "M1卡宾枪", exp: 30 },
     ],
     variantSlots: [],
     waves: [
-      { window: [5, 6], units: [{ type: "rifle", x: 6, y: 1, name: "柳潭里撤退纵队", equipment: "M1加兰德步枪", exp: 80 }, { type: "mg", x: 7, y: 3, name: "纵队火力", equipment: "勃朗宁M1919机枪", exp: 70 }] },
-      { window: [7, 8], units: [{ type: "rifle", x: 15, y: 12, name: "下碣隅里清障分队", equipment: "M1加兰德步枪", exp: 70 }] },
+      { window: [6, 7], units: [{ type: "rifle", x: 6, y: 1, name: "柳潭里撤退纵队", equipment: "M1加兰德步枪", exp: 55 }, { type: "mg", x: 7, y: 3, name: "纵队火力", equipment: "勃朗宁M1919机枪", exp: 45 }] },
+      { window: [10, 11], units: [{ type: "rifle", x: 15, y: 12, name: "下碣隅里清障分队", equipment: "M1加兰德步枪", exp: 45 }] },
     ],
     objectives: [
       { id: "msr-north-roadblock", name: "MSR北段临时路障", kind: "hold", x: 8, y: 6, owner: "player" },
@@ -326,6 +328,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: [
       { x: 2, y: 3 }, { x: 2, y: 4 }, { x: 2, y: 5 }, { x: 2, y: 6 }, { x: 2, y: 7 }, { x: 2, y: 8 },
       { x: 3, y: 3 }, { x: 3, y: 4 }, { x: 3, y: 5 }, { x: 3, y: 6 }, { x: 3, y: 7 },
+      { x: 4, y: 5 }, { x: 4, y: 6 }, { x: 5, y: 5 }, { x: 5, y: 6 },
     ],
     itemDrops: [{ x: 5, y: 9, options: ["medkit", "at_charge", "satchel", "field_manual"] }, { x: 13, y: 9, options: ["at_charge"] }],
     places: [
@@ -334,10 +337,12 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 15, y: 12, name: "下碣隅里方向" },
       { x: 16, y: 4, name: "长津湖" },
     ],
+    supplyPoints: [{ x: 5, y: 7 }, { x: 12, y: 8 }],
     scripted: [
-      { kind: "coldAttrition", fromTurn: 1, damage: 1, note: "极寒冻伤：双方持续减员" },
+      { kind: "coldAttrition", fromTurn: 4, damage: 1, note: "极寒冻伤：双方持续减员" },
     ],
-    victory: { minEvacuated: 3, evacuateRatio: 0.3, requireKeyUnit: true, minEnemiesRouted: 0 },
+    // 须击溃 2 个外围单位再撤离，避免只摸掉搜索班后秒撤
+    victory: { minEvacuated: 2, evacuateRatio: 0.25, requireKeyUnit: true, minEnemiesRouted: 2 },
   },
   {
     id: "m5-third-offensive",
@@ -550,7 +555,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；玩家由北向南推进。临津江横在北部，雪马里位于中央谷地，235高地是南端终局据点。",
     weather: { options: ["clear", "fog"], label: "春夜薄雾", detail: "夜间河谷能见度有限，白天气象适合联合国军空中支援。" },
     playerEquipment: PVA_LATE,
-    maxTurns: 16,
+    maxTurns: 17,
     map: [
       "...^^F........F^^...",
       "...^^F...==...F^^...",
@@ -571,18 +576,19 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     storyAllies: [
       { commander: "渡口狼", type: "rifle", level: 3, weapon: "ppsh50" },
       { commander: "高地鹰", type: "mg", level: 3, weapon: "dp28" },
+      { commander: "渡河辎", type: "logistics", level: 2, weapon: "supply_cart" },
     ],
     equipmentEra: "late" as const,
     weaponRewards: ["mortar82" as const],
     enemies: [
-      { type: "rifle", x: 10, y: 5, name: "临津江南岸前哨", equipment: "李-恩菲尔德No.4步枪", exp: 96 },
-      { type: "rifle", x: 10, y: 11, name: "格洛斯特营235高地守军", equipment: "李-恩菲尔德No.4步枪", exp: 89 },
-      { type: "mg", x: 9, y: 7, name: "雪马里布伦机枪组", equipment: "布伦轻机枪／维克斯机枪", exp: 110 },
-      { type: "artillery", x: 14, y: 12, name: "英军师属炮兵", equipment: "M2A1 105毫米榴弹炮", exp: 90 },
-      { type: "rifle", x: 12, y: 9, name: "英军后备步兵", equipment: "李-恩菲尔德No.4步枪", exp: 62 },
+      { type: "rifle", x: 10, y: 5, name: "临津江南岸前哨", equipment: "李-恩菲尔德No.4步枪", exp: 75 },
+      { type: "rifle", x: 10, y: 11, name: "格洛斯特营235高地守军", equipment: "李-恩菲尔德No.4步枪", exp: 72 },
+      { type: "mg", x: 9, y: 7, name: "雪马里布伦机枪组", equipment: "布伦轻机枪／维克斯机枪", exp: 80 },
+      { type: "artillery", x: 14, y: 12, name: "英军师属炮兵", equipment: "M2A1 105毫米榴弹炮", exp: 65 },
+      { type: "rifle", x: 12, y: 9, name: "英军后备步兵", equipment: "李-恩菲尔德No.4步枪", exp: 55 },
     ],
     variantSlots: [],
-    waves: [{ window: [6, 7], units: [{ type: "tank", x: 10, y: 12, name: "第8骠骑兵支援", equipment: "百夫长Mk.3坦克", exp: 85 }] }],
+    waves: [{ window: [8, 9], units: [{ type: "tank", x: 10, y: 12, name: "第8骠骑兵支援", equipment: "百夫长Mk.3坦克", exp: 70 }] }],
     objectives: [
       { id: "imjin-bridgehead", name: "临津江南岸桥头", kind: "capture", x: 10, y: 5, owner: "enemy" },
       { id: "gloster-hill", name: "235高地", kind: "capture", x: 10, y: 11, owner: "enemy" },
@@ -596,9 +602,10 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 5, y: 4, name: "临津江" },
     ],
     scripted: [
-      { kind: "barrage", turns: [3, 5, 7], damage: 8, note: "英军炮火拦阻射击" },
+      { kind: "barrage", turns: [4, 7], damage: 4, note: "英军炮火拦阻射击" },
+      { kind: "supplyWindow", untilTurn: 8, penalty: 0.1, note: "渡河后弹药见底" },
     ],
-    victory: { requiredCaptures: 2, holdTurns: 2, minSurvivors: 2 },
+    victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 2 },
   },
   {
     id: "m9-cheorwon",
@@ -642,29 +649,34 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     equipmentEra: "late" as const,
     weaponRewards: ["mosin" as const],
     enemies: [
-      { type: "rifle", x: 8, y: 12, name: "美3师追击步兵", equipment: "M1加兰德步枪", exp: 80 },
-      { type: "rifle", x: 11, y: 12, name: "美骑1师步兵", equipment: "M1加兰德步枪", exp: 80 },
-      { type: "mg", x: 9, y: 12, name: "美军支援火力组", equipment: "勃朗宁M1919机枪", exp: 80 },
-      { type: "artillery", x: 15, y: 13, name: "追击纵队炮兵", equipment: "M2A1 105毫米榴弹炮", exp: 60 },
-      { type: "rifle", x: 10, y: 10, name: "美军公路步兵", equipment: "M1加兰德步枪", exp: 60 },
+      { type: "rifle", x: 8, y: 11, name: "美3师追击步兵", equipment: "M1加兰德步枪", exp: 55 },
+      { type: "rifle", x: 11, y: 11, name: "美骑1师步兵", equipment: "M1加兰德步枪", exp: 55 },
+      { type: "mg", x: 9, y: 12, name: "美军支援火力组", equipment: "勃朗宁M1919机枪", exp: 55 },
+      { type: "artillery", x: 15, y: 13, name: "追击纵队炮兵", equipment: "M2A1 105毫米榴弹炮", exp: 40 },
+      { type: "rifle", x: 10, y: 10, name: "美军公路步兵", equipment: "M1加兰德步枪", exp: 35 },
     ],
     variantSlots: [],
     waves: [
-      { window: [3, 4], units: [{ type: "rifle", x: 9, y: 12, name: "追击步兵", equipment: "M1加兰德步枪", exp: 75 }, { type: "mg", x: 8, y: 12, name: "追击火力", equipment: "勃朗宁M1919机枪", exp: 75 }] },
-      { window: [6, 7], units: [{ type: "rifle", x: 10, y: 12, name: "第二梯队", equipment: "M1加兰德步枪", exp: 80 }] },
+      { window: [5, 6], units: [{ type: "rifle", x: 9, y: 12, name: "追击步兵", equipment: "M1加兰德步枪", exp: 50 }, { type: "mg", x: 8, y: 12, name: "追击火力", equipment: "勃朗宁M1919机枪", exp: 45 }] },
+      { window: [9, 10], units: [{ type: "rifle", x: 10, y: 12, name: "第二梯队", equipment: "M1加兰德步枪", exp: 50 }] },
     ],
     objectives: [],
-    evacZone: [{ x: 7, y: 1 }, { x: 8, y: 1 }, { x: 9, y: 1 }, { x: 10, y: 1 }, { x: 11, y: 1 }, { x: 12, y: 1 }],
+    evacZone: [
+      { x: 6, y: 0 }, { x: 7, y: 0 }, { x: 8, y: 0 }, { x: 9, y: 0 }, { x: 10, y: 0 }, { x: 11, y: 0 }, { x: 12, y: 0 }, { x: 13, y: 0 },
+      { x: 7, y: 1 }, { x: 8, y: 1 }, { x: 9, y: 1 }, { x: 10, y: 1 }, { x: 11, y: 1 }, { x: 12, y: 1 },
+    ],
     itemDrops: [{ x: 5, y: 7, options: ["medkit", "at_charge", "satchel", "field_manual"] }, { x: 14, y: 7, options: ["at_charge", "arty_support"] }],
     places: [
       { x: 10, y: 4, name: "第二阻击线" },
       { x: 7, y: 6, name: "前沿公路口" },
       { x: 10, y: 12, name: "涟川追击方向" },
     ],
+    supplyPoints: [{ x: 9, y: 5 }, { x: 11, y: 3 }],
     scripted: [
-      { kind: "barrage", turns: [3, 7], damage: 2, note: "联合国军炮火准备" },
+      { kind: "barrage", turns: [5, 8], damage: 2, note: "联合国军炮火准备" },
     ],
-    victory: { minEvacuated: 4, evacuateRatio: 0.5, requireKeyUnit: true, minEnemiesRouted: 1 },
+    // 须南下接触击溃 2 个单位后再北撤；扩大撤离区降低死档同时保留配额压力
+    victory: { minEvacuated: 4, evacuateRatio: 0.45, requireKeyUnit: true, minEnemiesRouted: 2 },
   },
   {
     id: "m10-triangle-hill",
@@ -682,7 +694,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；五圣山纵深在北，597.9与537.7北山紧凑相邻，堡垒格表示坑道后口；美7师与韩2师从南侧进攻。",
     weather: { options: ["overcast", "rain", "snow"], label: "深秋转初冬", detail: "战斗持续43天，经历阴雨、低云和初雪。" },
     playerEquipment: PVA_LATE,
-    maxTurns: 18,
+    maxTurns: 17,
     map: [
       "FF^^^FFF....FFF^^^FF",
       "FF^^^FFF.==.FFF^^^FF",
@@ -708,18 +720,17 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     equipmentEra: "late" as const,
     weaponRewards: [],
     enemies: [
-      { type: "rifle", x: 8, y: 11, name: "美7师突击连", equipment: "M1加兰德步枪", exp: 115 },
-      { type: "rifle", x: 11, y: 11, name: "韩2师突击连", equipment: "M1加兰德步枪", exp: 100 },
-      { type: "mg", x: 9, y: 11, name: "联合国军火力组", equipment: "勃朗宁M1919机枪", exp: 110 },
-      // 以近距迫击炮为主威胁；保留一门退后炮兵体现师属火力，但降低经验避免无解种子
-      { type: "mortar", x: 10, y: 10, name: "联合国军迫击炮组", equipment: "M1型81毫米迫击炮", exp: 100 },
-      { type: "artillery", x: 17, y: 13, name: "联合国军炮兵组", equipment: "M2A1 105毫米榴弹炮", exp: 80 },
-      { type: "rifle", x: 10, y: 9, name: "坑道口突击队", equipment: "M1加兰德步枪", exp: 100 },
+      { type: "rifle", x: 8, y: 11, name: "美7师突击连", equipment: "M1加兰德步枪", exp: 100 },
+      { type: "rifle", x: 11, y: 11, name: "韩2师突击连", equipment: "M1加兰德步枪", exp: 95 },
+      { type: "mg", x: 9, y: 11, name: "联合国军火力组", equipment: "勃朗宁M1919机枪", exp: 95 },
+      { type: "mortar", x: 10, y: 10, name: "联合国军迫击炮组", equipment: "M1型81毫米迫击炮", exp: 85 },
+      { type: "artillery", x: 17, y: 13, name: "联合国军炮兵组", equipment: "M2A1 105毫米榴弹炮", exp: 70 },
+      { type: "rifle", x: 10, y: 9, name: "坑道口突击队", equipment: "M1加兰德步枪", exp: 90 },
     ],
     variantSlots: [],
     waves: [
-      { window: [3, 4], units: [{ type: "rifle", x: 9, y: 11, name: "轮番突击", equipment: "M1加兰德步枪", exp: 90 }] },
-      { window: [7, 8], units: [{ type: "rifle", x: 10, y: 11, name: "二梯队", equipment: "M1加兰德步枪", exp: 85 }] },
+      { window: [2, 3], units: [{ type: "rifle", x: 9, y: 11, name: "轮番突击", equipment: "M1加兰德步枪", exp: 90 }] },
+      { window: [5, 6], units: [{ type: "mg", x: 8, y: 10, name: "火力增援", equipment: "勃朗宁M1919机枪", exp: 85 }] },
     ],
     objectives: [
       { id: "hill-5979", name: "597.9高地", kind: "hold", x: 7, y: 4, owner: "enemy" },
@@ -733,9 +744,12 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { x: 8, y: 5, name: "坑道后口" },
       { x: 10, y: 2, name: "五圣山纵深" },
     ],
+    supplyPoints: [{ x: 8, y: 5 }, { x: 11, y: 5 }],
     scripted: [
-      { kind: "barrage", turns: [4, 8], damage: 3, note: "上甘岭炮火准备" },
+      { kind: "barrage", turns: [3, 6, 9, 12, 15], damage: 5, note: "上甘岭炮火准备" },
+      { kind: "supplyWindow", untilTurn: 5, penalty: 0.16, note: "坑道外弹药耗尽" },
     ],
+    // 至少守住一处主峰到结束；炮火与弹药窗口压低蹲坑通关率
     victory: { holdUntilEnd: true, minPostsHeld: 1, minSurvivors: 3 },
   },
   {

@@ -250,7 +250,7 @@ export function performWait(_state: GameState, unit: Unit): boolean {
   return true;
 }
 
-/** 后勤邻接补充：回复生命并降低疲劳 */
+/** 后勤邻接补充：回复生命、降低疲劳，并短暂恢复弹药（对抗 supplyWindow） */
 export function performResupply(
   state: GameState,
   unit: Unit,
@@ -262,9 +262,21 @@ export function performResupply(
   const missing = target.maxHp - target.hp;
   const heal = Math.min(LOGISTICS.heal, Math.max(0, missing));
   const fatigueRelief = Math.min(LOGISTICS.fatigueRelief, target.fatigue);
-  if (heal <= 0 && fatigueRelief <= 0) return false;
+  const needsAmmo =
+    target.faction === "player" &&
+    state.scripted.some((rule) => rule.kind === "supplyWindow" && state.turn > rule.untilTurn) &&
+    (target.supplyRestoredUntil ?? 0) < state.turn;
+  if (heal <= 0 && fatigueRelief <= 0 && !needsAmmo) return false;
   target.hp += heal;
   addFatigue(target, -fatigueRelief);
+  // 弹药恢复：显式补弹，或治疗/消疲时顺带恢复（仅玩家）
+  if (
+    target.faction === "player" &&
+    state.scripted.some((rule) => rule.kind === "supplyWindow") &&
+    (needsAmmo || heal > 0 || fatigueRelief > 0)
+  ) {
+    target.supplyRestoredUntil = state.turn + LOGISTICS.ammoRestoreTurns;
+  }
   unit.hasActed = true;
   unit.mpLeft = 0;
   events.push({

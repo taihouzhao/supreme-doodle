@@ -238,6 +238,7 @@ export function hashState(state: GameState): string {
         Math.round(unit.fatigue * 100),
         unit.alive ? 1 : 0,
         unit.evacuated ? 1 : 0,
+        unit.supplyRestoredUntil ?? 0,
       ].join(":"),
     );
   }

@@ -7,7 +7,7 @@ import { renderReport } from "./report";
 import { runSimulation, type SimulationResult } from "./simulate";
 
 /**
- * 以「基础策略十二关平均任务胜率 ≈ 30%」为靶心，搜索敌军伤害系数。
+ * 以「基础策略十二关平均任务胜率 ≈ 40%」为靶心，搜索敌军伤害系数。
  * 玩法数值变更后应跑此工具反复打磨，再部署试玩。
  */
 

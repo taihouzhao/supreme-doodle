@@ -27,14 +27,14 @@ npm run dev           # 本地开发
 npm run build         # 构建静态产物到 dist/
 npm run test          # 规则、确定性、战役与平衡测试
 npm run sim           # 蒙特卡洛模拟 + 门槛 + reports/balance.md
-npm run balance:tune  # 调敌军伤害系数，靶心十二关平均任务完成率 ≈ 30%
+npm run balance:tune  # 调敌军伤害系数，靶心十二关平均任务完成率 ≈ 40%
 npm run ship          # 模拟门槛 → 构建 → 推送（触发 R2 部署）
 npm run deploy:r2     # 仅把 dist/ 同步到 R2（需凭证）
 ```
 
 ## 玩法变更站规
 
-1. **凡改玩法 / 数值 / 关卡难度**：必须用蒙特卡洛打磨（`npm run sim` / `npm run balance:tune`）。十二关采用“平均任务完成率”而非几乎必然归零的“全胜率”：基础策略目标带 **15%–42%**（靶心 30%），同时检查分关难度、战术策略优势、无死种子与反无脑打法门槛。
+1. **凡改玩法 / 数值 / 关卡难度**：必须用蒙特卡洛打磨（`npm run sim` / `npm run balance:tune`）。十二关采用“平均任务完成率”而非几乎必然归零的“全胜率”：基础策略目标带 **25%–65%**（靶心 40%，与 `src/sim/gates.ts` 一致），同时检查分关难度、战术≥基础、无死种子与反无脑打法门槛。
 2. **改完直接部署**：推送 `cursor/**` 或 `main` 会自动 Deploy to R2。试玩：https://korea-tactics.dashjie.net/index.html （强制刷新）。
 
 详见 `.cursor/rules/gameplay-workflow.mdc`。

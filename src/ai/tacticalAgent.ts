@@ -312,9 +312,19 @@ export const tacticalAgent: Agent = {
       return { kind: "capture", unitId: unit.id };
     }
 
-    // 后勤：优先补充重伤/高疲劳友军；阻击关不追到火线送死，改靠后补给
+    // 后勤：优先治疗/消疲；纯补弹只服务关键单位，避免满编刷弹药拖死回合
     if (unit.type === "logistics") {
+      const ammoActive = state.scripted.some(
+        (rule) => rule.kind === "supplyWindow" && state.turn > rule.untilTurn,
+      );
+      const combatNeed = (ally: Unit) =>
+        ally.hp < ally.maxHp || ally.fatigue > 0;
+      const ammoOnlyOk = (ally: Unit) =>
+        ammoActive &&
+        ally.keyUnit &&
+        (ally.supplyRestoredUntil ?? 0) < state.turn;
       const needy = resupplyTargets(state, unit)
+        .filter((ally) => combatNeed(ally) || ammoOnlyOk(ally))
         .slice()
         .sort(
           (a, b) =>
@@ -331,7 +341,6 @@ export const tacticalAgent: Agent = {
             ally.hp < ally.maxHp * (holdMission ? 0.55 : 0.75) ||
             ally.fatigue >= (holdMission ? 40 : 25);
           if (!hurt) return false;
-          // 阻击关：只接近仍靠近己方据点的伤员，避免后勤冲进南侧突击走廊
           if (!holdMission) return true;
           const posts = state.objectives.filter((o) => o.kind === "hold");
           return posts.some((post) => manhattan(ally, post) <= 2);
@@ -400,11 +409,15 @@ export const tacticalAgent: Agent = {
       const posts = state.objectives.filter((o) => o.kind === "hold");
       const onPost = posts.some((o) => o.x === unit.x && o.y === unit.y);
       if (!onPost && unit.mpLeft > 0) {
+        const contested = posts.filter((post) => post.owner !== "player");
         const vacant = posts.filter((post) => {
           const occ = unitAt(state, post.x, post.y);
           return !occ || occ.id === unit.id;
         });
-        const goal = nearest(unit, vacant.length > 0 ? vacant : posts);
+        const goal = nearest(
+          unit,
+          contested.length > 0 ? contested : vacant.length > 0 ? vacant : posts,
+        );
         if (goal && (unit.x !== goal.x || unit.y !== goal.y)) {
           let best: { x: number; y: number; dist: number } | null = null;
           for (const tile of stoppableTiles(state, unit)) {
@@ -427,10 +440,10 @@ export const tacticalAgent: Agent = {
         }
         const options = attackOptions(state, unit).filter((option) => {
           if (unit.keyUnit && canBeCountered(state, unit, option.target)) return false;
-          // 满血守军可以利用工事主动压低突击梯队；低血量单位只补刀，避免无谓换血。
-          if (hpRatio < 0.35 && !option.lethal) return false;
-          // 中残血时避免无反击换血，保全阻击关存活门槛。
-          if (hpRatio < 0.55 && canBeCountered(state, unit, option.target) && !option.lethal) {
+          const nearPost = posts.some((post) => manhattan(option.target, post) <= 2);
+          if (!nearPost) return option.lethal;
+          if (hpRatio < 0.4 && !option.lethal) return false;
+          if (hpRatio < 0.6 && canBeCountered(state, unit, option.target) && !option.lethal) {
             return false;
           }
           return true;

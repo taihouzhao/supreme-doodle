@@ -163,6 +163,11 @@ export interface Unit {
   evacuated: boolean;
   /** 固定主力标记；高大全在撤离关中也是必需撤离单位。 */
   keyUnit: boolean;
+  /**
+   * 后勤补给恢复的弹药窗口：在此回合（含）之前攻击不受 supplyWindow 惩罚。
+   * 与地图补给点共用语义，避免两套补给模型。
+   */
+  supplyRestoredUntil?: number;
 }
 
 export interface Objective {
@@ -233,6 +238,8 @@ export interface GameState {
   /** 本关拾取、通关后并入战役军械库 */
   pendingWeapons: WeaponId[];
   evacZone: Vec2[];
+  /** 补给点：站上可恢复弹药窗口（与后勤补给共用 supplyRestoredUntil） */
+  supplyPoints: Vec2[];
   inventory: Record<ItemId, number>;
   weather: Weather;
   pending: PendingReinforcement[];
