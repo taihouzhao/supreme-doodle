@@ -1,15 +1,17 @@
 import { ITEMS, ITEM_IDS } from "../content/items";
+import { ATTACHMENTS } from "../content/attachments";
 import { BALANCE } from "../content/balance";
 import { CHAPTER_ONE } from "../content/chapter";
 import { TERRAIN } from "../content/terrain";
 import { PROGRESS, levelFromExp } from "../content/progress";
 import { LOGISTICS, UNIT_TYPES } from "../content/units";
 import { WEAPONS, WEAPON_HISTORY } from "../content/weapons";
-import { equippableWeapons } from "../core/campaign";
+import { equippableAttachments, equippableWeapons, freeAttachmentCount, freeWeaponCount, ownedAttachmentCount, ownedWeaponCount } from "../core/campaign";
 import { effectiveStats, inventoryForUnit } from "../core/commander";
+import { effectiveIndirect } from "../core/equipment";
 import { attackRange, livingUnits, unitAt } from "../core/grid";
 import { isEvacTile, movementBudget, type RosterUnit } from "../core/mission";
-import type { GameState, ItemId, Unit, WeaponId, Weather } from "../core/types";
+import type { AttachmentId, GameState, ItemId, Unit, WeaponId, Weather } from "../core/types";
 import {
   COMMANDER_PORTRAIT,
   ITEM_ICON,
@@ -81,7 +83,7 @@ function combatSummary(battle: GameState, unit: Unit): StatCell[] {
   const range = attackRange(battle, unit);
   const terrain = TERRAIN[battle.tiles[unit.y * battle.width + unit.x]!];
 
-  const primary = def.indirect ? stats.intellect : stats.might;
+  const primary = effectiveIndirect(unit) ? stats.intellect : stats.might;
   // 武器进攻已并入 effectiveStats；统率常驻微幅与战斗公式一致
   const attack = Math.round(
     def.attack *
@@ -328,12 +330,16 @@ export class View {
   private bindArmory(): void {
     this.root.addEventListener("change", (event) => {
       const select = (event.target as HTMLElement).closest<HTMLSelectElement>(
-        'select[data-action="equip-weapon"]',
+        'select[data-action="equip-weapon"], select[data-action="equip-attachment"]',
       );
       if (!select) return;
       const unitId = select.dataset.value;
       if (!unitId) return;
-      this.session.equipWeapon(unitId, select.value as WeaponId);
+      if (select.dataset.action === "equip-attachment") {
+        this.session.equipAttachment(unitId, select.value ? (select.value as AttachmentId) : null);
+      } else {
+        this.session.equipWeapon(unitId, select.value as WeaponId);
+      }
     });
   }
 
@@ -433,6 +439,7 @@ export class View {
         ${factors.length > 0 ? `<ul class="factors">${factors.map((factor) =>
           `<li class="${factor.favourable ? "is-up" : "is-down"}"><span>${esc(factor.label)}</span><strong>×${factor.value.toFixed(2)}</strong></li>`,
         ).join("")}</ul>` : ""}
+        ${strike?.breakdown.coordinationSources?.length ? `<p class="card__note">火力呼应来源：${esc(strike.breakdown.coordinationSources.join("、"))}</p>` : ""}
       </section>` : `<strong class="intel__title">战场记录</strong>`}
       <button type="button" class="log__toggle" data-action="toggle-log" aria-expanded="${state.logExpanded}">
         ${state.logExpanded ? "收起回合记录" : `展开回合记录（${recent.length} 条）`}
@@ -516,6 +523,7 @@ export class View {
     const place = battle.places.find((entry) => entry.x === x && entry.y === y);
     const fieldItem = battle.fieldItems.find((i) => i.x === x && i.y === y);
     const supplyPoint = battle.supplyPoints.some((point) => point.x === x && point.y === y);
+    const fieldAttachment = (battle.fieldAttachments ?? []).find((i) => i.x === x && i.y === y);
     const evac = isEvacTile(battle, x, y);
 
     const title = occupant
@@ -528,7 +536,9 @@ export class View {
             ? "撤离带"
             : supplyPoint
               ? "补给点"
-          : terrain.name;
+              : fieldAttachment
+                ? "战场附件"
+                : terrain.name;
 
     const titleIcon = occupant
       ? unitPortrait(occupant)
@@ -536,14 +546,17 @@ export class View {
         ? objective.owner === "player"
           ? UI_ICON.objDone
           : UI_ICON.objPending
-        : evac
-          ? UI_ICON.evac
-          : supplyPoint
-            ? UI_ICON.fieldItem
-          : TERRAIN_ICON[terrainId];
+          : evac
+            ? UI_ICON.evac
+            : supplyPoint
+              ? UI_ICON.fieldItem
+              : fieldAttachment
+                ? UI_ICON.fieldItem
+                : TERRAIN_ICON[terrainId];
 
     const extras = [
       fieldItem ? `战利品${ITEMS[fieldItem.item].name}（战后结算）` : "",
+      fieldAttachment ? `附件${ATTACHMENTS[fieldAttachment.attachment].name}` : "",
       objective
         ? objective.owner === "player"
           ? "己方控制"
@@ -619,6 +632,7 @@ export class View {
           <ul class="factors">${breakdownFactors(previewForUnit.breakdown).slice(0, 8).map((factor) =>
             `<li class="${factor.favourable ? "is-up" : "is-down"}"><span>${esc(factor.label)}</span><strong>×${factor.value.toFixed(2)}</strong></li>`,
           ).join("")}</ul>
+          ${previewForUnit.breakdown.coordinationSources?.length ? `<p class="card__note">火力呼应来源：${esc(previewForUnit.breakdown.coordinationSources.join("、"))}</p>` : ""}
         </section>`
       : "";
 
@@ -840,7 +854,7 @@ export class View {
     dock.style.top = `${Math.round(best.top)}px`;
   }
 
-  /** 军械部一行：武器 + 携行（出战勾选在组织部） */
+  /** 军械部紧凑单位卡：武器槽 + 附件槽 + 携行物资（出战勾选在组织部） */
   private ordnanceRow(state: SessionState, unit: RosterUnit): string {
     const options = equippableWeapons(state.campaign, unit.id);
     const current = WEAPONS[unit.weapon];
@@ -853,10 +867,17 @@ export class View {
       current.stats.agility ? `敏+${current.stats.agility}` : "",
       current.rangeBonus ? `射程+${current.rangeBonus}` : "",
       current.defenseBonus ? `减伤+${Math.round(current.defenseBonus * 100)}%` : "",
+      current.damageMultiplier && current.damageMultiplier !== 1 ? `伤害×${current.damageMultiplier}` : "",
+      current.moveModifier ? `移动${current.moveModifier > 0 ? "+" : ""}${current.moveModifier}` : "",
+      current.requiresSetup ? "需架设" : "",
+      current.cooldownTurns ? `冷却${current.cooldownTurns}回合` : "",
+      current.splashRatio ? `正交溅射${Math.round(current.splashRatio * 100)}%` : "",
     ]
       .filter(Boolean)
       .join(" · ");
     const loadout = state.campaign.pendingLoadout?.[unit.id] ?? {};
+    const attachmentOptions = equippableAttachments(state.campaign, unit.id);
+    const currentAttachment = unit.attachment ? ATTACHMENTS[unit.attachment] : null;
     const stock = state.campaign.inventory;
     const used = this.session.loadoutTotals();
     const itemControls = ITEM_IDS.filter((id) => (stock[id] ?? 0) > 0 || (loadout[id] ?? 0) > 0)
@@ -884,12 +905,26 @@ export class View {
               const w = WEAPONS[id];
               const h = WEAPON_HISTORY[id];
               const mark = id === unit.weapon ? "✓ " : "";
-              return `<option value="${id}"${id === unit.weapon ? " selected" : ""}>${mark}${esc(w.name)} · 评分${w.score} · 射程修正${w.rangeBonus >= 0 ? "+" : ""}${w.rangeBonus} · ${esc(h.caliber)}</option>`;
+              const owned = ownedWeaponCount(state.campaign, id);
+              const free = freeWeaponCount(state.campaign, id, unit.id);
+              return `<option value="${id}"${id === unit.weapon ? " selected" : ""}>${mark}${esc(w.name)} · ${owned}/${free}件 · ${esc(h.caliber)}</option>`;
             })
             .join("")}
         </select>
-        <small>${esc(`${history.origin} · ${history.caliber}`)} · 当前评分 ${current.score}</small>
+        <small>${esc(`${history.origin} · ${history.caliber}`)} · 库存 ${ownedWeaponCount(state.campaign, unit.weapon)} 件 / 可用 ${freeWeaponCount(state.campaign, unit.weapon, unit.id)} 件</small>
         <small>${esc(bonus || "无额外加成")}${unit.manualWeapon ? " · 手动锁定" : ""}</small>
+        <select data-action="equip-attachment" data-value="${esc(unit.id)}" aria-label="${esc(unit.name)}的附件">
+          <option value=""${!unit.attachment ? " selected" : ""}>无附件 · 0/0</option>
+          ${attachmentOptions
+            .map((id) => {
+              const def = ATTACHMENTS[id];
+              const owned = ownedAttachmentCount(state.campaign, id);
+              const free = freeAttachmentCount(state.campaign, id, unit.id);
+              return `<option value="${id}"${id === unit.attachment ? " selected" : ""}>${id === unit.attachment ? "✓ " : ""}${esc(def.name)} · ${owned}/${free}件</option>`;
+            })
+            .join("")}
+        </select>
+        <small>${currentAttachment ? `${esc(currentAttachment.name)} · ${esc(currentAttachment.description)}` : "附件槽空置；附件不占用携行物资"}</small>
         <div class="loadout" title="从战役库存分配本关携行；不分配则默认整库带入">
           <strong>本关携行</strong>
           ${itemControls || "<small>库存为空，或保持默认整库带入</small>"}
@@ -905,7 +940,12 @@ export class View {
     const weather = mission.weather ?? { options: ["clear" as Weather], label: "晴", detail: "" };
     const commandersById = new Map((mission.commanders ?? []).map((c) => [c.id, c]));
     const eliteEnemies = mission.enemies.filter(
-      (enemy) => enemy.commanderId || enemy.title || (enemy.dropOptions?.length ?? 0) > 0,
+      (enemy) =>
+        enemy.commanderId ||
+        enemy.title ||
+        (enemy.dropOptions?.length ?? 0) > 0 ||
+        (enemy.dropWeapons?.length ?? 0) > 0 ||
+        (enemy.dropAttachments?.length ?? 0) > 0,
     );
     return `
       <p class="hq-panel__lead">${esc(mission.brief)}</p>
@@ -936,7 +976,11 @@ export class View {
               linked?.portrait && COMMANDER_PORTRAIT[linked.portrait]
                 ? COMMANDER_PORTRAIT[linked.portrait]
                 : null;
-            const drops = (enemy.dropOptions ?? []).map((id) => ITEMS[id].name).join(" / ");
+            const drops = [
+              ...(enemy.dropOptions ?? []).map((id) => ITEMS[id].name),
+              ...(enemy.dropWeapons ?? []).map((id) => WEAPONS[id]?.name ?? id),
+              ...(enemy.dropAttachments ?? []).map((id) => ATTACHMENTS[id]?.name ?? id),
+            ].join(" / ");
             return `<article class="threat-card">
               ${portrait ? `<img src="${portrait}" alt="${esc(name)}肖像" />` : `<span class="threat-card__fallback">${esc(name.slice(0, 1))}</span>`}
               <div>
@@ -970,6 +1014,10 @@ export class View {
     const warehouseCount = ITEM_IDS.reduce((sum, id) => sum + (state.campaign.inventory[id] ?? 0), 0);
     return `
       <p class="sheet__hint">战役库存（战役仓库）：为各将领分配武器与本关携行；每名将领最多携带 3 件，仓库最多保留 6 件。</p>
+      <p class="sheet__hint">每支部队固定 1 件武器，可再装 0–1 件附件；换装只在库存有空闲实物时生效，不会自动按评分替换。</p>
+      <p class="sheet__hint">附件库存：${Object.entries(state.campaign.attachments.reduce<Record<string, number>>((all, id) => ({ ...all, [id]: (all[id] ?? 0) + 1 }), {}))
+        .map(([id, count]) => `${ATTACHMENTS[id as AttachmentId]?.name ?? id}×${count}`)
+        .join("、") || "空"}</p>
       <p class="sheet__hint">战役仓库 ${warehouseCount}/6：${stockLine || "空"} · ${
         hasManualLoadout
           ? `已分配：${ITEM_IDS.filter((id) => (loadoutUsed[id] ?? 0) > 0)
@@ -995,7 +1043,7 @@ export class View {
     const status = unit.type === "logistics" ? "后勤保障" : type.name;
     const role = unit.duty ?? "直属作战分队";
     return `<article class="org-unit-row${target ? " is-target" : ""}${unit.type === "logistics" ? " is-logistics" : ""}">
-      <label class="org-unit-row__deploy">
+      <label class="org-card__deploy org-unit-row__deploy">
         <input type="checkbox" data-action="toggle-deploy" data-value="${esc(unit.id)}" aria-label="${esc(unit.commanderName)}出战" ${selected ? "checked" : ""} ${unit.keyUnit ? "disabled" : ""} />
         <span>${unit.keyUnit ? "主力" : selected ? "出战" : "待命"}</span>
       </label>
@@ -1033,6 +1081,7 @@ export class View {
     return `
       <div class="org-subtabs" aria-label="组织部工作区">
         <span>编制</span><strong>兵员补充</strong>
+        <small>查看五维成长</small>
       </div>
       <section class="org-summary" aria-label="部队就绪概况">
         <div><strong>部队就绪概况</strong><span>${state.campaign.roster.length} 个单位 · 总兵力 ${state.campaign.roster.reduce((sum, unit) => sum + unit.hp, 0)} / ${state.campaign.roster.reduce((sum, unit) => sum + unit.maxHp, 0)}</span></div>
@@ -1190,6 +1239,7 @@ export class View {
             <li><span>归队</span><strong>${outcome.returningUnits.length}</strong></li>
             <li><span>3级以上老兵</span><strong>${outcome.veteransAfter}</strong></li>
             <li><span>缴获武器</span><strong>${outcome.weaponsGained.length}</strong></li>
+            <li><span>回收附件</span><strong>${outcome.attachmentsGained.length}</strong></li>
           </ul>
           ${outcome.permanentLossNames.length > 0 ? `<p class="result-detail"><strong>永久损失：</strong>${esc(outcome.permanentLossNames.join("、"))}</p>` : ""}
           ${outcome.returningUnitNames.length > 0 ? `<p class="result-detail"><strong>重伤归队：</strong>${esc(outcome.returningUnitNames.join("、"))}</p>` : ""}
@@ -1197,6 +1247,7 @@ export class View {
           ${outcome.weaponsGained.length > 0 ? `<p class="result-detail"><strong>缴获/奖励：</strong>${esc(outcome.weaponsGained.map((id) => WEAPONS[id].name).join("、"))}</p>` : ""}
           ${(outcome.itemsGained?.length ?? 0) > 0 ? `<p class="result-detail"><strong>战利品：</strong>${esc((outcome.itemsGained ?? []).map((id) => ITEMS[id].name).join("、"))} · 已放入战役仓库（上限 6 件）</p>` : ""}
           ${(outcome.itemsDiscarded?.length ?? 0) > 0 ? `<p class="result-detail result-detail--warning"><strong>仓库已满：</strong>${esc((outcome.itemsDiscarded ?? []).map((id) => ITEMS[id].name).join("、"))} 未能保留</p>` : ""}
+          ${outcome.attachmentsGained.length > 0 ? `<p class="result-detail"><strong>附件入库：</strong>${esc(outcome.attachmentsGained.map((id) => ATTACHMENTS[id].name).join("、"))}</p>` : ""}
           <p class="result-detail"><strong>抵达地标：</strong>${landmarks.length > 0 ? esc(landmarks.join("、")) : "本关未抵达已登记地标"}</p>
           <p class="sheet__note">${
             outcome.permanentLosses.length > 0

@@ -3,6 +3,7 @@ import { UNIT_TYPES } from "../content/units";
 import { getMission } from "../content/missions";
 import { COUNTER_RATIO, estimateDamageFrom, itemDamage } from "../core/combat";
 import { inventoryForUnit } from "../core/commander";
+import { effectiveIndirect, isMotorized } from "../core/equipment";
 import {
   encirclementStatus,
   livingUnits,
@@ -152,7 +153,7 @@ function planItem(state: GameState, unit: Unit): Plan | null {
 
   if (hasItem("at_charge")) {
     const armour = livingUnits(state, "enemy").filter(
-      (e) => UNIT_TYPES[e.type].vehicle && manhattan(unit, e) <= ITEMS.at_charge.range,
+      (e) => isMotorized(e) && manhattan(unit, e) <= ITEMS.at_charge.range,
     );
     const target = armour.sort((a, b) => a.hp - b.hp)[0];
     if (target) {
@@ -304,7 +305,7 @@ function planRetreat(state: GameState, unit: Unit, danger: number[]): Plan | nul
 function priority(state: GameState, unit: Unit): number {
   let score = 0;
   if (unit.keyUnit) score += state.missionKind === "withdraw" ? 60 : 40;
-  if (UNIT_TYPES[unit.type].indirect) score += 30;
+  if (effectiveIndirect(unit)) score += 30;
   if (unit.type === "mg") score += 20;
   if (unit.type === "artillery") score += 15;
   if (unit.type === "logistics") score += 8;

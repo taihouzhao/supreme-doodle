@@ -27,6 +27,7 @@ import {
   performWait,
 } from "./resolve";
 import type { Action, ApplyResult, GameEvent, GameState, Unit } from "./types";
+import { isMotorized } from "./equipment";
 
 export class IllegalActionError extends Error {
   constructor(message: string) {
@@ -195,7 +196,7 @@ export function legalActions(state: GameState): Action[] {
         } else if (def.targeting === "target") {
           for (const enemy of livingUnits(state, "enemy")) {
             if (manhattan(unit, enemy) > def.range) continue;
-            if (def.antiArmorOnly && !UNIT_TYPES[enemy.type].vehicle) continue;
+            if (def.antiArmorOnly && !isMotorized(enemy)) continue;
             actions.push({ kind: "useItem", unitId: unit.id, item, targetId: enemy.id });
           }
         } else {
@@ -240,11 +241,16 @@ export function hashState(state: GameState): string {
         unit.alive ? 1 : 0,
         unit.evacuated ? 1 : 0,
         unit.supplyRestoredUntil ?? 0,
+        unit.weaponCooldownUntil ?? 0,
+        unit.medicTriggersUsed ?? 0,
+        unit.attachment ?? "",
       ].join(":"),
     );
   }
   for (const objective of state.objectives) parts.push(`${objective.id}=${objective.owner}`);
   for (const item of ITEM_IDS) parts.push(`${item}=${state.inventory[item]}`);
+  for (const weapon of state.pendingWeapons) parts.push(`pendingWeapon=${weapon}`);
+  for (const attachment of state.pendingAttachments ?? []) parts.push(`pendingAttachment=${attachment}`);
 
   const joined = parts.join("|");
   let hash = 0x811c9dc5;

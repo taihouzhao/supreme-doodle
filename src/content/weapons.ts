@@ -35,6 +35,29 @@ export interface WeaponDef {
   /** 只影响表现与多目标范围，不改变既有基础伤害公式。 */
   effectProfile?: WeaponEffectProfile;
   pattern?: AttackPattern;
+  /** 通用装备效果；旧型号缺省时按 1/0 处理。 */
+  damageMultiplier?: number;
+  moveModifier?: number;
+  /** 未移动时使用的固定射程；移动射程仍按 UnitType + rangeBonus。 */
+  stationaryMinRange?: number;
+  stationaryMaxRange?: number;
+  /** 与 stationary* 等价的结构化表示，供数据驱动工具读取。 */
+  fixedRange?: { min: number; max: number };
+  mobileRange?: { min: number; max: number };
+  movingDamageMultiplier?: number;
+  requiresSetup?: boolean;
+  /** 对特定守方兵种覆写克制系数。 */
+  matchupModifiers?: Partial<Record<UnitTypeId, number>>;
+  supplyPenaltyMultiplier?: number;
+  fortDamageMultiplier?: number;
+  splashRatio?: number;
+  cooldownTurns?: number;
+  /** 装备自身带车辆属性；BM-13 因此不能再挂炮兵牵引车。 */
+  motorized?: boolean;
+  vehicle?: boolean;
+  directFire?: boolean;
+  /** BAR 等武器的架设收益覆写。 */
+  setupBonusOverride?: number;
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
@@ -314,6 +337,193 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     score: 42,
     era: "enemy",
   },
+  mosin_m44_marksman: {
+    id: "mosin_m44_marksman",
+    name: "莫辛 M44 特等射手枪",
+    forTypes: ["rifle"],
+    stats: { might: 17, intellect: 2 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 32,
+    era: "late",
+    stationaryMinRange: 1,
+    stationaryMaxRange: 2,
+    fixedRange: { min: 1, max: 2 },
+    mobileRange: { min: 1, max: 1 },
+    damageMultiplier: 0.85,
+  },
+  m1d_sniper: {
+    id: "m1d_sniper",
+    name: "M1D狙击步枪",
+    forTypes: ["rifle"],
+    stats: { might: 18, intellect: 3 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 35,
+    era: "enemy",
+    stationaryMinRange: 1,
+    stationaryMaxRange: 2,
+    fixedRange: { min: 1, max: 2 },
+    mobileRange: { min: 1, max: 1 },
+    damageMultiplier: 0.9,
+    supplyPenaltyMultiplier: 1.15,
+  },
+  bar_m1918a2: {
+    id: "bar_m1918a2",
+    name: "M1918A2 BAR",
+    forTypes: ["mg"],
+    stats: { might: 15, agility: 2 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 29,
+    era: "enemy",
+    moveModifier: 1,
+    movingDamageMultiplier: 1.08,
+    setupBonusOverride: 0.15,
+  },
+  m2hb: {
+    id: "m2hb",
+    name: "M2HB 12.7mm机枪",
+    forTypes: ["mg"],
+    stats: { might: 22, leadership: 2 },
+    attackBonus: 0,
+    defenseBonus: 0.01,
+    rangeBonus: 1,
+    minRangeBonus: 0,
+    score: 38,
+    era: "enemy",
+    moveModifier: -2,
+    matchupModifiers: { tank: 0.7 },
+    requiresSetup: true,
+  },
+  type92_infantry_gun: {
+    id: "type92_infantry_gun",
+    name: "九二式步兵炮",
+    forTypes: ["artillery"],
+    stats: { intellect: 16, might: 4, leadership: 1 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: -2,
+    minRangeBonus: -2,
+    score: 28,
+    era: "early",
+    moveModifier: 2,
+    fortDamageMultiplier: 1.2,
+    directFire: true,
+  },
+  mortar120: {
+    id: "mortar120",
+    name: "120mm重迫击炮",
+    forTypes: ["mortar"],
+    stats: { intellect: 22, might: 4 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 2,
+    minRangeBonus: 1,
+    score: 36,
+    era: "late",
+    damageMultiplier: 1.15,
+    moveModifier: -1,
+    requiresSetup: true,
+  },
+  m2_4_2_mortar: {
+    id: "m2_4_2_mortar",
+    name: "M2 4.2英寸迫击炮",
+    forTypes: ["mortar"],
+    stats: { intellect: 24, might: 5 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 2,
+    minRangeBonus: 1,
+    score: 39,
+    era: "enemy",
+    damageMultiplier: 1.18,
+    moveModifier: -2,
+    supplyPenaltyMultiplier: 1.15,
+    requiresSetup: true,
+  },
+  qf25: {
+    id: "qf25",
+    name: "英制25磅炮",
+    forTypes: ["artillery"],
+    stats: { intellect: 21, leadership: 3 },
+    attackBonus: 0,
+    defenseBonus: 0.01,
+    rangeBonus: 1,
+    minRangeBonus: 0,
+    score: 37,
+    era: "enemy",
+    damageMultiplier: 1.08,
+    setupBonusOverride: 0.22,
+  },
+  zis3: {
+    id: "zis3",
+    name: "ZiS-3 76.2mm野炮",
+    forTypes: ["artillery"],
+    stats: { intellect: 23, might: 3, leadership: 2 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 1,
+    minRangeBonus: -1,
+    score: 41,
+    era: "late",
+    matchupModifiers: { tank: 0.85 },
+    directFire: true,
+  },
+  m30_122: {
+    id: "m30_122",
+    name: "M1938 122mm榴弹炮",
+    forTypes: ["artillery"],
+    stats: { intellect: 27, might: 2, leadership: 2 },
+    attackBonus: 0,
+    defenseBonus: 0.01,
+    rangeBonus: 1,
+    minRangeBonus: 1,
+    score: 46,
+    era: "late",
+    damageMultiplier: 1.18,
+    moveModifier: -1,
+    requiresSetup: true,
+  },
+  bm13: {
+    id: "bm13",
+    name: "BM-13“喀秋莎”",
+    forTypes: ["artillery"],
+    stats: { intellect: 26, might: 6, leadership: 3 },
+    attackBonus: 0,
+    defenseBonus: 0.02,
+    rangeBonus: 2,
+    minRangeBonus: 1,
+    score: 52,
+    era: "late",
+    splashRatio: 0.4,
+    cooldownTurns: 2,
+    motorized: true,
+    vehicle: true,
+    directFire: false,
+  },
+  m1_155: {
+    id: "m1_155",
+    name: "缴获M1 155mm榴弹炮",
+    forTypes: ["artillery"],
+    stats: { intellect: 31, might: 5, leadership: 2 },
+    attackBonus: 0,
+    defenseBonus: 0.01,
+    rangeBonus: 2,
+    minRangeBonus: 1,
+    score: 50,
+    era: "enemy",
+    damageMultiplier: 1.25,
+    moveModifier: -2,
+    supplyPenaltyMultiplier: 1.25,
+    requiresSetup: true,
+  },
 };
 
 export interface WeaponHistory {
@@ -347,6 +557,18 @@ export const WEAPON_HISTORY: Record<WeaponId, WeaponHistory> = {
   bren: { origin: "英国／加拿大", caliber: ".303 British", note: "布伦轻机枪是英联邦步兵班组的主要自动火力；游戏中兼表同阵地的维克斯支援。" },
   mac24: { origin: "法国", caliber: "7.5×54毫米", note: "MAC 24/29轻机枪，法国联合国营的代表性班组自动武器。" },
   centurion: { origin: "英国", caliber: "20磅炮（84毫米）", note: "百夫长Mk.3装备20磅炮，英军第8骠骑兵团在朝鲜战场投入使用。" },
+  mosin_m44_marksman: { origin: "苏联／志愿军", caliber: "7.62×54毫米R", note: "莫辛步枪的精确射手改型，用于冷枪冷炮时期的定点射击。" },
+  m1d_sniper: { origin: "美国（缴获）", caliber: ".30-06", note: "M1D加兰德狙击型，作为有限精英缴获装备进入军械库。" },
+  bar_m1918a2: { origin: "美国（缴获）", caliber: ".30-06", note: "BAR自动步枪，机动火力强但架设持续火力收益较低。" },
+  m2hb: { origin: "美国（缴获）", caliber: ".50 BMG", note: "M2HB重机枪，静止时具备有限反装甲能力。" },
+  type92_infantry_gun: { origin: "日本／缴获", caliber: "70毫米", note: "九二式步兵炮，轻便直射火力，适合山地阵地。" },
+  mortar120: { origin: "中国／苏式体系", caliber: "120毫米", note: "重迫击炮，威力较高但需要架设和持续补给。" },
+  m2_4_2_mortar: { origin: "美国", caliber: "4.2英寸（106.7毫米）", note: "美军化学迫击炮体系，游戏中抽象为高威力曲射火力。" },
+  qf25: { origin: "英国／英联邦", caliber: "25磅（87.6毫米）", note: "英军25磅炮，朝鲜战场英联邦炮兵的代表型号。" },
+  zis3: { origin: "苏联", caliber: "76.2毫米", note: "ZiS-3野炮，兼具直射与反装甲用途。" },
+  m30_122: { origin: "苏联／志愿军", caliber: "122毫米", note: "M-30 122毫米榴弹炮，体现1951年后苏式火炮换装。" },
+  bm13: { origin: "苏联／志愿军", caliber: "132毫米火箭弹", note: "BM-13喀秋莎火箭炮，车辆自走且齐射后需要冷却。" },
+  m1_155: { origin: "美国（缴获）", caliber: "155毫米", note: "缴获M1重榴弹炮，威力大、机动和补给代价都高。" },
 };
 
 export const WEAPON_IDS = Object.keys(WEAPONS) as WeaponId[];
@@ -417,6 +639,18 @@ export function weaponForEquipment(
 ): WeaponId {
   const text = equipment ?? "";
   const matches: [RegExp, WeaponId][] = [
+    [/BM[- ]?13|喀秋莎/i, "bm13"],
+    [/155毫米|M1\s*155/i, "m1_155"],
+    [/122毫米|M1938|M-30/i, "m30_122"],
+    [/ZiS[- ]?3|76\.2毫米/i, "zis3"],
+    [/25磅|QF25/i, "qf25"],
+    [/4\.2英寸|4\.2英寸迫击炮/i, "m2_4_2_mortar"],
+    [/120毫米重迫击炮/i, "mortar120"],
+    [/九二式步兵炮/i, "type92_infantry_gun"],
+    [/M2HB|12\.7mm机枪/i, "m2hb"],
+    [/BAR|M1918A2/i, "bar_m1918a2"],
+    [/M1D|狙击步枪/i, "m1d_sniper"],
+    [/M44|特等射手/i, "mosin_m44_marksman"],
     [/百夫长/i, "centurion"],
     [/谢尔曼|M4A3E8/i, "sherman"],
     [/李[-－]?恩菲尔德|Lee[- ]?Enfield/i, "lee_enfield"],

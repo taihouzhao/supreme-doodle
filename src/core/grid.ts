@@ -2,6 +2,14 @@ import { TERRAIN } from "../content/terrain";
 import { BALANCE } from "../content/balance";
 import { LOGISTICS, UNIT_TYPES } from "../content/units";
 import { WEAPONS, weaponPattern } from "../content/weapons";
+import {
+  coordinationRelay,
+  hasWeaponCooldown,
+  ignoresVehicleTerrain,
+  isMotorized,
+  requiresSetup,
+  resupplyRange,
+} from "./equipment";
 import type { GameState, TerrainDef, Unit, Vec2 } from "./types";
 
 export function inBounds(state: GameState, x: number, y: number): boolean {
@@ -32,7 +40,7 @@ export function canEnter(state: GameState, unit: Unit, x: number, y: number): bo
   if (!inBounds(state, x, y)) return false;
   const terrain = tileAt(state, x, y);
   if (!terrain.passable) return false;
-  if (UNIT_TYPES[unit.type].vehicle && !terrain.vehiclePassable) return false;
+  if (isMotorized(unit) && !ignoresVehicleTerrain(unit) && !terrain.vehiclePassable) return false;
   return true;
 }
 
@@ -249,10 +257,19 @@ function searchPath(
 export function attackRange(state: GameState, unit: Unit): { min: number; max: number } {
   const def = UNIT_TYPES[unit.type];
   const terrain = tileAt(state, unit.x, unit.y);
-  const weaponBonus = WEAPONS[unit.weapon]?.rangeBonus ?? 0;
+  const weapon = WEAPONS[unit.weapon];
+  const stationary = !unit.movedThisTurn;
+  const stationaryMin = stationary && (weapon?.stationaryMinRange ?? weapon?.fixedRange?.min) !== undefined
+    ? (weapon?.stationaryMinRange ?? weapon?.fixedRange?.min)!
+    : weapon?.mobileRange?.min ?? def.minRange + (weapon?.minRangeBonus ?? 0);
+  const stationaryMax = stationary && (weapon?.stationaryMaxRange ?? weapon?.fixedRange?.max) !== undefined
+    ? (weapon?.stationaryMaxRange ?? weapon?.fixedRange?.max)!
+    : weapon?.mobileRange?.max ?? def.maxRange + (weapon?.rangeBonus ?? 0);
+  const rangefinder = stationary && unit.attachment === "rangefinder" ? 1 : 0;
+  const equipmentBonus = Math.min(2, Math.max(-2, stationaryMax - def.maxRange + rangefinder));
   return {
-    min: Math.max(1, def.minRange + (WEAPONS[unit.weapon]?.minRangeBonus ?? 0)),
-    max: def.maxRange + terrain.rangeBonus + weaponBonus,
+    min: Math.max(1, stationaryMin),
+    max: def.maxRange + terrain.rangeBonus + equipmentBonus,
   };
 }
 
@@ -275,6 +292,8 @@ export function canAttack(state: GameState, attacker: Unit, defender: Unit): boo
   if (attacker.evacuated || defender.evacuated) return false;
   if (attacker.faction === defender.faction) return false;
   if (UNIT_TYPES[attacker.type].attack <= 0) return false;
+  if (hasWeaponCooldown(attacker, state.turn)) return false;
+  if (requiresSetup(attacker) && attacker.movedThisTurn) return false;
   const { min, max } = attackRange(state, attacker);
   if (max < min) return false;
   const distance = manhattan(attacker, defender);
@@ -366,7 +385,9 @@ export function resupplyOutcome(state: GameState, unit: Unit, target: Unit): Res
 /** 后勤可补充的正交相邻友军（未满员、仍有疲劳，或我方弹药窗口已过期） */
 export function resupplyTargets(state: GameState, unit: Unit): Unit[] {
   if (unit.type !== "logistics" || !unit.alive || unit.evacuated) return [];
-  return adjacentFriendlyUnits(state, unit).filter((ally) => {
+  const range = resupplyRange(unit);
+  return livingUnits(state, unit.faction).filter((ally) => {
+    if (ally.id === unit.id || manhattan(unit, ally) > range) return false;
     if (!needsResupply(state, ally)) return false;
     const outcome = resupplyOutcome(state, unit, ally);
     // 缺编需要真实人力；后勤队降到最低机动编制后仍可处理疲劳/弹药，但不会再凭空回血。
@@ -392,12 +413,29 @@ export function adjacentAllies(state: GameState, unit: Unit): number {
  * 后勤不计入火力覆盖，但可以通过相邻位置提供有限的近距离支援。
  */
 export function coordinationAllies(state: GameState, attacker: Unit, defender: Unit): number {
-  return livingUnits(state, attacker.faction).filter((ally) => {
-    if (ally.id === attacker.id || ally.type === "logistics") return false;
-    const range = attackRange(state, ally);
-    const distance = manhattan(ally, defender);
-    return distance >= range.min && distance <= range.max;
-  }).length;
+  return coordinationSources(state, attacker, defender).length;
+}
+
+/** 协同来源明细：普通友军 4 格，电话静止中继 5 格，SCR-300 移动中继 7 格。 */
+export function coordinationSources(state: GameState, attacker: Unit, defender: Unit): string[] {
+  return livingUnits(state, attacker.faction)
+    .filter((ally) => {
+      if (ally.id === attacker.id || ally.type === "logistics" && !coordinationRelay(ally)) return false;
+      const relay = coordinationRelay(ally);
+      if (relay?.staticOnly && ally.movedThisTurn) return false;
+      const radius = relay?.radius ?? 4;
+      if (manhattan(ally, attacker) > radius) return false;
+      if (hasWeaponCooldown(ally, state.turn) || (requiresSetup(ally) && ally.movedThisTurn)) return false;
+      // 电话/电台本身就是中继节点，即使所属后勤单位没有攻击力，也能把相邻火力接入网络。
+      if (relay) return true;
+      const range = attackRange(state, ally);
+      const distance = manhattan(ally, defender);
+      return distance >= range.min && distance <= range.max;
+    })
+    .map((ally) => {
+      const relay = coordinationRelay(ally);
+      return relay ? `${ally.name}·${relay.label}` : `${ally.name}·普通火力呼应`;
+    });
 }
 
 /**

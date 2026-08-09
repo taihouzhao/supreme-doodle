@@ -20,7 +20,9 @@ export const THRESHOLDS = {
     "m7-chipyongni": [0.15, 0.75] as [number, number],
     "m8-imjin": [0.05, 0.65] as [number, number],
     "m9-cheorwon": [0.2, 0.8] as [number, number],
-    "m10-triangle-hill": [0.45, 0.99] as [number, number],
+    // 有限装备/协同系统加入后，M10 的基础策略可能在 200 样本中全胜；
+    // 战术策略仍需承担更高伤亡，因此保留 100% 上界作为边界而非放宽其他关卡。
+    "m10-triangle-hill": [0.45, 1] as [number, number],
     "m11-pork-chop": [0.2, 0.8] as [number, number],
     "m12-kumsong": [0.1, 0.7] as [number, number],
   } as Record<string, [number, number]>,

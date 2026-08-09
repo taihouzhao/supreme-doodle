@@ -74,6 +74,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；中央纵路是温井—北镇公路，伏击线夹在239.8、216与409.5高地之间，温井位于地图南端，九龙江沿南侧限制机动。",
     weather: { options: ["clear", "overcast"], label: "深秋寒夜", detail: "低温、天黑后能见度下降；长射程火力略受影响。" },
     playerEquipment: PVA_EARLY,
+    enemyDamageMultiplier: 0.6,
     maxTurns: 17,
     map: [
       "^^^FF^^^F..F^^^FF^^^",
@@ -98,7 +99,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { commander: "蒋庆泉", type: "rifle", level: 1, weapon: "type38", duty: "第118师温井方向配属" },
     ],
     equipmentEra: "early" as const,
-    weaponRewards: ["zhongzheng" as const],
+    weaponRewards: ["zhongzheng", "type92_infantry_gun"],
+    attachmentRewards: ["field_telephone"],
     enemies: [
       { type: "rifle", x: 9, y: 4, name: "韩6师2团3营前卫连", equipment: "M1加兰德步枪", exp: 55, commanderId: "kim-jong-oh", title: "敌军主将", dropOptions: ["field_manual", "medkit"] },
       { type: "rifle", x: 10, y: 7, name: "韩6师2团3营先遣连", equipment: "M1卡宾枪", exp: 48 },
@@ -143,8 +145,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；云山城位于河谷中央，城南公路越过支流后继续向清川江方向；目标统一使用功能名“城南公路桥”。",
     weather: { options: ["clear", "overcast"], label: "寒冷夜战", detail: "入夜后气温下降，山谷间有薄雾。" },
     playerEquipment: PVA_EARLY,
+    enemyDamageMultiplier: 0.75,
     // 取消“溃散后自动推进”后，夺取第二个据点需要显式行军；保留两回合机动窗口。
-    maxTurns: 18,
+    maxTurns: 24,
     map: [
       "^^^^^F..F....F..^^^^",
       "^^^^FF..F.==.F..F^^^",
@@ -163,13 +166,14 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     playerSpawns: [{ x: 4, y: 2 }, { x: 5, y: 3 }, { x: 7, y: 2 }, { x: 3, y: 4 }, { x: 4, y: 5 }, { x: 6, y: 4 }, { x: 8, y: 3 }, { x: 9, y: 4 }],
     storyAllies: [
-      { commander: "曹辉章", type: "rifle", level: 2, weapon: "zhongzheng", duty: "第39军云山方向配属步兵" },
+      { commander: "曹辉章", type: "rifle", level: 2, weapon: "zhongzheng", attachment: "field_telephone", duty: "第39军云山方向配属步兵" },
       { commander: "张明禄", type: "mortar", level: 2, weapon: "mortar60", duty: "第39军迫击炮配属" },
     ],
     equipmentEra: "early" as const,
-    weaponRewards: ["zb26" as const],
+    weaponRewards: ["zb26"],
+    attachmentRewards: ["ammo_carrier"],
     enemies: [
-      { type: "rifle", x: 10, y: 4, name: "美骑8团步兵", equipment: "M1加兰德步枪", exp: 55, commanderId: "hobart-gay", title: "敌军主将", dropOptions: ["field_manual", "at_charge"] },
+      { type: "rifle", x: 10, y: 4, name: "美骑8团步兵", equipment: "M1加兰德步枪", exp: 55, commanderId: "hobart-gay", title: "敌军主将", dropOptions: ["field_manual", "at_charge"], dropWeapons: ["bar_m1918a2"] },
       { type: "rifle", x: 12, y: 6, name: "韩军换防部队", equipment: "M1卡宾枪", exp: 48 },
       { type: "mg", x: 9, y: 4, name: "美骑8团火力排", equipment: "勃朗宁M1919机枪", exp: 58 },
       { type: "mg", x: 11, y: 10, name: "桥头机枪班", equipment: "勃朗宁M1919机枪", exp: 45 },
@@ -217,6 +221,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；关卡聚焦军隅里以南的敌后道路网。三所里与龙源里位于横向撤退道路上，南北山路是第38军急行穿插轴；清川江只作为北缘战役背景。",
     weather: { options: ["snow", "overcast"], label: "初雪与冻土", detail: "寒潮到来，山路结冰，部队移动与远射均受影响。" },
     playerEquipment: PVA_EARLY,
+    enemyDamageMultiplier: 0.8,
     maxTurns: 16,
     map: [
       "~~~~~~~~~..~~~~~~~~~",
@@ -241,10 +246,11 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { commander: "倪恩德", type: "rifle", level: 1, weapon: "type38", duty: "第113师穿插配属" },
     ],
     equipmentEra: "early" as const,
-    weaponRewards: ["mortar60" as const],
+    weaponRewards: ["mortar60"],
+    attachmentRewards: ["camouflage_net"],
     enemies: [
       { type: "rifle", x: 5, y: 5, name: "美2师后卫", equipment: "M1加兰德步枪", exp: 85 },
-      { type: "rifle", x: 14, y: 5, name: "韩军警戒营", equipment: "M1卡宾枪", exp: 45, title: "精锐指挥官", dropOptions: ["field_manual", "satchel"] },
+      { type: "rifle", x: 14, y: 5, name: "韩军警戒营", equipment: "M1卡宾枪", exp: 45, title: "精锐指挥官", dropOptions: ["field_manual", "satchel"], dropWeapons: ["m2hb"] },
       { type: "mg", x: 10, y: 5, name: "公路护卫火力组", equipment: "勃朗宁M1919机枪", exp: 95 },
       { type: "mortar", x: 12, y: 2, name: "美军迫击炮组", equipment: "M1型81毫米迫击炮", exp: 55 },
       { type: "rifle", x: 10, y: 4, name: "军隅里后卫", equipment: "M1加兰德步枪", exp: 50 },
@@ -285,6 +291,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "在极寒中依托主补给路北、南两段临时路障，反复迟滞由柳潭里向下碣隅里收缩的陆战队纵队。敌军会从公路两端夹击清障；坚持到脱离命令下达并保存高大全。",
     mapNote: "北在上；道路由西北柳潭里方向斜向东南下碣隅里，长津湖占据东侧。两处目标是主补给路沿线临时路障；Fox连控制的死鹰岭高地仍属美军通路防御体系。",
     weather: { options: ["snow"], label: "极寒暴雪", detail: "约零下二三十摄氏度的严寒；积雪降低移动力与远程火力。" },
+    enemyDamageMultiplier: 1.05,
     playerEquipment: PVA_EARLY,
     maxTurns: 20,
     map: [
@@ -310,7 +317,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { commander: "陈德忠", type: "logistics", level: 2, weapon: "supply_cart", duty: "第9兵团极寒辎重配属" },
     ],
     equipmentEra: "early" as const,
-    weaponRewards: ["mosin" as const],
+    weaponRewards: ["mosin"],
+    attachmentRewards: ["winter_kit", "medic_team"],
     enemies: [
       { type: "rifle", x: 6, y: 1, name: "陆战5团先头分队", equipment: "M1加兰德步枪", exp: 75 },
       { type: "rifle", x: 15, y: 12, name: "下碣隅里接应队", equipment: "M1加兰德步枪", exp: 75 },
@@ -360,6 +368,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "从北岸夜渡临津江，先夺取渡河带，再沿狭窄走廊向南突破议政府北侧山口。守军正向纵深收缩，必须在其完成部署前连续占领两个节点。",
     mapNote: "北在上；玩家由北向南推进。临津江横贯北部，中央公路依次通过渡河带和议政府北侧山口，目标呈前后梯次。",
     weather: { options: ["snow", "clear"], label: "隆冬冻江", detail: "河面部分冻结，夜间严寒，部队体力消耗明显。" },
+    enemyDamageMultiplier: 0.9,
     playerEquipment: PVA_EARLY,
     maxTurns: 18,
     map: [
@@ -384,7 +393,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { commander: "孙生禄", type: "mg", level: 2, weapon: "dp28", duty: "临津江方向火力配属" },
     ],
     equipmentEra: "late" as const,
-    weaponRewards: ["dp28" as const],
+    weaponRewards: ["dp28"],
+    attachmentRewards: ["motor_transport"],
     enemies: [
       { type: "rifle", x: 8, y: 4, name: "联合国军江岸前哨", equipment: "M1加兰德步枪", exp: 62 },
       { type: "rifle", x: 12, y: 9, name: "韩军山口守备队", equipment: "M1卡宾枪", exp: 48 },
@@ -451,7 +461,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { commander: "周厚刚", type: "mortar", level: 3, weapon: "mortar82", duty: "第40军迫击炮配属" },
     ],
     equipmentEra: "late" as const,
-    weaponRewards: ["ppsh50" as const],
+    weaponRewards: ["ppsh50", "mortar120"],
+    attachmentRewards: ["artillery_tractor"],
     enemies: [
       { type: "rifle", x: 10, y: 6, name: "韩军第8师步兵", equipment: "M1加兰德步枪", exp: 50, commanderId: "edward-almond", title: "敌军主将", dropOptions: ["field_manual", "arty_support"] },
       { type: "rifle", x: 7, y: 10, name: "美军交通警戒队", equipment: "M1卡宾枪", exp: 55 },
@@ -516,11 +527,12 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { commander: "刘维汉", type: "mg", level: 3, weapon: "dp28", duty: "外线掩护火力配属" },
     ],
     equipmentEra: "late" as const,
-    weaponRewards: ["bazooka" as const],
+    weaponRewards: ["bazooka"],
+    attachmentRewards: ["scr300_radio"],
     enemies: [
       { type: "mg", x: 7, y: 7, name: "美23团西侧火力点", equipment: "勃朗宁M1919机枪", exp: 110 },
       { type: "mg", x: 12, y: 7, name: "法军营东侧火力点", equipment: "MAC 24/29轻机枪", exp: 110 },
-      { type: "rifle", x: 10, y: 6, name: "美23团核心步兵", equipment: "M1加兰德步枪", exp: 83, commanderId: "paul-freeman", title: "敌军主将", dropOptions: ["field_manual", "medkit"] },
+      { type: "rifle", x: 10, y: 6, name: "美23团核心步兵", equipment: "M1加兰德步枪", exp: 83, commanderId: "paul-freeman", title: "敌军主将", dropOptions: ["field_manual", "medkit"], dropWeapons: ["m2_4_2_mortar"] },
     ],
     variantSlots: [],
     waves: [{ window: [8, 9], units: [
@@ -555,6 +567,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "从北岸夜渡临津江，夺取南岸桥头后沿雪马里谷地分割英军，最后攻上235高地。三个地段是连续纵深，不要在渡口与高地同时分兵硬冲。",
     mapNote: "北在上；玩家由北向南推进。临津江横在北部，雪马里位于中央谷地，235高地是南端终局据点。",
     weather: { options: ["clear", "fog"], label: "春夜薄雾", detail: "夜间河谷能见度有限，白天气象适合联合国军空中支援。" },
+    enemyDamageMultiplier: 1.05,
     playerEquipment: PVA_LATE,
     maxTurns: 17,
     map: [
@@ -580,10 +593,11 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { commander: "陈德忠", type: "logistics", level: 2, weapon: "supply_cart", duty: "渡河辎重配属" },
     ],
     equipmentEra: "late" as const,
-    weaponRewards: ["mortar82" as const],
+    weaponRewards: ["mortar82"],
+    attachmentRewards: ["rangefinder"],
     enemies: [
       { type: "rifle", x: 10, y: 5, name: "临津江南岸前哨", equipment: "李-恩菲尔德No.4步枪", exp: 75 },
-      { type: "rifle", x: 10, y: 11, name: "格洛斯特营235高地守军", equipment: "李-恩菲尔德No.4步枪", exp: 72, commanderId: "james-carne", title: "敌军主将", dropOptions: ["field_manual", "bandage"] },
+      { type: "rifle", x: 10, y: 11, name: "格洛斯特营235高地守军", equipment: "李-恩菲尔德No.4步枪", exp: 72, commanderId: "james-carne", title: "敌军主将", dropOptions: ["field_manual", "bandage"], dropWeapons: ["qf25"] },
       { type: "mg", x: 9, y: 7, name: "雪马里布伦机枪组", equipment: "布伦轻机枪／维克斯机枪", exp: 80 },
       { type: "artillery", x: 14, y: 12, name: "英军师属炮兵", equipment: "M2A1 105毫米榴弹炮", exp: 65 },
       { type: "rifle", x: 12, y: 9, name: "英军后备步兵", equipment: "李-恩菲尔德No.4步枪", exp: 55 },
@@ -606,7 +620,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { kind: "barrage", turns: [4, 7], damage: 4, note: "英军炮火拦阻射击" },
       { kind: "supplyWindow", untilTurn: 8, penalty: 0.1, note: "渡河后弹药见底" },
     ],
-    victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 2 },
+    victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 6 },
   },
   {
     id: "m9-cheorwon",
@@ -648,7 +662,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { commander: "高玉宝", type: "logistics", level: 2, weapon: "supply_cart", duty: "北撤辎重配属" },
     ],
     equipmentEra: "late" as const,
-    weaponRewards: ["mosin" as const],
+    weaponRewards: ["mosin", "zis3"],
     enemies: [
       { type: "rifle", x: 8, y: 11, name: "美3师追击步兵", equipment: "M1加兰德步枪", exp: 55 },
       { type: "rifle", x: 11, y: 11, name: "美骑1师步兵", equipment: "M1加兰德步枪", exp: 55 },
@@ -695,6 +709,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；五圣山纵深在北，597.9与537.7北山紧凑相邻，堡垒格表示坑道后口；美7师与韩2师从南侧进攻。",
     weather: { options: ["overcast", "rain", "snow"], label: "深秋转初冬", detail: "战斗持续43天，经历阴雨、低云和初雪。" },
     playerEquipment: PVA_LATE,
+    enemyDamageMultiplier: 0.65,
     maxTurns: 17,
     map: [
       "FF^^^FFF....FFF^^^FF",
@@ -720,8 +735,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     equipmentEra: "late" as const,
     weaponRewards: [],
+    preMissionWeapons: ["m30_122", "bm13", "mosin_m44_marksman"],
     enemies: [
-      { type: "rifle", x: 8, y: 11, name: "美7师突击连", equipment: "M1加兰德步枪", exp: 100, commanderId: "wayne-smith", title: "敌军主将", dropOptions: ["field_manual", "satchel"] },
+      { type: "rifle", x: 8, y: 11, name: "美7师突击连", equipment: "M1加兰德步枪", exp: 100, commanderId: "wayne-smith", title: "敌军主将", dropOptions: ["field_manual", "satchel"], dropWeapons: ["m1d_sniper"], dropAttachments: ["t52_vest"] },
       { type: "rifle", x: 11, y: 11, name: "韩2师突击连", equipment: "M1加兰德步枪", exp: 95 },
       { type: "mg", x: 9, y: 11, name: "联合国军火力组", equipment: "勃朗宁M1919机枪", exp: 95 },
       { type: "mortar", x: 10, y: 10, name: "联合国军迫击炮组", equipment: "M1型81毫米迫击炮", exp: 85 },
@@ -768,6 +784,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "借雨雾接近猪排山，夺取东、西两个前沿支撑点并顶住反击。壕沟和高地减伤明显，迫击炮与炮火支援是打开缺口的关键。",
     mapNote: "北在上；东西支撑点位于同一条连续猪排山前哨山脊，由壕沟与地堡相连。玩家从志愿军北侧阵地接近，美军由南侧主抵抗线增援。",
     weather: { options: ["rain", "fog"], label: "季风雨雾", detail: "持续降雨与山雾削弱远程火力，谷地泥泞。" },
+    enemyDamageMultiplier: 0.8,
     playerEquipment: PVA_LATE_ARMOR,
     maxTurns: 17,
     map: [
@@ -793,9 +810,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { commander: "215号坦克车组", type: "tank", level: 4, weapon: "t34_85", equipment: "T-34-85（独立坦克第4团第2连）", duty: "独立坦克第4团第2连车组" },
     ],
     equipmentEra: "late" as const,
-    weaponRewards: ["dp28" as const],
+    weaponRewards: ["dp28"],
     enemies: [
-      { type: "rifle", x: 7, y: 6, name: "美7师前哨西连", equipment: "M1加兰德步枪", exp: 72, commanderId: "arthur-trudeau", title: "敌军主将", dropOptions: ["field_manual", "at_charge"] },
+      { type: "rifle", x: 7, y: 6, name: "美7师前哨西连", equipment: "M1加兰德步枪", exp: 72, commanderId: "arthur-trudeau", title: "敌军主将", dropOptions: ["field_manual", "at_charge"], dropWeapons: ["m1d_sniper", "m1_155"] },
       { type: "rifle", x: 12, y: 6, name: "美7师前哨东连", equipment: "M1加兰德步枪", exp: 72 },
       { type: "mg", x: 9, y: 6, name: "前哨机枪阵地", equipment: "勃朗宁M1919机枪", exp: 95 },
       { type: "artillery", x: 14, y: 12, name: "主抵抗线炮兵组", equipment: "M2A1 105毫米榴弹炮", exp: 88 },
@@ -841,6 +858,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "在炮火准备后由北向南突破轿岩山三峰阵地：先撕开中、东峰结合部，再夺主峰。暴雨掩护接近也会拖慢机动；最后一关仍以保存主力为硬约束。",
     mapNote: "北在上；本图仅表现中央集团轿岩山切片。西峰主峰与中、东峰构成连续山体，南侧金城川是战役纵深线；北汉江位于画外东翼。",
     weather: { options: ["rain"], label: "盛夏暴雨", detail: "季风暴雨造成河水上涨、道路泥泞，远程火力效果下降。" },
+    enemyDamageMultiplier: 1.03,
     playerEquipment: PVA_LATE,
     maxTurns: 23,
     map: [

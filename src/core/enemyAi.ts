@@ -12,6 +12,7 @@ import {
   tileAt,
   unitAt,
 } from "./grid";
+import { effectiveIndirect } from "./equipment";
 import type { ReachableTile } from "./grid";
 import {
   performAttack,
@@ -25,14 +26,12 @@ import type { GameEvent, GameState, Unit, Vec2 } from "./types";
 /** 防守型关卡里，敌人不会离开阵地太远去追人 */
 const DEFENDER_LEASH = 7;
 
-function rangeFrom(state: GameState, unit: Unit, pos: Vec2): { min: number; max: number } {
-  const def = UNIT_TYPES[unit.type];
-  const bonus = tileAt(state, pos.x, pos.y).rangeBonus;
-  return { min: def.minRange, max: def.maxRange + bonus };
+function rangeFrom(state: GameState, unit: Unit, pos: Vec2, moved = false): { min: number; max: number } {
+  return attackRange(state, { ...unit, x: pos.x, y: pos.y, movedThisTurn: moved });
 }
 
 function canCounterFrom(state: GameState, attacker: Unit, defender: Unit, from: Vec2): boolean {
-  if (UNIT_TYPES[attacker.type].indirect) return false;
+  if (effectiveIndirect(attacker)) return false;
   const range = rangeFrom(state, defender, { x: defender.x, y: defender.y });
   const distance = manhattan(from, defender);
   return distance >= range.min && distance <= range.max;
@@ -115,8 +114,8 @@ function bestAttackPlan(
   for (const tile of tiles) {
     const occupant = unitAt(state, tile.x, tile.y);
     if (occupant && occupant.id !== unit.id) continue;
-    const range = rangeFrom(state, unit, tile);
     const moved = tile.cost > 0;
+    const range = rangeFrom(state, unit, tile, moved);
     const terrain = tileAt(state, tile.x, tile.y);
     const formationSupport = Math.min(18, formationSupportAt(state, unit, tile) * 5);
     const incomingThreat = incomingThreatAt(state, unit, tile) * 0.22;

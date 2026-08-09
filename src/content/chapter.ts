@@ -1,4 +1,4 @@
-import type { CommanderStats, ItemId, UnitTypeId, WeaponId } from "../core/types";
+import type { AttachmentId, CommanderStats, ItemId, UnitTypeId, WeaponId } from "../core/types";
 import { designation } from "./naming";
 import { MISSION_LIST } from "./missions";
 import type { MissionConfig } from "./missions/schema";
@@ -21,6 +21,7 @@ export interface StartingUnitSpec {
   /** 底板属性（未含等级成长） */
   baseStats?: Partial<CommanderStats>;
   weapon?: WeaponId;
+  attachment?: AttachmentId;
   keyUnit?: boolean;
   kind?: Extract<CommanderKind, "companion">;
 }
@@ -42,6 +43,8 @@ export interface ChapterConfig {
   startingInventory: Record<ItemId, number>;
   /** 开局军械库 */
   startingArmory: WeaponId[];
+  /** 开局附件库存；与 startingRoster 的附件一一对应时仍只计一件实物。 */
+  startingAttachments?: AttachmentId[];
   /** 每关开始时补足到的最低编制（仅伴随将领） */
   minRoster: number;
   /** 单关最多补充的新兵数 */
@@ -80,6 +83,7 @@ export const CHAPTER_ONE: ChapterConfig = {
       keyUnit: true,
       baseStats: { leadership: 48, intellect: 44, might: 45, stamina: 46, agility: 42 },
       weapon: "zhongzheng",
+      attachment: "engineer_tools",
     },
     {
       commander: "郭恩志",
@@ -116,6 +120,7 @@ export const CHAPTER_ONE: ChapterConfig = {
       bio: "朴达峰战斗英雄；本篇以其韧劲与补给穿插能力编入加强营。",
       baseStats: { leadership: 44, intellect: 40, might: 36, stamina: 48, agility: 40 },
       weapon: "supply_cart",
+      attachment: "pack_train",
     },
   ],
   reserveCommanders: [
@@ -140,6 +145,7 @@ export const CHAPTER_ONE: ChapterConfig = {
     field_manual: 1,
   },
   startingArmory: ["type38", "zhongzheng", "zb26", "mortar60", "supply_cart", "type75"],
+  startingAttachments: ["engineer_tools", "pack_train"],
   minRoster: 5,
   maxReplacementsPerMission: 2,
   permanentLossChance: { won: 0.18, lost: 0.35 },
