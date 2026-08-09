@@ -48,8 +48,8 @@ CI 会在 PR 上跑测试与构建；推送到 `main` 或任意 `cursor/**` 分�
 模拟器参数：
 
 ```bash
-npm run sim -- --seeds=300 --campaign-seeds=80 --out=reports/balance.md --json
-npm run balance:tune -- --seeds=80 --target=0.3 --write
+npm run sim -- --seeds=300 --campaign-seeds=80 --workers=4 --out=reports/balance.md --json
+npm run balance:tune -- --seeds=80 --target=0.3 --workers=4 --write
 node --import tsx src/sim/trace.ts m12-kumsong tactical 7   # 单局复盘
 ```
 

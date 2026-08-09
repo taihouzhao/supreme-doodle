@@ -39,6 +39,7 @@ export function renderReport(result: SimulationResult): string {
     [
       `- 每关每策略运行种子数：${result.seeds}`,
       `- 战役续跑种子数：${result.recovery.runs}`,
+      `- 并行 workers：${result.workers}`,
       `- 门槛通过：**${passed}/${total}**`,
       `- 生成耗时：${(result.elapsedMs / 1000).toFixed(1)}s`,
       "",

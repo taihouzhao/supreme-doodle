@@ -1,4 +1,4 @@
-import type { CampaignRun, MissionRun } from "./runner";
+import type { CampaignRun, MissionFacts } from "./runner";
 
 export interface MissionAggregate {
   missionId: string;
@@ -51,7 +51,11 @@ export function blockedWinRateStdDev(results: boolean[], blocks = 5): number {
   return stdDev(rates);
 }
 
-export function aggregateMission(missionId: string, agentId: string, runs: MissionRun[]): MissionAggregate {
+export function aggregateMission(
+  missionId: string,
+  agentId: string,
+  runs: MissionFacts[],
+): MissionAggregate {
   const wins = runs.map((run) => run.status === "won");
   return {
     missionId,
