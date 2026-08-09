@@ -129,6 +129,17 @@ describe("后勤补充", () => {
     expect(logistics.hasActed).toBe(true);
     expect(events.some((e) => e.type === "resupplied")).toBe(true);
   });
+
+  it("满员无疲劳的邻接友军不在补给列表中", () => {
+    const state = scenario();
+    const logistics = put(state, "p1", 5, 5);
+    logistics.type = "logistics";
+    logistics.weapon = "supply_cart";
+    const ally = put(state, "p0", 5, 6);
+    ally.hp = ally.maxHp;
+    ally.fatigue = 0;
+    expect(resupplyTargets(state, logistics)).toHaveLength(0);
+  });
 });
 
 describe("战斗", () => {

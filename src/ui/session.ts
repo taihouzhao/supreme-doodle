@@ -17,6 +17,7 @@ import {
   livingUnits,
   manhattan,
   reachableTiles,
+  adjacentFriendlyUnits as gridAdjacentFriendly,
   resupplyTargets as gridResupplyTargets,
   unitAt,
 } from "../core/grid";
@@ -525,6 +526,52 @@ export class Session {
     return tiles;
   }
 
+  /** 邻接但暂无需补给的友军（淡提示） */
+  resupplyIdleTiles(): Set<number> {
+    const battle = this.state.battle;
+    const unit = this.selectedUnit;
+    const tiles = new Set<number>();
+    if (
+      !battle ||
+      !unit ||
+      unit.faction !== "player" ||
+      unit.hasActed ||
+      unit.type !== "logistics" ||
+      this.state.fxBusy
+    ) {
+      return tiles;
+    }
+    const ready = this.resupplyTargets();
+    for (const ally of gridAdjacentFriendly(battle, unit)) {
+      const key = ally.y * battle.width + ally.x;
+      if (!ready.has(key)) tiles.add(key);
+    }
+    return tiles;
+  }
+
+  /** 当前后勤可一键补充的友军列表 */
+  resupplyAllies(): Unit[] {
+    const battle = this.state.battle;
+    const unit = this.selectedUnit;
+    if (
+      !battle ||
+      !unit ||
+      unit.faction !== "player" ||
+      unit.hasActed ||
+      unit.type !== "logistics" ||
+      this.state.fxBusy
+    ) {
+      return [];
+    }
+    return gridResupplyTargets(battle, unit);
+  }
+
+  resupplyAlly(targetId: string): void {
+    const unit = this.selectedUnit;
+    if (!unit || unit.type !== "logistics" || unit.hasActed) return;
+    this.dispatch({ kind: "resupply", unitId: unit.id, targetId });
+  }
+
   itemTiles(): Set<number> {
     const battle = this.state.battle;
     const unit = this.selectedUnit;
@@ -576,11 +623,20 @@ export class Session {
       if (
         unit.type === "logistics" &&
         occupant?.faction === "player" &&
-        occupant.id !== unit.id &&
-        this.resupplyTargets().has(pos.y * battle.width + pos.x)
+        occupant.id !== unit.id
       ) {
-        this.dispatch({ kind: "resupply", unitId: unit.id, targetId: occupant.id });
-        return;
+        if (this.resupplyTargets().has(pos.y * battle.width + pos.x)) {
+          this.dispatch({ kind: "resupply", unitId: unit.id, targetId: occupant.id });
+          return;
+        }
+        if (manhattan(unit, occupant) === 1) {
+          this.update({
+            inspectedTile: { ...pos },
+            notice: `${occupant.name} 暂无需补给（生命与疲劳已满）`,
+            endTurnArmed: false,
+          });
+          return;
+        }
       }
       if (!occupant && this.moveTiles().has(pos.y * battle.width + pos.x)) {
         this.dispatch({ kind: "move", unitId: unit.id, to: { x: pos.x, y: pos.y } });
@@ -677,7 +733,12 @@ export class Session {
       selected && selected.alive && !selected.hasActed ? selected.id : null;
     const movedOnly =
       action.kind === "move" && stillSelected && undoableMove?.unitId === stillSelected;
-    const moveTip = "还可攻击，或点「休整」结束；「撤销」可退回移动";
+    const movedUnit =
+      action.kind === "move" ? next.units.find((u) => u.id === action.unitId) : undefined;
+    const moveTip =
+      movedUnit?.type === "logistics"
+        ? "可点青绿友军或跟手「补充」按钮补给；「撤销」可退回移动"
+        : "还可攻击，或点「休整」结束；「撤销」可退回移动";
     if (movedOnly) this.pendingRoutNotice = moveTip;
 
     this.update({

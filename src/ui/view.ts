@@ -117,6 +117,7 @@ const SKELETON = `
       <div class="stage__map" data-region="map">
         <canvas data-region="canvas" tabindex="0" aria-label="战场棋盘；获得焦点后可用方向键平移"></canvas>
         <aside class="hud-sheet" data-region="panel" aria-live="polite" hidden></aside>
+        <div class="action-dock" data-region="action-dock" hidden></div>
         <aside class="battle-intel" data-region="intel" aria-label="交战情报"></aside>
         <div class="notice" data-region="notice" role="status" aria-live="polite" hidden></div>
       </div>
@@ -250,6 +251,9 @@ export class View {
         case "unit-capture":
           if (value) this.session.dispatch({ kind: "capture", unitId: value });
           break;
+        case "unit-resupply":
+          if (value) this.session.resupplyAlly(value);
+          break;
         case "use-item":
           this.handleItem(value as ItemId);
           break;
@@ -326,11 +330,19 @@ export class View {
     if (battleVisible && state.battle) {
       this.renderHudTop(state, state.battle);
       this.renderSheet(state, state.battle);
+      this.renderActionDock(state, state.battle);
       this.renderIntel(state, state.battle);
       this.renderNotice(state);
       const endBtn = this.root.querySelector<HTMLButtonElement>('[data-action="end-turn"]');
       if (endBtn) endBtn.disabled = state.fxBusy;
       this.paintBoard(state, state.battle);
+      this.positionActionDock(state, state.battle);
+    } else {
+      const dock = this.regions["action-dock"];
+      if (dock) {
+        dock.hidden = true;
+        dock.innerHTML = "";
+      }
     }
 
     this.renderOverlay(state);
@@ -341,6 +353,7 @@ export class View {
     const state = this.session.current;
     if (state.screen !== "battle" || !state.battle) return;
     this.paintBoard(state, state.battle);
+    this.positionActionDock(state, state.battle);
   }
 
   private paintBoard(state: SessionState, battle: GameState): void {
@@ -353,6 +366,7 @@ export class View {
         attackTiles: this.session.attackTiles(),
         attackTargets: this.session.attackTargets(),
         resupplyTiles: this.session.resupplyTargets(),
+        resupplyIdleTiles: this.session.resupplyIdleTiles(),
         itemTiles: this.session.itemTiles(),
         inspected: state.inspectedTile,
         highlightObjectiveId: state.highlightObjectiveId,
@@ -508,11 +522,6 @@ export class View {
     const def = UNIT_TYPES[unit.type];
     const weapon = WEAPONS[unit.weapon];
     const range = attackRange(battle, unit);
-    const canCapture =
-      def.canCapture &&
-      battle.objectives.some(
-        (o) => o.kind === "capture" && o.owner !== "player" && o.x === unit.x && o.y === unit.y,
-      );
     const isMine = unit.faction === "player";
     const items = this.session.availableItems();
     const locked = state.fxBusy;
@@ -539,20 +548,6 @@ export class View {
           ${renderItemSlots(items, state.pendingItem, locked || unit.hasActed)}
         </div>`;
 
-    const canUndo = isMine && !unit.hasActed && this.session.canUndoMove();
-    const actions = !isMine
-      ? ""
-      : previewForUnit
-        ? ""
-      : unit.hasActed
-        ? `<p class="card__dim">本回合已行动</p>`
-        : `<div class="actions">
-          ${canCapture ? `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}" ${locked ? "disabled" : ""}>${ico(UI_ICON.actCapture, "ico ico--btn")}占领</button>` : ""}
-          ${canUndo ? `<button class="btn" data-action="unit-undo-move" ${locked ? "disabled" : ""} title="仅可撤销本次移动（攻击/休整/补给后不可撤销）">撤销移动</button>` : ""}
-          ${unit.type === "logistics" ? `<p class="card__state">点击相邻友军可补充：回复生命、降低疲劳；补给窗口过期后还可短暂恢复弹药</p>` : ""}
-          <button class="btn" data-action="unit-wait" data-value="${unit.id}" ${locked ? "disabled" : ""} title="结束本单位行动并降低疲劳">休整</button>
-        </div>`;
-
     const attackPreview = previewForUnit && previewTarget
       ? `<section class="attack-preview" aria-label="攻击预测">
           <div class="attack-preview__head"><strong>攻击预测 · ${esc(previewTarget.name)}</strong><span>${previewForUnit.rout === "certain" ? "确定击溃" : previewForUnit.rout === "possible" ? "可能击溃" : "无法击溃"}</span></div>
@@ -564,10 +559,6 @@ export class View {
           <ul class="factors">${breakdownFactors(previewForUnit.breakdown).slice(0, 8).map((factor) =>
             `<li class="${factor.favourable ? "is-up" : "is-down"}"><span>${esc(factor.label)}</span><strong>×${factor.value.toFixed(2)}</strong></li>`,
           ).join("")}</ul>
-          <div class="actions">
-            <button class="btn btn--primary" data-action="confirm-attack" ${locked ? "disabled" : ""}>确认攻击</button>
-            <button class="btn" data-action="cancel-attack">取消</button>
-          </div>
         </section>`
       : "";
 
@@ -607,13 +598,123 @@ export class View {
       <div class="card__gear" title="${esc(`${unit.equipment} · 机械型号 ${weapon.name} · ${WEAPON_HISTORY[unit.weapon].caliber}`)}">${ico(WEAPON_ICON[unit.weapon], "ico ico--weapon")}<span>${esc(unit.equipment)}</span><span class="card__range">${range.min}–${range.max}格</span></div>
       ${unit.keyUnit ? `<p class="card__state">主力护卫：承受伤害 ×${BALANCE.keyUnitDamageTaken.toFixed(2)}；重伤将立即失败</p>` : ""}
       ${def.setupBonus > 0 ? `<p class="card__state">${unit.movedThisTurn ? "机枪已移动：本回合无架设加成" : `机枪已架设：伤害 +${Math.round(def.setupBonus * 100)}%`}</p>` : ""}
+      ${unit.type === "logistics" && isMine && !unit.hasActed ? `<p class="card__state">后勤：靠近伤员后点跟手「补充」，或点棋盘上的青绿友军</p>` : ""}
+      ${isMine && unit.hasActed ? `<p class="card__dim">本回合已行动</p>` : ""}
       ${slots}
       ${attackPreview}
       ${detail}
-      ${actions}
     </section>`;
   }
 
+  /** 跟手操作条：贴近单位/目的地，只放当前必操作 */
+  private renderActionDock(state: SessionState, battle: GameState): void {
+    const dock = this.regions["action-dock"]!;
+    const unit = this.session.selectedUnit;
+    if (!unit || unit.faction !== "player") {
+      dock.hidden = true;
+      dock.innerHTML = "";
+      return;
+    }
+
+    const locked = state.fxBusy;
+    const preview = this.session.attackPreview();
+    const previewForUnit = preview?.attackerId === unit.id ? preview : null;
+    const previewTarget = previewForUnit
+      ? battle.units.find((candidate) => candidate.id === previewForUnit.defenderId)
+      : null;
+
+    if (previewForUnit && previewTarget) {
+      dock.hidden = false;
+      dock.innerHTML = `
+        <div class="action-dock__label">攻击 · ${esc(previewTarget.name)}</div>
+        <div class="action-dock__row">
+          <button class="btn btn--primary" data-action="confirm-attack" ${locked ? "disabled" : ""}>确认攻击</button>
+          <button class="btn" data-action="cancel-attack" ${locked ? "disabled" : ""}>取消</button>
+        </div>`;
+      return;
+    }
+
+    if (unit.hasActed) {
+      dock.hidden = true;
+      dock.innerHTML = "";
+      return;
+    }
+
+    const canCapture =
+      UNIT_TYPES[unit.type].canCapture &&
+      battle.objectives.some(
+        (o) => o.kind === "capture" && o.owner !== "player" && o.x === unit.x && o.y === unit.y,
+      );
+    const canUndo = this.session.canUndoMove();
+    const resupplyAllies = unit.type === "logistics" ? this.session.resupplyAllies() : [];
+
+    const buttons: string[] = [];
+    for (const ally of resupplyAllies) {
+      buttons.push(
+        `<button class="btn btn--primary" data-action="unit-resupply" data-value="${esc(ally.id)}" ${locked ? "disabled" : ""} title="回复生命、降低疲劳，并恢复弹药">补充 ${esc(ally.name)}</button>`,
+      );
+    }
+    if (canCapture) {
+      buttons.push(
+        `<button class="btn btn--primary" data-action="unit-capture" data-value="${unit.id}" ${locked ? "disabled" : ""}>${ico(UI_ICON.actCapture, "ico ico--btn")}占领</button>`,
+      );
+    }
+    if (canUndo) {
+      buttons.push(
+        `<button class="btn" data-action="unit-undo-move" ${locked ? "disabled" : ""} title="仅可撤销本次移动">撤销</button>`,
+      );
+    }
+    buttons.push(
+      `<button class="btn" data-action="unit-wait" data-value="${unit.id}" ${locked ? "disabled" : ""} title="结束本单位行动并降低疲劳">休整</button>`,
+    );
+
+    const hint =
+      unit.type === "logistics" && resupplyAllies.length === 0
+        ? `<div class="action-dock__hint">靠近伤员或疲劳友军后可补充</div>`
+        : "";
+
+    dock.hidden = false;
+    dock.innerHTML = `
+      <div class="action-dock__label">${esc(unit.name)}</div>
+      ${hint}
+      <div class="action-dock__row">${buttons.join("")}</div>`;
+  }
+
+  private positionActionDock(state: SessionState, battle: GameState): void {
+    const dock = this.regions["action-dock"];
+    const map = this.regions.map;
+    if (!dock || !map || dock.hidden) return;
+
+    const unit = this.session.selectedUnit;
+    const preview = this.session.attackPreview();
+    let anchorX = unit?.x ?? state.inspectedTile?.x;
+    let anchorY = unit?.y ?? state.inspectedTile?.y;
+    if (preview && unit && preview.attackerId === unit.id) {
+      const defender = battle.units.find((u) => u.id === preview.defenderId);
+      if (defender) {
+        anchorX = defender.x;
+        anchorY = defender.y;
+      }
+    }
+    if (anchorX === undefined || anchorY === undefined) return;
+
+    const rect = this.board.tileCssRect(anchorX, anchorY);
+    if (!rect) return;
+
+    const pad = 8;
+    const dockW = Math.min(dock.offsetWidth || 220, map.clientWidth - pad * 2);
+    const dockH = dock.offsetHeight || 72;
+    let left = rect.left + rect.width / 2 - dockW / 2;
+    let top = rect.top + rect.height + 6;
+    // 贴底则翻到格子上方
+    if (top + dockH > map.clientHeight - pad) {
+      top = rect.top - dockH - 6;
+    }
+    left = Math.max(pad, Math.min(left, map.clientWidth - dockW - pad));
+    top = Math.max(pad, Math.min(top, map.clientHeight - dockH - pad));
+    dock.style.left = `${Math.round(left)}px`;
+    dock.style.top = `${Math.round(top)}px`;
+  }
 
   /** 花名册一行：将领 + 可选武器下拉 + 该武器带来的加成 */
   private armoryRow(state: SessionState, unit: RosterUnit): string {

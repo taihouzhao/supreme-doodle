@@ -38,6 +38,9 @@ export const HIGHLIGHT = {
   resupply: "rgba(46, 140, 110, 0.34)",
   resupplyHatch: "rgba(36, 150, 112, 0.9)",
   resupplyEdge: "rgba(20, 90, 68, 0.95)",
+  /** 邻接但暂无需补给的友军：淡青提示「点得到但无效」 */
+  resupplyIdle: "rgba(46, 140, 110, 0.14)",
+  resupplyIdleEdge: "rgba(20, 90, 68, 0.45)",
   selected: "#f5d76e",
   objectivePlayer: "#2f6f5e",
   objectiveEnemy: "#a8443a",
