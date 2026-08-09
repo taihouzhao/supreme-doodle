@@ -116,9 +116,72 @@ async function resolveChrome() {
   }
 }
 
-async function enterFirstMission(page, baseUrl) {
+async function openFirstBrief(page, baseUrl) {
   await page.goto(baseUrl, { waitUntil: "networkidle0" });
   await page.locator('[data-action="new-campaign"]').click();
+  await page.waitForSelector(".sheet--hq");
+}
+
+async function inspectBrief(page) {
+  const tabs = [
+    ["staff", "任务目标"],
+    ["ordnance", "战役库存"],
+    ["org", "查看五维成长"],
+  ];
+  for (const [tab, expected] of tabs) {
+    await page.locator(`[data-action="brief-tab"][data-value="${tab}"]`).click();
+    await page.waitForFunction(
+      (value, text) => {
+        const button = document.querySelector(`[data-action="brief-tab"][data-value="${value}"]`);
+        const panel = document.querySelector("#hq-panel");
+        return button?.getAttribute("aria-pressed") === "true" && panel?.textContent?.includes(text);
+      },
+      {},
+      tab,
+      expected,
+    );
+  }
+
+  return page.evaluate(() => {
+    const box = (selector) => {
+      const element = document.querySelector(selector);
+      if (!(element instanceof HTMLElement)) throw new Error(`Missing ${selector}`);
+      const rect = element.getBoundingClientRect();
+      return { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left };
+    };
+    const buttons = [...document.querySelectorAll('[data-action="brief-tab"]')];
+    const labels = [...document.querySelectorAll('.org-card__deploy input')].map((input) =>
+      input.getAttribute("aria-label"),
+    );
+    return {
+      viewport: { width: window.innerWidth, height: window.innerHeight },
+      sheet: box(".sheet--hq"),
+      footer: box(".hq-footer"),
+      tabCount: buttons.length,
+      selectedTabs: buttons.filter((button) => button.getAttribute("aria-pressed") === "true").length,
+      controlsPanel: buttons.every((button) => button.getAttribute("aria-controls") === "hq-panel"),
+      labelledPanel: document.querySelector("#hq-panel")?.getAttribute("aria-labelledby") === "brief-tab-org",
+      deployLabels: labels,
+      bodyScrollX: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+}
+
+function assertBrief(layout) {
+  const { width, height } = layout.viewport;
+  assert.equal(layout.tabCount, 3, "HQ tabs missing");
+  assert.equal(layout.selectedTabs, 1, "HQ must expose exactly one selected department");
+  assert.ok(layout.controlsPanel && layout.labelledPanel, "HQ tab/panel accessibility links missing");
+  assert.ok(layout.deployLabels.length > 0, "organization deploy controls missing");
+  assert.equal(new Set(layout.deployLabels).size, layout.deployLabels.length, "deploy controls need unique labels");
+  assert.ok(layout.deployLabels.every(Boolean), "deploy controls need accessible names");
+  assert.ok(layout.sheet.top >= -1 && layout.sheet.left >= -1, "HQ sheet clipped at top/left");
+  assert.ok(layout.sheet.right <= width + 1 && layout.sheet.bottom <= height + 1, "HQ sheet clipped at bottom/right");
+  assert.ok(layout.footer.bottom <= height + 1, "HQ primary action is not reachable");
+  assert.ok(layout.bodyScrollX <= 8, `HQ horizontal page scroll ${layout.bodyScrollX}px`);
+}
+
+async function enterFirstMission(page) {
   await page.locator('[data-action="begin-mission"]').click();
   await page.waitForSelector(".hud-top__name");
   await page.waitForFunction(() => document.querySelector(".hud-top__name")?.textContent?.trim().length);
@@ -208,7 +271,10 @@ try {
       isMobile: viewport.isMobile,
       hasTouch: viewport.hasTouch,
     });
-    await enterFirstMission(page, baseUrl);
+    await openFirstBrief(page, baseUrl);
+    const brief = await inspectBrief(page);
+    assertBrief(brief);
+    await enterFirstMission(page);
     const layout = await measure(page);
     try {
       assertViewport(layout, viewport);
