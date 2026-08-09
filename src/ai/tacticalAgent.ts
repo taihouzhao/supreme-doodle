@@ -214,6 +214,17 @@ function planCombat(state: GameState, unit: Unit, danger: number[]): Plan | null
 
   for (const tile of tiles) {
     const moved = tile.cost > 0;
+    const blocksCapture =
+      state.missionKind === "breakthrough" &&
+      !UNIT_TYPES[unit.type].canCapture &&
+      state.objectives.some(
+        (objective) =>
+          objective.kind === "capture" &&
+          objective.owner !== "player" &&
+          objective.x === tile.x &&
+          objective.y === tile.y,
+      );
+    if (blocksCapture) continue;
     const terrain = tileAt(state, tile.x, tile.y);
     const positional =
       terrain.defense * WEIGHTS.terrain -
@@ -407,7 +418,7 @@ export const tacticalAgent: Agent = {
       state.missionKind === "breakthrough" &&
       UNIT_TYPES[unit.type].canCapture &&
       unit.mpLeft > 0 &&
-      state.turn >= Math.ceil(state.maxTurns * 0.45)
+      state.turn >= Math.ceil(state.maxTurns * 0.3)
     ) {
       const pending = state.objectives.filter((o) => o.kind === "capture" && o.owner !== "player");
       const goal = nearest(unit, pending);
