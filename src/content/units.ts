@@ -79,7 +79,8 @@ export const UNIT_TYPES: Record<UnitTypeId, UnitTypeDef> = {
     minRange: 1,
     maxRange: 0,
     attack: 0,
-    maxHp: 85,
+    // 后勤队本身就是可调拨的人力池，容量略高于普通步兵。
+    maxHp: 115,
     vehicle: false,
     canCapture: false,
     indirect: false,
@@ -88,9 +89,12 @@ export const UNIT_TYPES: Record<UnitTypeId, UnitTypeDef> = {
   },
 };
 
-/** 后勤补充：回复生命、疲劳，并短暂恢复供给窗口内的弹药 */
+/** 后勤补充：人员守恒调拨 + 疲劳/弹药服务。 */
 export const LOGISTICS = {
-  heal: 28,
+  /** 一次战场补充最多调拨的人数。 */
+  personnelPerAction: 28,
+  /** 后勤队必须保留的最低机动编制，不能捐到空队。 */
+  minimumPersonnel: 55,
   fatigueRelief: 18,
   /** 邻接补给后，目标无视 supplyWindow 惩罚的持续回合数 */
   ammoRestoreTurns: 3,

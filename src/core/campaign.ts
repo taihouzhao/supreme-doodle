@@ -8,7 +8,7 @@ import {
 import { ITEM_IDS } from "../content/items";
 import type { MissionConfig } from "../content/missions/schema";
 import { BASE_STATS } from "../content/progress";
-import { levelFromExp, rankName, veterancyLevel } from "../content/units";
+import { LOGISTICS, levelFromExp, rankName, veterancyLevel } from "../content/units";
 import { WEAPONS, bestWeapon, defaultWeaponFor, weaponFits } from "../content/weapons";
 import { effectiveMaxHp, recomputeStatsAtLevel } from "./commander";
 import { createMissionState, emptyInventory, type RosterUnit } from "./mission";
@@ -51,6 +51,61 @@ export interface CampaignState {
   pendingDeploy?: string[];
   /** 出击前为各单位分配的携行物资（按 rosterId）；空则整库带入 */
   pendingLoadout?: Record<string, ItemLoadout>;
+}
+
+export interface PersonnelTransferBounds {
+  sourceId: string | null;
+  targetId: string | null;
+  max: number;
+}
+
+/** 出击前的人力调拨上限，始终保留后勤队最低机动编制。 */
+export function personnelTransferBounds(
+  campaign: CampaignState,
+  sourceId?: string | null,
+  targetId?: string | null,
+): PersonnelTransferBounds {
+  const source =
+    campaign.roster.find((unit) => unit.id === sourceId && unit.type === "logistics") ??
+    campaign.roster.find((unit) => unit.type === "logistics");
+  const target = campaign.roster.find(
+    (unit) => unit.id === targetId && unit.type !== "logistics",
+  ) ?? campaign.roster.find((unit) => unit.type !== "logistics" && unit.hp < unit.maxHp);
+  if (!source || !target) return { sourceId: source?.id ?? null, targetId: target?.id ?? null, max: 0 };
+  const sourceRoom = Math.max(0, source.hp - LOGISTICS.minimumPersonnel);
+  const targetMissing = Math.max(0, target.maxHp - target.hp);
+  return {
+    sourceId: source.id,
+    targetId: target.id,
+    max: Math.min(sourceRoom, targetMissing),
+  };
+}
+
+/**
+ * 应用一次出击前人力调拨。返回新 CampaignState，便于 UI 预览后确认和存档。
+ * 任何非法来源、目标或超额请求都会被安全截断为合法范围。
+ */
+export function transferPersonnel(
+  campaign: CampaignState,
+  sourceId: string,
+  targetId: string,
+  requested: number,
+): CampaignState {
+  const source = campaign.roster.find((unit) => unit.id === sourceId && unit.type === "logistics");
+  const target = campaign.roster.find((unit) => unit.id === targetId && unit.type !== "logistics");
+  if (!source || !target || source.id === target.id) return campaign;
+  const amount = Math.min(
+    Math.max(0, Math.floor(requested)),
+    Math.max(0, source.hp - LOGISTICS.minimumPersonnel),
+    Math.max(0, target.maxHp - target.hp),
+  );
+  if (amount <= 0) return campaign;
+  const roster = campaign.roster.map((unit) => {
+    if (unit.id === source.id) return { ...unit, hp: unit.hp - amount };
+    if (unit.id === target.id) return { ...unit, hp: unit.hp + amount };
+    return unit;
+  });
+  return { ...campaign, roster };
 }
 
 function chapterOf(chapterId: string): ChapterConfig {

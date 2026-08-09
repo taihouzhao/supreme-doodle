@@ -143,7 +143,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；云山城位于河谷中央，城南公路越过支流后继续向清川江方向；目标统一使用功能名“城南公路桥”。",
     weather: { options: ["clear", "overcast"], label: "寒冷夜战", detail: "入夜后气温下降，山谷间有薄雾。" },
     playerEquipment: PVA_EARLY,
-    maxTurns: 16,
+    // 取消“溃散后自动推进”后，夺取第二个据点需要显式行军；保留两回合机动窗口。
+    maxTurns: 18,
     map: [
       "^^^^^F..F....F..^^^^",
       "^^^^FF..F.==.F..F^^^",

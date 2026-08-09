@@ -6,7 +6,6 @@ import { effectiveStats, syncLevelFromExp } from "./commander";
 import { COUNTER_RATIO, canCounter, computeDamage, itemDamage, refreshMaxHp } from "./combat";
 import {
   canAttack,
-  canEnter,
   findPath,
   livingUnits,
   manhattan,
@@ -16,7 +15,7 @@ import {
   unitAt,
 } from "./grid";
 import { isEvacTile } from "./mission";
-import { nextInt } from "./rng";
+import { nextInt, nextRange } from "./rng";
 import type { GameEvent, GameState, ItemId, Unit, Vec2 } from "./types";
 
 const FATIGUE = BALANCE.fatigue;
@@ -139,32 +138,40 @@ export function performMove(state: GameState, unit: Unit, to: Vec2, events: Game
   return true;
 }
 
-/** 击溃紧贴的敌军后推进到空出的格子，占住刚打开的缺口 */
-function advanceAfterRout(
+/**
+ * 敌军溃散后不再自动推进。若条件允许，按确定性随机收容少量俘虏，
+ * 优先进入最近的后勤队，其次才进入发动攻击的作战单位。
+ */
+function capturePrisoners(
   state: GameState,
   attacker: Unit,
-  target: Unit,
+  defender: Unit,
   events: GameEvent[],
 ): void {
-  if (!attacker.alive || attacker.evacuated) return;
-  if (manhattan(attacker, target) !== 1) return;
-  if (!canEnter(state, attacker, target.x, target.y)) return;
-  if (unitAt(state, target.x, target.y)) return;
+  if (attacker.faction !== "player" || defender.faction !== "enemy") return;
 
-  const from = { x: attacker.x, y: attacker.y };
-  const to = { x: target.x, y: target.y };
-  attacker.x = to.x;
-  attacker.y = to.y;
-  attacker.movedThisTurn = true;
-  events.push({
-    type: "moved",
-    unitId: attacker.id,
-    from,
-    to,
-    cost: 0,
-    path: [from, to],
-  });
-  settleTileEntry(state, attacker, events);
+  const chance = nextRange(state.rng, 0, 1);
+  state.rng = chance.state;
+  if (chance.value > BALANCE.prisoners.chance) return;
+
+  const recipients = livingUnits(state, "player")
+    .filter((unit) => unit.type === "logistics" || unit.id === attacker.id)
+    .sort((a, b) => {
+      const aRoom = a.maxHp - a.hp;
+      const bRoom = b.maxHp - b.hp;
+      return bRoom - aRoom || manhattan(a, defender) - manhattan(b, defender) || a.id.localeCompare(b.id);
+    });
+  const recipient = recipients.find((unit) => unit.hp < unit.maxHp);
+  if (!recipient) return;
+
+  const draw = nextInt(state.rng, BALANCE.prisoners.min, BALANCE.prisoners.max);
+  state.rng = draw.state;
+  const amount = Math.min(draw.value, recipient.maxHp - recipient.hp);
+  if (amount <= 0) return;
+
+  recipient.hp += amount;
+  state.stats.prisonersCaptured = (state.stats.prisonersCaptured ?? 0) + amount;
+  events.push({ type: "prisonersCaptured", unitId: recipient.id, sourceId: defender.id, amount });
 }
 
 export function performAttack(
@@ -208,7 +215,7 @@ export function performAttack(
   const defenderRouted = defender.hp <= 0;
   const attackerRouted = attacker.hp <= 0;
 
-  // 先发 attacked（带本击血量/溃散），再发晋升与 routed，保证 FX 时间线：命中→掉血→溃散→推进
+  // 先发 attacked（带本击血量/溃散），再发晋升与 routed，保证 FX 时间线：命中→掉血→溃散→收容
   events.push({
     type: "attacked",
     attackerId: attacker.id,
@@ -230,6 +237,7 @@ export function performAttack(
   if (defenderRouted) {
     routUnit(state, defender, events);
     grantExp(attacker, VETERANCY.expPerRout, state, events);
+    capturePrisoners(state, attacker, defender, events);
   }
   if (attackerRouted) {
     routUnit(state, attacker, events);
@@ -239,7 +247,6 @@ export function performAttack(
   addFatigue(attacker, FATIGUE.perAttack);
   attacker.hasActed = true;
   attacker.mpLeft = 0;
-  if (!defender.alive) advanceAfterRout(state, attacker, defender, events);
   return true;
 }
 
@@ -264,7 +271,7 @@ export function performWait(_state: GameState, unit: Unit): boolean {
   return true;
 }
 
-/** 后勤邻接补充：回复生命、降低疲劳，并短暂恢复弹药（对抗 supplyWindow） */
+/** 后勤邻接补充：从后勤人员池转移兵员，并降低疲劳、恢复弹药窗口。 */
 export function performResupply(
   state: GameState,
   unit: Unit,
@@ -274,20 +281,27 @@ export function performResupply(
   if (unit.type !== "logistics") return false;
   if (!resupplyTargets(state, unit).some((ally) => ally.id === target.id)) return false;
   const missing = target.maxHp - target.hp;
-  const heal = Math.min(LOGISTICS.heal, Math.max(0, missing));
+  const transferable = Math.max(0, unit.hp - LOGISTICS.minimumPersonnel);
+  const personnel = Math.min(
+    LOGISTICS.personnelPerAction,
+    transferable,
+    Math.max(0, missing),
+  );
   const fatigueRelief = Math.min(LOGISTICS.fatigueRelief, target.fatigue);
   const needsAmmo =
     target.faction === "player" &&
     state.scripted.some((rule) => rule.kind === "supplyWindow" && state.turn > rule.untilTurn) &&
     (target.supplyRestoredUntil ?? 0) < state.turn;
-  if (heal <= 0 && fatigueRelief <= 0 && !needsAmmo) return false;
-  target.hp += heal;
+  if (personnel <= 0 && fatigueRelief <= 0 && !needsAmmo) return false;
+  // 人员守恒：后勤减少多少，作战单位就增加多少，禁止凭空回血。
+  unit.hp -= personnel;
+  target.hp += personnel;
   addFatigue(target, -fatigueRelief);
   // 弹药恢复：显式补弹，或治疗/消疲时顺带恢复（仅玩家）
   if (
     target.faction === "player" &&
     state.scripted.some((rule) => rule.kind === "supplyWindow") &&
-    (needsAmmo || heal > 0 || fatigueRelief > 0)
+    (needsAmmo || personnel > 0 || fatigueRelief > 0)
   ) {
     target.supplyRestoredUntil = state.turn + LOGISTICS.ammoRestoreTurns;
   }
@@ -297,10 +311,10 @@ export function performResupply(
     type: "resupplied",
     unitId: unit.id,
     targetId: target.id,
-    heal,
+    personnel,
+    heal: 0,
     fatigueRelief,
   });
-  if (heal > 0) events.push({ type: "healed", unitId: target.id, amount: heal });
   return true;
 }
 
@@ -348,7 +362,11 @@ export function performItem(
     target.hp -= dealt;
     damage += dealt;
     targetIds.push(target.id);
-    if (target.hp <= 0) routUnit(state, target, events);
+    if (target.hp <= 0) {
+      routUnit(state, target, events);
+      grantExp(unit, VETERANCY.expPerRout, state, events);
+      capturePrisoners(state, unit, target, events);
+    }
   } else {
     const center = usage.to;
     if (!center) return false;
@@ -363,7 +381,11 @@ export function performItem(
       victim.hp -= dealt;
       damage += dealt;
       targetIds.push(victim.id);
-      if (victim.hp <= 0) routUnit(state, victim, events);
+      if (victim.hp <= 0) {
+        routUnit(state, victim, events);
+        grantExp(unit, VETERANCY.expPerRout, state, events);
+        capturePrisoners(state, unit, victim, events);
+      }
     }
     if (targetIds.length === 0) return false;
   }

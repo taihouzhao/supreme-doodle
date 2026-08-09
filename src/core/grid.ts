@@ -1,5 +1,5 @@
 import { TERRAIN } from "../content/terrain";
-import { UNIT_TYPES } from "../content/units";
+import { LOGISTICS, UNIT_TYPES } from "../content/units";
 import { WEAPONS } from "../content/weapons";
 import type { GameState, TerrainDef, Unit, Vec2 } from "./types";
 
@@ -247,7 +247,12 @@ export function needsResupply(state: GameState, ally: Unit): boolean {
 /** 后勤可补充的正交相邻友军（未满员、仍有疲劳，或我方弹药窗口已过期） */
 export function resupplyTargets(state: GameState, unit: Unit): Unit[] {
   if (unit.type !== "logistics" || !unit.alive || unit.evacuated) return [];
-  return adjacentFriendlyUnits(state, unit).filter((ally) => needsResupply(state, ally));
+  const canTransferPersonnel = unit.hp > LOGISTICS.minimumPersonnel;
+  return adjacentFriendlyUnits(state, unit).filter((ally) => {
+    if (!needsResupply(state, ally)) return false;
+    // 缺编需要真实人力；后勤队降到最低机动编制后仍可处理疲劳/弹药，但不会再凭空回血。
+    return canTransferPersonnel || ally.hp >= ally.maxHp;
+  });
 }
 
 export function attackableTargets(state: GameState, unit: Unit): Unit[] {
@@ -259,6 +264,34 @@ export function adjacentAllies(state: GameState, unit: Unit): number {
     const other = unitAt(state, unit.x + step.x, unit.y + step.y);
     return other && other.faction === unit.faction ? count + 1 : count;
   }, 0);
+}
+
+/**
+ * 能够对同一目标形成覆盖的友军数。
+ * 这里不要求这些单位本回合仍有行动点，表示的是「已经建立的火力呼应」；
+ * 后勤不计入火力覆盖，但可以通过相邻位置提供有限的近距离支援。
+ */
+export function coordinationAllies(state: GameState, attacker: Unit, defender: Unit): number {
+  return livingUnits(state, attacker.faction).filter((ally) => {
+    if (ally.id === attacker.id || ally.type === "logistics") return false;
+    const range = attackRange(state, ally);
+    const distance = manhattan(ally, defender);
+    return distance >= range.min && distance <= range.max;
+  }).length;
+}
+
+/**
+ * 守方的相互掩护单位数：相邻单位或能够反击当前攻方的单位均算入，
+ * 但不把守方本身重复计算。这样远程火力也会影响近战单位是否贸然接触。
+ */
+export function defensiveSupportAllies(state: GameState, defender: Unit, attacker: Unit): number {
+  return livingUnits(state, defender.faction).filter((ally) => {
+    if (ally.id === defender.id || ally.type === "logistics") return false;
+    if (manhattan(ally, defender) === 1) return true;
+    const range = attackRange(state, ally);
+    const distance = manhattan(ally, attacker);
+    return distance >= range.min && distance <= range.max;
+  }).length;
 }
 
 export function orthogonalNeighbours(pos: Vec2): Vec2[] {

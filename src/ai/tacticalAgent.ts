@@ -492,6 +492,11 @@ export const tacticalAgent: Agent = {
     const hurt = unit.hp / unit.maxHp < (unit.keyUnit ? 0.7 : WEIGHTS.retreatHpRatio);
     const exposed =
       dangerAt(state, danger, unit) > unit.hp * (unit.keyUnit ? 0.25 : WEIGHTS.retreatDangerRatio);
+
+    // 先处理能改变局面的道具：反坦克武器等机会窗口不能被后撤判断吞掉，
+    // 否则装甲单位占住目标格时，部队会在目标前反复后退而错过突破时机。
+    if (item && (!combat || item.score > combat.score)) return item.action;
+
     if ((hurt && exposed || (unit.keyUnit && hurt)) && unit.mpLeft > 0) {
       const retreat = planRetreat(state, unit, danger);
       if (retreat && (!combat || retreat.score > combat.score - (unit.keyUnit ? 30 : 0))) {
@@ -499,7 +504,6 @@ export const tacticalAgent: Agent = {
       }
     }
 
-    if (item && (!combat || item.score > combat.score)) return item.action;
     if (combat) return combat.action;
     return { kind: "wait", unitId: unit.id };
   },

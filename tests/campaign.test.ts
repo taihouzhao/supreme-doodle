@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { getAgent } from "../src/ai";
 import { CHAPTER_ONE } from "../src/content/chapter";
-import { veterancyLevel } from "../src/content/units";
-import { createCampaign, finishMission, startMission } from "../src/core/campaign";
+import { LOGISTICS, veterancyLevel } from "../src/content/units";
+import {
+  createCampaign,
+  finishMission,
+  personnelTransferBounds,
+  startMission,
+  transferPersonnel,
+} from "../src/core/campaign";
 import { evaluateVictory } from "../src/core/mission";
 import { playCampaign } from "../src/sim/runner";
 
@@ -30,6 +36,25 @@ describe("战役继承", () => {
     expect(inherited.fatigue).toBeLessThan(80);
     expect(inherited.hp).toBeGreaterThan(20);
     expect(inherited.missionsSurvived).toBe(1);
+  });
+
+  it("兵员调拨保持守恒，并保留后勤最低机动编制", () => {
+    const campaign = createCampaign("chapter-one", 13);
+    const source = campaign.roster.find((unit) => unit.type === "logistics")!;
+    const target = campaign.roster.find((unit) => unit.type !== "logistics")!;
+    source.hp = source.maxHp;
+    target.hp = Math.max(1, target.hp - 40);
+
+    const beforeTotal = source.hp + target.hp;
+    const bounds = personnelTransferBounds(campaign, source.id, target.id);
+    expect(bounds.max).toBeGreaterThan(0);
+
+    const next = transferPersonnel(campaign, source.id, target.id, bounds.max + 100);
+    const nextSource = next.roster.find((unit) => unit.id === source.id)!;
+    const nextTarget = next.roster.find((unit) => unit.id === target.id)!;
+    expect(nextSource.hp).toBeGreaterThanOrEqual(LOGISTICS.minimumPersonnel);
+    expect(nextTarget.hp).toBe(target.maxHp);
+    expect(nextSource.hp + nextTarget.hp).toBe(beforeTotal);
   });
 
   it("撤离的单位一定保留，不参与永久损失判定", () => {

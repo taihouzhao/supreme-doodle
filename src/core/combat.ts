@@ -4,7 +4,14 @@ import { WEATHER_EFFECT } from "../content/terrain";
 import { MATCHUP, PROGRESS, UNIT_TYPES } from "../content/units";
 import { WEAPONS } from "../content/weapons";
 import { effectiveMaxHp, effectiveStats } from "./commander";
-import { adjacentAllies, attackRange, manhattan, tileAt } from "./grid";
+import {
+  adjacentAllies,
+  attackRange,
+  coordinationAllies,
+  defensiveSupportAllies,
+  manhattan,
+  tileAt,
+} from "./grid";
 import { nightAssaultBonus, supplyPenalty } from "./mission";
 import { nextRange } from "./rng";
 import type { DamageBreakdown, GameState, Unit } from "./types";
@@ -75,8 +82,23 @@ export function damageComponents(
   const leadScale = 1 + Math.max(0, atkStats.leadership - 40) * 0.004;
   const flank =
     1 +
-    Math.min(BALANCE.flank.cap, adjacentAllies(state, attacker) * BALANCE.flank.perAlly) *
+      Math.min(BALANCE.flank.cap, adjacentAllies(state, attacker) * BALANCE.flank.perAlly) *
       leadScale;
+  const coordination =
+    1 +
+      Math.min(
+        BALANCE.coordination.cap,
+        coordinationAllies(state, attacker, defender) * BALANCE.coordination.perAlly,
+      ) *
+        leadScale;
+  const defensiveSupport = Math.max(
+    1 - BALANCE.defensiveSupport.cap,
+    1 -
+      Math.min(
+        BALANCE.defensiveSupport.cap,
+        defensiveSupportAllies(state, defender, attacker) * BALANCE.defensiveSupport.perAlly,
+      ),
+  );
 
   let rawDefense =
     attackerDef.indirect && defenderTile.defense > 0
@@ -108,8 +130,10 @@ export function damageComponents(
         weapon *
         fatigue *
         flank *
+        coordination *
         terrain *
         defenderVeterancy *
+        defensiveSupport *
         keyGuard *
         weather *
         setup *
@@ -127,8 +151,10 @@ export function damageComponents(
     weapon,
     fatigue,
     flank,
+    coordination,
     terrain,
     defenderVeterancy,
+    defensiveSupport,
     keyGuard,
     weather,
     setup,

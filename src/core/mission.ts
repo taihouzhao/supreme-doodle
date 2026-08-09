@@ -356,6 +356,7 @@ export function createMissionState(setup: MissionSetup): GameState {
       playerEvacuated: 0,
       damageDealt: 0,
       damageTaken: 0,
+      prisonersCaptured: 0,
     },
     resultReason: "",
   };

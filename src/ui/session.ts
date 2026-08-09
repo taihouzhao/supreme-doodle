@@ -6,7 +6,9 @@ import {
   createCampaign,
   equipWeapon,
   finishMission,
+  personnelTransferBounds,
   startMission,
+  transferPersonnel,
   toggleDeployUnit,
   adjustLoadoutItem,
   companionDeployCap,
@@ -110,6 +112,14 @@ export interface SessionState {
   fxSpeed: number;
   /** 指挥部仪表盘当前部门 */
   briefTab: BriefTab;
+  /** 出击前组织部的人员调拨草稿；确认后写入 CampaignState。 */
+  personnelTransfer: {
+    sourceId: string | null;
+    targetId: string | null;
+    amount: number;
+  };
+  /** 回合日志默认折叠，用户主动展开后才显示事件列表。 */
+  logExpanded: boolean;
 }
 
 type Listener = (state: SessionState) => void;
@@ -148,6 +158,8 @@ export class Session {
       fxBusy: false,
       fxSpeed: loadFxSpeed(),
       briefTab: "staff",
+      personnelTransfer: { sourceId: null, targetId: null, amount: 0 },
+      logExpanded: false,
     };
     this.presentation = new Presentation(
       () => {
@@ -236,6 +248,8 @@ export class Session {
       endTurnArmed: false,
       fxBusy: false,
       briefTab: "staff",
+      personnelTransfer: { sourceId: null, targetId: null, amount: 0 },
+      logExpanded: false,
     });
   }
 
@@ -243,6 +257,73 @@ export class Session {
     if (this.state.screen !== "brief") return;
     if (tab === this.state.briefTab) return;
     this.update({ briefTab: tab });
+  }
+
+  /** 当前组织部人员调拨草稿及可调拨上限。 */
+  personnelTransferDraft(): {
+    sourceId: string | null;
+    targetId: string | null;
+    amount: number;
+    max: number;
+  } {
+    const draft = this.state.personnelTransfer;
+    const bounds = personnelTransferBounds(this.state.campaign, draft.sourceId, draft.targetId);
+    const amount = Math.min(Math.max(0, draft.amount), bounds.max);
+    return { sourceId: bounds.sourceId, targetId: bounds.targetId, amount, max: bounds.max };
+  }
+
+  selectPersonnelTarget(targetId: string): void {
+    if (this.state.screen !== "brief") return;
+    const bounds = personnelTransferBounds(this.state.campaign, null, targetId);
+    if (!bounds.targetId) return;
+    this.update({
+      personnelTransfer: {
+        sourceId: bounds.sourceId,
+        targetId: bounds.targetId,
+        amount: Math.min(10, bounds.max),
+      },
+    });
+  }
+
+  adjustPersonnelTransfer(delta: number): void {
+    if (this.state.screen !== "brief") return;
+    const draft = this.personnelTransferDraft();
+    this.update({
+      personnelTransfer: {
+        sourceId: draft.sourceId,
+        targetId: draft.targetId,
+        amount: Math.max(0, Math.min(draft.max, draft.amount + Math.floor(delta))),
+      },
+    });
+  }
+
+  confirmPersonnelTransfer(): void {
+    if (this.state.screen !== "brief") return;
+    const draft = this.personnelTransferDraft();
+    if (!draft.sourceId || !draft.targetId || draft.amount <= 0) {
+      this.update({ notice: "当前没有可调拨的缺口，或后勤队已达到最低机动编制。" });
+      return;
+    }
+    const campaign = transferPersonnel(
+      this.state.campaign,
+      draft.sourceId,
+      draft.targetId,
+      draft.amount,
+    );
+    if (campaign === this.state.campaign) {
+      this.update({ notice: "调拨未生效，请检查目标缺口与后勤余量。" });
+      return;
+    }
+    writeSave(campaign);
+    this.update({
+      campaign,
+      personnelTransfer: { sourceId: draft.sourceId, targetId: draft.targetId, amount: 0 },
+      notice: `已从后勤队调拨 ${draft.amount} 人至作战单位。`,
+    });
+  }
+
+  toggleLog(): void {
+    this.update({ logExpanded: !this.state.logExpanded });
   }
 
   /** 出击前手动换装，立即存档 */
@@ -288,6 +369,7 @@ export class Session {
     this.update({
       screen: this.state.campaign.status === "complete" ? "chapterEnd" : "brief",
       briefTab: "staff",
+      personnelTransfer: { sourceId: null, targetId: null, amount: 0 },
     });
   }
 
@@ -322,6 +404,7 @@ export class Session {
         },
       ],
       notice: missionStartNotice(started.mission, started.state.weather),
+      logExpanded: false,
     });
   }
 
@@ -872,6 +955,7 @@ export class Session {
       pendingAttack: null,
       endTurnArmed: false,
       briefTab: "staff",
+      personnelTransfer: { sourceId: null, targetId: null, amount: 0 },
     });
   }
 

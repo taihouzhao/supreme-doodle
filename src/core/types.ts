@@ -206,6 +206,8 @@ export interface MissionStats {
   playerEvacuated: number;
   damageDealt: number;
   damageTaken: number;
+  /** 俘虏敌军后转入己方后勤/作战编制的人员数。 */
+  prisonersCaptured?: number;
 }
 
 /** 地图地名标注 */
@@ -280,6 +282,10 @@ export interface DamageBreakdown {
   defenderVeterancy: number;
   /** 主力护卫减伤；普通单位为 1。 */
   keyGuard: number;
+  /** 多单位火力覆盖/互相呼应带来的攻击修正。 */
+  coordination?: number;
+  /** 守方邻近单位对本次攻击的掩护修正（小于 1 表示减伤）。 */
+  defensiveSupport?: number;
   weather: number;
   setup: number;
   highGround: number;
@@ -330,8 +336,17 @@ export type GameEvent =
       type: "resupplied";
       unitId: string;
       targetId: string;
+      /** 本次从后勤单位转移给目标的人员数；不是凭空回血。 */
+      personnel?: number;
       heal: number;
       fatigueRelief: number;
+    }
+  | {
+      type: "prisonersCaptured";
+      /** 负责接收俘虏的己方单位，通常为最近的后勤单位。 */
+      unitId: string;
+      sourceId: string;
+      amount: number;
     }
   | { type: "scripted"; kind: ScriptedRule["kind"]; note: string; unitIds: string[]; damage: number }
   | { type: "evacuated"; unitId: string }

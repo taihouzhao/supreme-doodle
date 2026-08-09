@@ -21,9 +21,9 @@ export const PROGRESS = {
   /** 等级对伤害的额外温和加成，避免完全吃掉属性曲线 */
   attackPerLevel: 0.018,
   defensePerLevel: 0.012,
-  /** 经验：造成伤害与击溃 */
+  /** 经验：造成伤害与击溃；歼灭奖励明显高于单次擦伤。 */
   expPerDamage: 0.4,
-  expPerRout: 28,
+  expPerRout: 40,
   /** 升级曲线：升到 level+1 所需累计经验 */
   expForLevel(level: number): number {
     if (level <= 1) return 0;

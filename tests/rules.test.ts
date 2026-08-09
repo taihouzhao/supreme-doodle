@@ -4,7 +4,14 @@ import { getMission } from "../src/content/missions";
 import { UNIT_TYPES, veterancyLevel } from "../src/content/units";
 import { canCounter, damageComponents, estimateDamage } from "../src/core/combat";
 import { applyAction, legalActions } from "../src/core/engine";
-import { canAttack, reachableTiles, resupplyTargets, tileAt } from "../src/core/grid";
+import {
+  canAttack,
+  coordinationAllies,
+  defensiveSupportAllies,
+  reachableTiles,
+  resupplyTargets,
+  tileAt,
+} from "../src/core/grid";
 import {
   createMissionState,
   evaluateVictory,
@@ -187,6 +194,22 @@ describe("战斗", () => {
     expect(veterancyLevel(0)).toBe(1);
     expect(veterancyLevel(500)).toBeGreaterThan(1);
   });
+
+  it("多单位火力呼应与相互掩护进入伤害分解", () => {
+    const state = scenario();
+    const attacker = put(state, "p0", 6, 6);
+    const defender = put(state, "e0", 6, 5);
+    const coveringAttacker = put(state, "p1", 5, 5);
+    const coveringDefender = put(state, "e1", 5, 5);
+    expect(coordinationAllies(state, attacker, defender)).toBeGreaterThan(0);
+    expect(defensiveSupportAllies(state, defender, attacker)).toBeGreaterThan(0);
+
+    const breakdown = damageComponents(state, attacker, defender, 1);
+    expect(breakdown.coordination).toBeGreaterThan(1);
+    expect(breakdown.defensiveSupport).toBeLessThan(1);
+    coveringAttacker.alive = false;
+    coveringDefender.alive = false;
+  });
 });
 
 describe("规则动作", () => {
@@ -209,8 +232,8 @@ describe("规则动作", () => {
   });
 });
 
-describe("击溃推进", () => {
-  it("打掉紧贴的敌人后推进到对方格子", () => {
+describe("击溃后的站位", () => {
+  it("打掉紧贴的敌人后仍留在原开火格", () => {
     const state = scenario();
     const attacker = put(state, "p0", 6, 6);
     const defender = put(state, "e0", 6, 5);
@@ -218,9 +241,8 @@ describe("击溃推进", () => {
     const events: GameEvent[] = [];
     expect(performAttack(state, attacker, defender, events)).toBe(true);
     expect(defender.alive).toBe(false);
-    expect({ x: attacker.x, y: attacker.y }).toEqual({ x: 6, y: 5 });
-    const advance = events.find((e) => e.type === "moved");
-    expect(advance).toBeTruthy();
+    expect({ x: attacker.x, y: attacker.y }).toEqual({ x: 6, y: 6 });
+    expect(events.some((e) => e.type === "moved")).toBe(false);
   });
 
   it("远距离击溃不会推进", () => {
@@ -246,6 +268,34 @@ describe("击溃推进", () => {
     expect(performAttack(state, attacker, defender, events)).toBe(true);
     expect(defender.alive).toBe(false);
     expect({ x: attacker.x, y: attacker.y }).toEqual({ x: 6, y: 6 });
+  });
+
+  it("击溃奖励经验，并在随机命中时收容少量俘虏", () => {
+    const base = scenario();
+    const attacker = put(base, "p0", 6, 6);
+    const defender = put(base, "e0", 6, 5);
+    defender.hp = 1;
+    const logistics = put(base, "p1", 6, 7);
+    logistics.type = "logistics";
+    logistics.weapon = "supply_cart";
+    logistics.hp = 1;
+    const expBefore = attacker.exp;
+    let captured = false;
+    for (let rng = 0; rng < 512 && !captured; rng += 1) {
+      const state = structuredClone(base);
+      state.rng = rng;
+      const events: GameEvent[] = [];
+      const trialAttacker = state.units.find((unit) => unit.id === attacker.id)!;
+      const trialDefender = state.units.find((unit) => unit.id === defender.id)!;
+      performAttack(state, trialAttacker, trialDefender, events);
+      captured = events.some((event) => event.type === "prisonersCaptured");
+      if (captured) {
+        expect(trialAttacker.exp).toBeGreaterThan(expBefore);
+        expect(state.stats.prisonersCaptured).toBeGreaterThan(0);
+        expect(state.units.find((unit) => unit.id === logistics.id)!.hp).toBeGreaterThan(1);
+      }
+    }
+    expect(captured).toBe(true);
   });
 });
 

@@ -33,8 +33,10 @@ export function breakdownFactors(breakdown: DamageBreakdown): Factor[] {
     ["武器", breakdown.weapon],
     ["疲劳", breakdown.fatigue],
     ["夹击", breakdown.flank],
+    ["火力呼应", breakdown.coordination ?? 1],
     ["目标地形", breakdown.terrain],
     ["目标防护", breakdown.defenderVeterancy],
+    ["相互掩护", breakdown.defensiveSupport ?? 1],
     ["主力护卫", breakdown.keyGuard],
     ["天气", breakdown.weather],
     ["架设", breakdown.setup],
@@ -68,11 +70,14 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     }
     case "resupplied": {
       const parts = [
+        (event.personnel ?? 0) > 0 ? `调拨 ${event.personnel} 人` : "",
         event.heal > 0 ? `回复 ${event.heal}` : "",
         event.fatigueRelief > 0 ? `疲劳 -${event.fatigueRelief}` : "",
       ].filter(Boolean);
       return `${unitLabel(state, event.unitId)} 补充 ${unitLabel(state, event.targetId)}（${parts.join("，")}）`;
     }
+    case "prisonersCaptured":
+      return `${unitLabel(state, event.unitId)} 收容 ${event.amount} 名俘虏，转入编制（来自 ${unitLabel(state, event.sourceId)}）`;
     case "itemPicked":
       return `${unitLabel(state, event.unitId)} 拾取了${ITEMS[event.item].name}`;
     case "weaponPicked":

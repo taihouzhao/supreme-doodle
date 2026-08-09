@@ -2,8 +2,8 @@ import { ITEMS, ITEM_IDS } from "../content/items";
 import { BALANCE } from "../content/balance";
 import { CHAPTER_ONE } from "../content/chapter";
 import { TERRAIN } from "../content/terrain";
-import { PROGRESS, levelFromExp, expProgress } from "../content/progress";
-import { UNIT_TYPES } from "../content/units";
+import { PROGRESS, levelFromExp } from "../content/progress";
+import { LOGISTICS, UNIT_TYPES } from "../content/units";
 import { WEAPONS, WEAPON_HISTORY } from "../content/weapons";
 import { equippableWeapons } from "../core/campaign";
 import { effectiveStats } from "../core/commander";
@@ -260,6 +260,9 @@ export class View {
         case "toggle-detail":
           this.session.toggleDetail();
           break;
+        case "toggle-log":
+          this.session.toggleLog();
+          break;
         case "focus-objective":
           if (value) {
             this.session.focusObjective(value);
@@ -288,6 +291,17 @@ export class View {
           if (value === "staff" || value === "ordnance" || value === "org") {
             this.session.setBriefTab(value);
           }
+          break;
+        case "select-personnel-target":
+          if (value) this.session.selectPersonnelTarget(value);
+          break;
+        case "adjust-personnel": {
+          const delta = Number(target.dataset.delta ?? "0");
+          if (Number.isFinite(delta) && delta !== 0) this.session.adjustPersonnelTransfer(delta);
+          break;
+        }
+        case "confirm-personnel":
+          this.session.confirmPersonnelTransfer();
           break;
         case "loadout-adj": {
           const rosterId = target.dataset.roster;
@@ -414,9 +428,12 @@ export class View {
           `<li class="${factor.favourable ? "is-up" : "is-down"}"><span>${esc(factor.label)}</span><strong>×${factor.value.toFixed(2)}</strong></li>`,
         ).join("")}</ul>` : ""}
       </section>` : `<strong class="intel__title">战场记录</strong>`}
-      <ol class="log" role="log" aria-live="polite">
+      <button type="button" class="log__toggle" data-action="toggle-log" aria-expanded="${state.logExpanded}">
+        ${state.logExpanded ? "收起回合记录" : `展开回合记录（${recent.length} 条）`}
+      </button>
+      ${state.logExpanded ? `<ol class="log" role="log" aria-live="polite">
         ${recent.map((entry) => `<li class="log__item log__item--${entry.tone}"><span class="log__turn">T${entry.turn}</span>${esc(entry.text)}</li>`).join("")}
-      </ol>
+      </ol>` : ""}
     `;
   }
 
@@ -853,40 +870,6 @@ export class View {
     </li>`;
   }
 
-  /** 组织部卡片：五维 + 出战勾选 */
-  private orgCard(unit: RosterUnit, deployed: Set<string>, cap: number): string {
-    const selected = deployed.has(unit.id);
-    const xp = expProgress(unit.exp);
-    const xpPct =
-      xp.need > 0 ? Math.max(0, Math.min(100, Math.round((xp.into / xp.need) * 100))) : 100;
-    const hpPct = Math.max(0, Math.min(100, Math.round((unit.hp / unit.maxHp) * 100)));
-    return `<article class="org-card${selected ? " is-deployed" : ""}">
-      <header class="org-card__head">
-        <label class="org-card__deploy">
-          <input type="checkbox" data-action="toggle-deploy" data-value="${esc(unit.id)}" aria-label="${esc(unit.commanderName)}出战" ${selected ? "checked" : ""} ${unit.keyUnit ? "disabled" : ""} />
-          <span>${unit.keyUnit ? "主力" : selected ? "出战" : "待命"}</span>
-        </label>
-        <div class="org-card__who">
-          <strong>${esc(unit.commanderName)}${unit.keyUnit ? " · 主角" : ""}</strong>
-          <small>${esc(unit.duty ?? "直属作战分队")} · ${esc(unit.rank)} · ${esc(UNIT_TYPES[unit.type].name)}</small>
-          ${unit.bio ? `<small class="org-card__bio">${esc(unit.bio)}</small>` : ""}
-        </div>
-      </header>
-      <div class="org-card__bars">
-        <div class="bar bar--hp" title="生命 ${unit.hp}/${unit.maxHp}"><i style="width:${hpPct}%"></i><span>HP ${unit.hp}/${unit.maxHp}</span></div>
-        <div class="bar bar--xp" title="经验 ${Math.round(unit.exp)}"><i style="width:${xpPct}%"></i><span>Lv.${unit.level}${xp.need > 0 ? ` · EXP ${xp.into}/${xp.need}` : " · 满级"}</span></div>
-      </div>
-      <div class="org-card__stats">
-        ${meter("统率", unit.stats.leadership)}
-        ${meter("智力", unit.stats.intellect)}
-        ${meter("武力", unit.stats.might)}
-        ${meter("耐力", unit.stats.stamina)}
-        ${meter("机敏", unit.stats.agility)}
-      </div>
-      <p class="org-card__note">出战名额含主力；当前编制上限 ${cap}。</p>
-    </article>`;
-  }
-
   private renderStaffPanel(state: SessionState): string {
     const mission = CHAPTER_ONE.missions[state.campaign.missionIndex];
     if (!mission) return "";
@@ -970,14 +953,90 @@ export class View {
       </ul>`;
   }
 
+  private orgRosterRow(
+    unit: RosterUnit,
+    deployed: Set<string>,
+    cap: number,
+    selectedTarget: string | null,
+  ): string {
+    const selected = deployed.has(unit.id);
+    const target = selectedTarget === unit.id;
+    const hpPct = Math.max(0, Math.min(100, Math.round((unit.hp / unit.maxHp) * 100)));
+    const type = UNIT_TYPES[unit.type];
+    const status = unit.type === "logistics" ? "后勤保障" : type.name;
+    const role = unit.duty ?? "直属作战分队";
+    return `<article class="org-unit-row${target ? " is-target" : ""}${unit.type === "logistics" ? " is-logistics" : ""}">
+      <label class="org-unit-row__deploy">
+        <input type="checkbox" data-action="toggle-deploy" data-value="${esc(unit.id)}" aria-label="${esc(unit.commanderName)}出战" ${selected ? "checked" : ""} ${unit.keyUnit ? "disabled" : ""} />
+        <span>${unit.keyUnit ? "主力" : selected ? "出战" : "待命"}</span>
+      </label>
+      <button type="button" class="org-unit-row__select" data-action="select-personnel-target" data-value="${esc(unit.id)}" ${unit.type === "logistics" ? "disabled" : ""} aria-pressed="${target}">
+        <span class="org-unit-row__identity">
+          <strong>${esc(unit.name)}${unit.keyUnit ? " ★" : ""}</strong>
+          <small>${esc(role)} · ${esc(status)}</small>
+        </span>
+        <span class="org-unit-row__personnel"><b>${unit.hp}</b> / ${unit.maxHp}<i style="width:${hpPct}%"></i></span>
+        <span class="org-unit-row__signals"><em>士气 ${Math.round(unit.stats.leadership)}</em><em>疲劳 ${Math.round(unit.fatigue)}</em><em>${unit.type === "logistics" ? "储备" : "弹药"} ${unit.type === "logistics" ? unit.hp : (hpPct >= 70 ? "充足" : hpPct >= 40 ? "有限" : "紧张")}</em></span>
+        <span class="org-unit-row__chevron" aria-hidden="true">›</span>
+      </button>
+      <small class="org-unit-row__cap">编制 ${deployed.size}/${cap}</small>
+    </article>`;
+  }
+
   private renderOrgPanel(state: SessionState): string {
     const deployed = new Set(this.session.deployedIds());
     const cap = this.session.deployCap();
+    const draft = this.session.personnelTransferDraft();
+    const source = draft.sourceId
+      ? state.campaign.roster.find((unit) => unit.id === draft.sourceId) ?? null
+      : null;
+    const target = draft.targetId
+      ? state.campaign.roster.find((unit) => unit.id === draft.targetId) ?? null
+      : null;
+    const amount = draft.amount;
+    const sourceAfter = source ? source.hp - amount : 0;
+    const targetAfter = target ? target.hp + amount : 0;
+    const hasShortfall = state.campaign.roster.some(
+      (unit) => unit.type !== "logistics" && unit.hp < unit.maxHp,
+    );
+    const canConfirm = Boolean(source && target && amount > 0 && draft.max > 0);
+
     return `
-      <p class="sheet__hint">出战 ${deployed.size} / ${cap}（含主力高大全）。查看五维成长，勾选本关上阵编制。</p>
-      <div class="org-grid">
-        ${state.campaign.roster.map((unit) => this.orgCard(unit, deployed, cap)).join("")}
-      </div>`;
+      <div class="org-subtabs" aria-label="组织部工作区">
+        <span>编制</span><strong>兵员补充</strong>
+      </div>
+      <section class="org-summary" aria-label="部队就绪概况">
+        <div><strong>部队就绪概况</strong><span>${state.campaign.roster.length} 个单位 · 总兵力 ${state.campaign.roster.reduce((sum, unit) => sum + unit.hp, 0)} / ${state.campaign.roster.reduce((sum, unit) => sum + unit.maxHp, 0)}</span></div>
+        <span class="org-summary__state">${hasShortfall ? "存在缺编" : "编制完整"}</span>
+      </section>
+      <div class="org-summary__meters">
+        <span>士气均值 <b>${Math.round(state.campaign.roster.reduce((sum, unit) => sum + unit.stats.leadership, 0) / Math.max(1, state.campaign.roster.length))}</b></span>
+        <span>疲劳均值 <b>${Math.round(state.campaign.roster.reduce((sum, unit) => sum + unit.fatigue, 0) / Math.max(1, state.campaign.roster.length))}</b></span>
+        <span>后勤最低留存 <b>${LOGISTICS.minimumPersonnel}</b></span>
+      </div>
+      <div class="org-roster" aria-label="部队编制列表">
+        ${state.campaign.roster.map((unit) => this.orgRosterRow(unit, deployed, cap, draft.targetId)).join("")}
+      </div>
+      <section class="personnel-transfer" aria-label="兵员补充">
+        <header class="personnel-transfer__head"><h4>兵员补充</h4><span>${draft.max > 0 ? `可调拨 ${draft.max} 人` : "当前无可调拨缺口"}</span></header>
+        <p class="personnel-transfer__route">${esc(source?.name ?? "后勤单位")} <b>→</b> ${esc(target?.name ?? "选择作战单位")}</p>
+        <div class="personnel-transfer__preview">
+          <div><small>调出前 → 调出后</small><strong>${source?.hp ?? "—"} → ${source ? sourceAfter : "—"} / ${source?.maxHp ?? "—"}</strong></div>
+          <div><small>调入前 → 调入后</small><strong>${target?.hp ?? "—"} → ${target ? targetAfter : "—"} / ${target?.maxHp ?? "—"}</strong></div>
+        </div>
+        <div class="personnel-transfer__amount" role="group" aria-label="调拨数量">
+          <button type="button" class="btn btn--small" data-action="adjust-personnel" data-delta="-10" ${amount <= 0 ? "disabled" : ""}>−10</button>
+          <button type="button" class="btn btn--small" data-action="adjust-personnel" data-delta="-1" ${amount <= 0 ? "disabled" : ""}>−</button>
+          <strong>${amount}</strong>
+          <button type="button" class="btn btn--small" data-action="adjust-personnel" data-delta="1" ${amount >= draft.max ? "disabled" : ""}>＋</button>
+          <button type="button" class="btn btn--small" data-action="adjust-personnel" data-delta="10" ${amount >= draft.max ? "disabled" : ""}>＋10</button>
+        </div>
+        <p class="personnel-transfer__reserve">后勤队至少保留 ${LOGISTICS.minimumPersonnel} 人；本次确认后仍余 ${source ? sourceAfter : "—"} 人。</p>
+        <div class="personnel-transfer__actions">
+          <button type="button" class="btn" data-action="adjust-personnel" data-delta="-${amount}" ${amount <= 0 ? "disabled" : ""}>取消</button>
+          <button type="button" class="btn btn--primary" data-action="confirm-personnel" ${canConfirm ? "" : "disabled"}>确认补充</button>
+        </div>
+      </section>`;
   }
 
   private renderOverlay(state: SessionState): void {
@@ -1035,8 +1094,8 @@ export class View {
         const cap = this.session.deployCap();
         const tabs: { id: BriefTab; label: string; hint: string }[] = [
           { id: "staff", label: "参谋部", hint: "下一任务" },
+          { id: "org", label: "组织部", hint: "编制与补充" },
           { id: "ordnance", label: "军械部", hint: "装备分配" },
-          { id: "org", label: "组织部", hint: "编制成长" },
         ];
         const panel =
           tab === "ordnance"
@@ -1046,10 +1105,10 @@ export class View {
               : this.renderStaffPanel(state);
         return `<div class="sheet sheet--brief sheet--hq">
           <header class="hq-top">
-            <div class="hq-top__copy">
+              <div class="hq-top__copy">
               <p class="sheet__eyebrow">指挥部 · 第 ${state.campaign.missionIndex + 1} / ${CHAPTER_ONE.missions.length} 关 · ${esc(mission.date ?? "")}</p>
               <h1>${esc(mission.name)}</h1>
-              <p class="hq-top__meta">${esc(mission.location ?? "")}</p>
+              <p class="hq-top__meta">${esc(mission.location ?? "")} · ${esc(mission.weather?.label ?? "晴")} · ${mission.maxTurns} 回合</p>
             </div>
           </header>
           <nav class="hq-tabs" aria-label="指挥部部门">
