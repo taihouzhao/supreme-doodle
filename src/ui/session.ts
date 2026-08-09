@@ -52,6 +52,8 @@ import {
 
 export type Screen = "title" | "brief" | "battle" | "result" | "chapterEnd";
 
+export type BriefTab = "staff" | "ordnance" | "org";
+
 export interface LogEntry {
   id: number;
   turn: number;
@@ -106,6 +108,8 @@ export interface SessionState {
   fxBusy: boolean;
   /** 交战动画倍速：1 / 2 / 3 */
   fxSpeed: number;
+  /** 指挥部仪表盘当前部门 */
+  briefTab: BriefTab;
 }
 
 type Listener = (state: SessionState) => void;
@@ -143,6 +147,7 @@ export class Session {
       notice: null,
       fxBusy: false,
       fxSpeed: loadFxSpeed(),
+      briefTab: "staff",
     };
     this.presentation = new Presentation(
       () => {
@@ -230,7 +235,14 @@ export class Session {
       pendingAttack: null,
       endTurnArmed: false,
       fxBusy: false,
+      briefTab: "staff",
     });
+  }
+
+  setBriefTab(tab: BriefTab): void {
+    if (this.state.screen !== "brief") return;
+    if (tab === this.state.briefTab) return;
+    this.update({ briefTab: tab });
   }
 
   /** 出击前手动换装，立即存档 */
@@ -273,7 +285,10 @@ export class Session {
   }
 
   continueCampaign(): void {
-    this.update({ screen: this.state.campaign.status === "complete" ? "chapterEnd" : "brief" });
+    this.update({
+      screen: this.state.campaign.status === "complete" ? "chapterEnd" : "brief",
+      briefTab: "staff",
+    });
   }
 
   beginMission(): void {
@@ -856,6 +871,7 @@ export class Session {
       mission: null,
       pendingAttack: null,
       endTurnArmed: false,
+      briefTab: "staff",
     });
   }
 
