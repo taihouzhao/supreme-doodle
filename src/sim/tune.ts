@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BALANCE } from "../content/balance";
 import { evaluateGates, THRESHOLDS } from "./gates";
+import { defaultWorkerCount } from "./pool";
 import { renderReport } from "./report";
 import { runSimulation, type SimulationResult } from "./simulate";
 
@@ -16,6 +17,7 @@ export interface TuneOptions {
   tolerance?: number;
   seeds?: number;
   campaignSeeds?: number;
+  workers?: number;
   write?: boolean;
   out?: string;
   quiet?: boolean;
@@ -63,16 +65,22 @@ function formatNum(value: number): string {
   return `${Math.round(value * 1000) / 1000}`;
 }
 
-function evaluateTrial(
+async function evaluateTrial(
   enemyDamage: number,
   seeds: number,
   campaignSeeds: number,
-): {
+  workers: number,
+): Promise<{
   trial: TuneTrial;
   simulation: SimulationResult;
-} {
+}> {
   applyEnemyDamage(enemyDamage);
-  const simulation = runSimulation({ seeds, campaignSeeds });
+  const simulation = await runSimulation({
+    seeds,
+    campaignSeeds,
+    workers,
+    balance: { enemyDamage },
+  });
   const winRate = basicCampaignWinRate(simulation);
   const target = THRESHOLDS.playerCampaignWinTarget;
   const gatesPassed = simulation.gates.filter((g) => g.passed).length;
@@ -91,11 +99,12 @@ function evaluateTrial(
  * 在敌军伤害系数上做有界搜索，优先「全部门槛通过且最接近目标」，
  * 其次「最接近目标」。
  */
-export function tuneBalance(options: TuneOptions = {}): TuneResult {
+export async function tuneBalance(options: TuneOptions = {}): Promise<TuneResult> {
   const target = options.target ?? THRESHOLDS.playerCampaignWinTarget;
   const tolerance = options.tolerance ?? THRESHOLDS.playerCampaignWinTolerance;
   const seeds = options.seeds ?? 80;
   const campaignSeeds = options.campaignSeeds ?? Math.max(24, Math.floor(seeds / 3));
+  const workers = Math.max(1, options.workers ?? defaultWorkerCount());
   const write = options.write ?? false;
   const quiet = options.quiet ?? false;
 
@@ -106,7 +115,12 @@ export function tuneBalance(options: TuneOptions = {}): TuneResult {
   let best: TuneTrial | null = null;
 
   for (const enemyDamage of candidates) {
-    const { trial, simulation } = evaluateTrial(enemyDamage, seeds, campaignSeeds);
+    const { trial, simulation } = await evaluateTrial(
+      enemyDamage,
+      seeds,
+      campaignSeeds,
+      workers,
+    );
     trials.push(trial);
     if (!quiet) {
       console.log(
@@ -133,7 +147,12 @@ export function tuneBalance(options: TuneOptions = {}): TuneResult {
   const simulation =
     bestSim.seeds >= finalSeeds
       ? bestSim
-      : runSimulation({ seeds: finalSeeds, campaignSeeds: finalCampaign });
+      : await runSimulation({
+          seeds: finalSeeds,
+          campaignSeeds: finalCampaign,
+          workers,
+          balance: { enemyDamage: best.enemyDamage },
+        });
   const gates = evaluateGates({
     missions: simulation.missions,
     degenerates: simulation.degenerates,
@@ -213,6 +232,9 @@ export function parseTuneArgs(argv: string[]): TuneOptions {
       case "campaign-seeds":
         options.campaignSeeds = Number(rawValue);
         break;
+      case "workers":
+        options.workers = Number(rawValue);
+        break;
       case "out":
         options.out = rawValue;
         break;
@@ -236,7 +258,7 @@ const isMain =
 if (isMain) {
   const options = parseTuneArgs(process.argv.slice(2));
   if (options.write === undefined) options.write = true;
-  const result = tuneBalance(options);
+  const result = await tuneBalance(options);
   const [lo, hi] = THRESHOLDS.playerCampaignWinBand;
   const rate = result.best.basicCampaignWinRate;
   const inBand = rate >= lo && rate <= hi;

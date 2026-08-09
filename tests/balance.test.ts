@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { runSimulation } from "../src/sim/simulate";
+import { beforeAll, describe, expect, it } from "vitest";
+import { runSimulation, type SimulationResult } from "../src/sim/simulate";
 import { THRESHOLDS } from "../src/sim/gates";
 
 /**
@@ -7,7 +7,11 @@ import { THRESHOLDS } from "../src/sim/gates";
  * 正式判定以平衡报告为准。
  */
 describe("能力梯度", () => {
-  const result = runSimulation({ seeds: 40, campaignSeeds: 12 });
+  let result: SimulationResult;
+
+  beforeAll(async () => {
+    result = await runSimulation({ seeds: 40, campaignSeeds: 12 });
+  }, 120_000);
 
   const rate = (agentId: string, missionId: string): number =>
     result.missions.find((row) => row.agentId === agentId && row.missionId === missionId)!.winRate;
@@ -16,36 +20,40 @@ describe("能力梯度", () => {
     result.missions.find((row) => row.agentId === agentId && row.missionId === missionId)!
       .avgCasualties;
 
-  const missionIds = [...new Set(result.missions.map((row) => row.missionId))];
-
-  it.each(missionIds)("%s 上随机不显著优于基础，基础 ≤ 战术", (missionId) => {
-    // 40 个种子的冒烟样本允许约 10% 离散波动；正式随机上限由 gates 单独阻断。
-    expect(rate("random", missionId)).toBeLessThanOrEqual(rate("basic", missionId) + 0.1);
-    // 阻击关蹲点有时比主动交火更稳，允许小幅倒挂，但仍要求战术不低于随机之上的可用水平
-    const holdSlack = /chosin|cheorwon|triangle-hill/.test(missionId) ? 0.3 : 0;
-    expect(rate("basic", missionId)).toBeLessThanOrEqual(rate("tactical", missionId) + holdSlack);
-  });
-
-  it.each(missionIds)("%s 上战术策略伤亡更低", (missionId) => {
-    const basicLoss = casualties("basic", missionId);
-    // 阻击关：基础策略几乎不伤亡或战术更敢交火时，比值会失真。
-    const holdMission = /chosin|cheorwon|triangle-hill/.test(missionId);
-    const ceiling =
-      (basicLoss < 0.5
-        ? Math.max(basicLoss * 2.5, holdMission ? 3.5 : 2.0)
-        : Math.max(basicLoss * 3.5, basicLoss + (holdMission ? 2.5 : 1.25))) + 0.05;
-    expect(casualties("tactical", missionId)).toBeLessThanOrEqual(ceiling);
-  });
-
   it("随机策略基本无法通关", () => {
+    const missionIds = [...new Set(result.missions.map((row) => row.missionId))];
     for (const missionId of missionIds) {
       expect(rate("random", missionId)).toBeLessThan(0.15);
     }
   });
 
   it("战术策略保持可通关优势", () => {
+    const missionIds = [...new Set(result.missions.map((row) => row.missionId))];
     for (const missionId of missionIds) {
       expect(rate("tactical", missionId)).toBeGreaterThan(0.52);
+    }
+  });
+
+  it("各关随机不显著优于基础，基础 ≤ 战术（阻击容差）", () => {
+    const missionIds = [...new Set(result.missions.map((row) => row.missionId))];
+    for (const missionId of missionIds) {
+      // 40 个种子的冒烟样本允许约 10% 离散波动；正式随机上限由 gates 单独阻断。
+      expect(rate("random", missionId)).toBeLessThanOrEqual(rate("basic", missionId) + 0.1);
+      const holdSlack = /chosin|cheorwon|triangle-hill/.test(missionId) ? 0.3 : 0;
+      expect(rate("basic", missionId)).toBeLessThanOrEqual(rate("tactical", missionId) + holdSlack);
+    }
+  });
+
+  it("各关战术策略伤亡可控", () => {
+    const missionIds = [...new Set(result.missions.map((row) => row.missionId))];
+    for (const missionId of missionIds) {
+      const basicLoss = casualties("basic", missionId);
+      const holdMission = /chosin|cheorwon|triangle-hill/.test(missionId);
+      const ceiling =
+        (basicLoss < 0.5
+          ? Math.max(basicLoss * 2.5, holdMission ? 3.5 : 2.0)
+          : Math.max(basicLoss * 3.5, basicLoss + (holdMission ? 2.5 : 1.25))) + 0.05;
+      expect(casualties("tactical", missionId)).toBeLessThanOrEqual(ceiling);
     }
   });
 

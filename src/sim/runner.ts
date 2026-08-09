@@ -18,7 +18,13 @@ import type { Action, GameState } from "../core/types";
 export const MAX_ACTIONS_PER_TURN = 60;
 export const MAX_TOTAL_ACTIONS = 4000;
 
-export interface MissionRun {
+export interface PlayOptions {
+  /** 是否保留动作序列与终局状态；蒙特卡洛批量默认关闭以省内存 */
+  recordTrace?: boolean;
+}
+
+/** 聚合与门槛所需的轻量对局结果（不含 trace） */
+export interface MissionFacts {
   missionId: string;
   agentId: string;
   seed: number;
@@ -35,8 +41,31 @@ export interface MissionRun {
   survivors: number;
   veteransAlive: number;
   weather: GameState["weather"];
+}
+
+export interface MissionRun extends MissionFacts {
   actions: Action[];
   finalState: GameState;
+}
+
+function toFacts(run: MissionRun): MissionFacts {
+  return {
+    missionId: run.missionId,
+    agentId: run.agentId,
+    seed: run.seed,
+    status: run.status,
+    reason: run.reason,
+    coreObjectiveMet: run.coreObjectiveMet,
+    turnsUsed: run.turnsUsed,
+    playerRouted: run.playerRouted,
+    enemyRouted: run.enemyRouted,
+    evacuated: run.evacuated,
+    damageDealt: run.damageDealt,
+    damageTaken: run.damageTaken,
+    survivors: run.survivors,
+    veteransAlive: run.veteransAlive,
+    weather: run.weather,
+  };
 }
 
 export function playMission(
@@ -44,7 +73,9 @@ export function playMission(
   agent: Agent,
   agentSeed: number,
   reportedSeed = agentSeed,
+  options: PlayOptions = {},
 ): MissionRun {
+  const recordTrace = options.recordTrace ?? true;
   const rng = new Rng(deriveSeed(agentSeed, `agent:${agent.id}`));
   let state = initial;
   const actions: Action[] = [];
@@ -62,7 +93,7 @@ export function playMission(
     const action: Action =
       inTurn >= MAX_ACTIONS_PER_TURN ? { kind: "endTurn" } : agent.decide(state, rng);
 
-    actions.push(action);
+    if (recordTrace) actions.push(action);
     const result = applyAction(state, action);
     state = result.state;
     total += 1;
@@ -100,7 +131,22 @@ export function playStandaloneMission(
   missionId: string,
   agent: Agent,
   seed: number,
-): MissionRun {
+  options: { recordTrace: false },
+): MissionFacts;
+export function playStandaloneMission(
+  chapterId: string,
+  missionId: string,
+  agent: Agent,
+  seed: number,
+  options?: PlayOptions,
+): MissionRun;
+export function playStandaloneMission(
+  chapterId: string,
+  missionId: string,
+  agent: Agent,
+  seed: number,
+  options: PlayOptions = {},
+): MissionRun | MissionFacts {
   const chapter = CHAPTERS[chapterId];
   if (!chapter) throw new Error(`未知章节: ${chapterId}`);
   const campaign = createCampaign(chapterId, seed);
@@ -118,19 +164,25 @@ export function playStandaloneMission(
     inventory: campaign.inventory,
   });
 
-  return playMission(state, agent, seed);
+  const run = playMission(state, agent, seed, seed, options);
+  return options.recordTrace === false ? toFacts(run) : run;
 }
 
 export interface CampaignRun {
   chapterId: string;
   agentId: string;
   seed: number;
-  missions: MissionRun[];
+  missions: MissionFacts[];
   outcomes: MissionOutcome[];
-  finalCampaign: CampaignState;
+  finalCampaign?: CampaignState;
   missionsWon: number;
   veteransAtEnd: number;
   rosterAtEnd: number;
+}
+
+export interface CampaignRunTrace extends CampaignRun {
+  missions: MissionRun[];
+  finalCampaign: CampaignState;
 }
 
 /**
@@ -140,7 +192,21 @@ export function playCampaign(
   chapterId: string,
   agentFor: Agent | ((missionIndex: number) => Agent),
   seed: number,
-): CampaignRun {
+  options: { recordTrace: false },
+): CampaignRun;
+export function playCampaign(
+  chapterId: string,
+  agentFor: Agent | ((missionIndex: number) => Agent),
+  seed: number,
+  options?: PlayOptions,
+): CampaignRunTrace;
+export function playCampaign(
+  chapterId: string,
+  agentFor: Agent | ((missionIndex: number) => Agent),
+  seed: number,
+  options: PlayOptions = {},
+): CampaignRun | CampaignRunTrace {
+  const recordTrace = options.recordTrace ?? true;
   const pick = typeof agentFor === "function" ? agentFor : () => agentFor;
   let campaign = createCampaign(chapterId, seed);
   const missions: MissionRun[] = [];
@@ -149,22 +215,31 @@ export function playCampaign(
   while (campaign.status === "running") {
     const index = missions.length;
     const started = startMission(campaign);
-    const run = playMission(started.state, pick(index), seed + index);
-    missions.push(run);
+    const run = playMission(started.state, pick(index), seed + index, seed + index, {
+      recordTrace,
+    });
     const finished = finishMission(started.campaign, run.finalState, started.replacements);
     campaign = finished.campaign;
     outcomes.push(finished.outcome);
+    missions.push(run);
   }
 
-  return {
+  const base = {
     chapterId,
     agentId: typeof agentFor === "function" ? "mixed" : agentFor.id,
     seed,
-    missions,
     outcomes,
-    finalCampaign: campaign,
     missionsWon: missions.filter((m) => m.status === "won").length,
     veteransAtEnd: campaign.roster.filter((u) => veterancyLevel(u.exp) >= 1).length,
     rosterAtEnd: campaign.roster.length,
+  };
+
+  if (recordTrace) {
+    return { ...base, missions, finalCampaign: campaign };
+  }
+
+  return {
+    ...base,
+    missions: missions.map((run) => toFacts(run)),
   };
 }

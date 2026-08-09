@@ -1,11 +1,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { defaultWorkerCount } from "./pool";
 import { renderReport } from "./report";
 import { runSimulation } from "./simulate";
 
 interface CliOptions {
   seeds: number;
   campaignSeeds?: number;
+  workers?: number;
   out: string;
   json?: string;
   quiet: boolean;
@@ -22,6 +24,9 @@ function parseArgs(argv: string[]): CliOptions {
         break;
       case "campaign-seeds":
         options.campaignSeeds = Number(rawValue);
+        break;
+      case "workers":
+        options.workers = Number(rawValue);
         break;
       case "out":
         options.out = rawValue ?? options.out;
@@ -40,8 +45,9 @@ function parseArgs(argv: string[]): CliOptions {
 }
 
 const options = parseArgs(process.argv.slice(2));
-const result = runSimulation({
+const result = await runSimulation({
   seeds: options.seeds,
+  workers: options.workers ?? defaultWorkerCount(),
   ...(options.campaignSeeds !== undefined ? { campaignSeeds: options.campaignSeeds } : {}),
 });
 
@@ -64,7 +70,9 @@ if (!options.quiet) {
   for (const gate of result.gates) {
     console.log(`${gate.passed ? "PASS" : "FAIL"}  ${gate.title}\n      ${gate.detail}`);
   }
-  console.log(`\n报告已写入 ${options.out}（${(result.elapsedMs / 1000).toFixed(1)}s）`);
+  console.log(
+    `\n报告已写入 ${options.out}（${(result.elapsedMs / 1000).toFixed(1)}s，${result.workers} workers）`,
+  );
 }
 
 const failed = result.gates.filter((gate) => !gate.passed);
