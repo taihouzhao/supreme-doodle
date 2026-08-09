@@ -827,7 +827,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；本图仅表现中央集团轿岩山切片。西峰主峰与中、东峰构成连续山体，南侧金城川是战役纵深线；北汉江位于画外东翼。",
     weather: { options: ["rain"], label: "盛夏暴雨", detail: "季风暴雨造成河水上涨、道路泥泞，远程火力效果下降。" },
     playerEquipment: PVA_LATE,
-    maxTurns: 20,
+    maxTurns: 22,
     map: [
       "FF^^^F........F^^^FF",
       "FF^^^F...==...F^^^FF",
@@ -876,6 +876,6 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { kind: "barrage", turns: [5, 8], damage: 2, note: "联合国军拦阻炮火" },
       { kind: "supplyWindow", untilTurn: 9, penalty: 0.1, note: "金城反击弹药窗口" },
     ],
-    victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 3 },
+    victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 2 },
   },
 ];
