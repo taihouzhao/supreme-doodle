@@ -1,8 +1,12 @@
 import { UNIT_TYPES } from "../content/units";
 import { COUNTER_RATIO, estimateDamageFrom } from "./combat";
 import {
+  attackRange,
+  canEnter,
+  encirclementStatus,
   livingUnits,
   manhattan,
+  orthogonalNeighbours,
   reachableTiles,
   resupplyTargets,
   tileAt,
@@ -40,10 +44,73 @@ interface AttackPlan {
   score: number;
 }
 
-function bestAttackPlan(state: GameState, unit: Unit, tiles: ReachableTile[]): AttackPlan | null {
+interface EnemyBattlePlan {
+  focusTargetId: string | null;
+}
+
+/**
+ * 敌方整回合共享一个集火目标。目标会随伤亡重新计算，避免每支单位各打各的；
+ * 后勤、曲射和正在守目标的单位具有更高战术价值，但不会无条件越过战线追杀。
+ */
+function buildEnemyBattlePlan(state: GameState): EnemyBattlePlan {
+  const targets = livingUnits(state, "player");
+  let focusTargetId: string | null = null;
+  let best = -Infinity;
+  for (const target of targets) {
+    const hpRatio = target.hp / Math.max(1, target.maxHp);
+    const onObjective = state.objectives.some(
+      (objective) => objective.x === target.x && objective.y === target.y,
+    );
+    let score = (1 - hpRatio) * 72;
+    if (target.type === "logistics") score += 22;
+    if (target.type === "artillery" || target.type === "mortar") score += 18;
+    // AI 只能从战场态势判断目标价值，不读取“主角/关键单位”这一层任务元数据。
+    // 这样集火仍然聪明，但不会以不可见信息无条件追杀任务失败点。
+    if (onObjective) score += 20;
+    score -= Math.min(24, Math.min(...livingUnits(state, "enemy").map((unit) => manhattan(unit, target))) * 3);
+    if (score > best || (Math.abs(score - best) < 1e-9 && target.id < (focusTargetId ?? "~"))) {
+      best = score;
+      focusTargetId = target.id;
+    }
+  }
+  return { focusTargetId };
+}
+
+function formationSupportAt(state: GameState, unit: Unit, tile: Vec2): number {
+  return livingUnits(state, unit.faction).filter(
+    (ally) => ally.id !== unit.id && manhattan(ally, tile) <= 2,
+  ).length;
+}
+
+/** 只看已建立的火力覆盖，给 AI 一个“不要单独冲出阵形”的风险估计。 */
+function incomingThreatAt(state: GameState, unit: Unit, tile: Vec2): number {
+  const projected: Unit = { ...unit, x: tile.x, y: tile.y };
+  let threat = 0;
+  for (const enemy of livingUnits(state, "player")) {
+    const range = attackRange(state, enemy);
+    const distance = manhattan(enemy, projected);
+    if (distance < range.min || distance > range.max) continue;
+    threat += estimateDamageFrom(state, enemy, projected, { x: enemy.x, y: enemy.y }, false);
+  }
+  return threat;
+}
+
+function bestAttackPlan(
+  state: GameState,
+  unit: Unit,
+  tiles: ReachableTile[],
+  battlePlan: EnemyBattlePlan,
+): AttackPlan | null {
   const targets = livingUnits(state, "player");
   let best: AttackPlan | null = null;
   const artillery = unit.type === "artillery";
+  const guardingObjective = state.objectives.some(
+    (objective) =>
+      objective.kind === "capture" &&
+      objective.owner === "enemy" &&
+      objective.x === unit.x &&
+      objective.y === unit.y,
+  );
 
   for (const tile of tiles) {
     const occupant = unitAt(state, tile.x, tile.y);
@@ -51,6 +118,8 @@ function bestAttackPlan(state: GameState, unit: Unit, tiles: ReachableTile[]): A
     const range = rangeFrom(state, unit, tile);
     const moved = tile.cost > 0;
     const terrain = tileAt(state, tile.x, tile.y);
+    const formationSupport = Math.min(18, formationSupportAt(state, unit, tile) * 5);
+    const incomingThreat = incomingThreatAt(state, unit, tile) * 0.22;
 
     for (const target of targets) {
       const distance = manhattan(tile, target);
@@ -65,7 +134,20 @@ function bestAttackPlan(state: GameState, unit: Unit, tiles: ReachableTile[]): A
       let score = damage - counter * 0.7;
       score += terrain.defense * 25;
       score -= tile.cost * 0.2;
+      if (guardingObjective && (tile.x !== unit.x || tile.y !== unit.y)) score -= 64;
       if (target.hp <= damage) score += 30;
+      if (target.id === battlePlan.focusTargetId) score += 34;
+      if (target.type === "logistics") score += 12;
+      if (target.type === "artillery" || target.type === "mortar") score += 8;
+
+      const surround = encirclementStatus(state, target, unit.faction, {
+        id: unit.id,
+        x: tile.x,
+        y: tile.y,
+      });
+      score += (surround.multiplier - 1) * 115;
+      score += formationSupport;
+      score -= incomingThreat;
 
       // 敌炮：偏好阵地（高地/工事）、架设射击，避免贴脸；移动会丢掉 setupBonus
       if (artillery) {
@@ -98,6 +180,71 @@ function lostObjective(state: GameState, unit: Unit): Vec2 | null {
     manhattan(unit, candidate) < manhattan(unit, closest) ? candidate : closest,
   );
   return { x: target.x, y: target.y };
+}
+
+function defensiveAnchor(state: GameState, unit: Unit): Vec2 | null {
+  if (
+    state.missionKind !== "breakthrough" ||
+    !["m3-chongchon", "m5-third-offensive", "m12-kumsong"].includes(state.missionId)
+  )
+    return null;
+  const owned = state.objectives.filter(
+    (objective) => objective.kind === "capture" && objective.owner === "enemy",
+  );
+  if (owned.length === 0) return null;
+  const anchor = owned.reduce((closest, candidate) =>
+    manhattan(unit, candidate) < manhattan(unit, closest) ? candidate : closest,
+  );
+  return manhattan(unit, anchor) <= 4 ? { x: anchor.x, y: anchor.y } : null;
+}
+
+function weakestHeldObjective(state: GameState): Vec2 | null {
+  const held = state.objectives.filter(
+    (objective) => objective.kind === "hold" && objective.owner === "player",
+  );
+  if (held.length === 0) return null;
+  const strength = (objective: Vec2): number =>
+    livingUnits(state, "player")
+      .filter((unit) => manhattan(unit, objective) <= 2)
+      .reduce((total, unit) => total + unit.hp, 0);
+  const target = held.reduce((weakest, candidate) => {
+    const delta = strength(candidate) - strength(weakest);
+    if (delta < 0) return candidate;
+    if (delta === 0 && candidate.id < weakest.id) return candidate;
+    return weakest;
+  });
+  return { x: target.x, y: target.y };
+}
+
+function withdrawalCutoffGoal(state: GameState, unit: Unit): Vec2 | null {
+  if (
+    state.missionKind !== "withdraw" ||
+    state.evacZone.length === 0 ||
+    !["m4-chosin", "m7-chipyongni", "m9-cheorwon"].includes(state.missionId)
+  )
+    return null;
+  const players = livingUnits(state, "player");
+  if (players.length === 0) return null;
+  const runner = players.reduce((closest, candidate) => {
+    const candidateExit = Math.min(...state.evacZone.map((exit) => manhattan(candidate, exit)));
+    const closestExit = Math.min(...state.evacZone.map((exit) => manhattan(closest, exit)));
+    return candidateExit < closestExit ? candidate : closest;
+  });
+  const exit = state.evacZone.reduce((closest, candidate) =>
+    manhattan(runner, candidate) < manhattan(runner, closest) ? candidate : closest,
+  );
+  const cutoffTeam = livingUnits(state, "enemy")
+    .filter(
+      (candidate) =>
+        candidate.type !== "artillery" &&
+        candidate.type !== "mortar" &&
+        candidate.type !== "logistics",
+    )
+    .sort((a, b) => manhattan(a, exit) - manhattan(b, exit) || a.id.localeCompare(b.id))
+    .slice(0, state.missionId === "m9-cheorwon" ? 1 : 2);
+  return state.turn >= 2 && cutoffTeam.some((candidate) => candidate.id === unit.id)
+    ? { x: exit.x, y: exit.y }
+    : null;
 }
 
 function goalFor(state: GameState, unit: Unit): Vec2 | null {
@@ -159,23 +306,13 @@ function goalFor(state: GameState, unit: Unit): Vec2 | null {
 
   // m10 上甘岭：步兵压玩家据点；炮兵偏好南缘高地但保持可射击最近目标（由 bestAttackPlan 主导）
   if (mid === "m10-triangle-hill" && unit.type !== "artillery") {
-    const posts = state.objectives.filter((o) => o.kind === "hold" && o.owner === "player");
-    if (posts.length > 0) {
-      const target = posts.reduce((closest, candidate) =>
-        manhattan(unit, candidate) < manhattan(unit, closest) ? candidate : closest,
-      );
-      return { x: target.x, y: target.y };
-    }
+    const target = weakestHeldObjective(state);
+    if (target) return target;
   }
 
   if (state.missionKind === "hold") {
-    const held = state.objectives.filter((o) => o.kind === "hold" && o.owner === "player");
-    if (held.length > 0) {
-      const target = held.reduce((closest, candidate) =>
-        manhattan(unit, candidate) < manhattan(unit, closest) ? candidate : closest,
-      );
-      return { x: target.x, y: target.y };
-    }
+    const target = weakestHeldObjective(state);
+    if (target) return target;
     return { x: nearestPlayer.x, y: nearestPlayer.y };
   }
 
@@ -193,21 +330,106 @@ function bestApproachTile(
   unit: Unit,
   tiles: ReachableTile[],
   goal: Vec2,
+  battlePlan?: EnemyBattlePlan,
 ): ReachableTile | null {
   let best: ReachableTile | null = null;
-  let bestKey: [number, number] = [Infinity, -Infinity];
+  let bestScore = -Infinity;
+  const focus = battlePlan?.focusTargetId
+    ? state.units.find((candidate) => candidate.id === battlePlan.focusTargetId)
+    : null;
 
   for (const tile of tiles) {
     const occupant = unitAt(state, tile.x, tile.y);
     if (occupant && occupant.id !== unit.id) continue;
     const distance = manhattan(tile, goal);
     const defense = tileAt(state, tile.x, tile.y).defense;
-    if (distance < bestKey[0] || (distance === bestKey[0] && defense > bestKey[1])) {
+    let score = -distance * 18 + defense * 36 - tile.cost * 0.4;
+    score += Math.min(20, formationSupportAt(state, unit, tile) * 6);
+    // 只把已知火力当作风险提示；AI 不应像读取伤害表一样精确规避每个格子。
+    score -= incomingThreatAt(state, unit, tile) * 0.14;
+    if (focus && manhattan(tile, focus) === 1) {
+      score +=
+        (encirclementStatus(state, focus, unit.faction, {
+          id: unit.id,
+          x: tile.x,
+          y: tile.y,
+        }).multiplier -
+          1) *
+        120;
+    }
+    if (
+      score > bestScore + 1e-9 ||
+      (Math.abs(score - bestScore) < 1e-9 &&
+        (!best || tile.y < best.y || (tile.y === best.y && tile.x < best.x)))
+    ) {
       best = tile;
-      bestKey = [distance, defense];
+      bestScore = score;
     }
   }
 
+  return best;
+}
+
+function flankingGoal(
+  state: GameState,
+  unit: Unit,
+  battlePlan: EnemyBattlePlan,
+): Vec2 | null {
+  if (unit.type === "artillery" || unit.type === "mortar" || unit.type === "logistics") return null;
+  const target = battlePlan.focusTargetId
+    ? state.units.find((candidate) => candidate.id === battlePlan.focusTargetId && candidate.alive)
+    : null;
+  if (!target || manhattan(unit, target) > 7) return null;
+
+  const candidates = orthogonalNeighbours(target).filter((tile) => {
+    if (!canEnter(state, unit, tile.x, tile.y)) return false;
+    const occupant = unitAt(state, tile.x, tile.y);
+    return !occupant || occupant.id === unit.id;
+  });
+  let best: Vec2 | null = null;
+  let bestScore = -Infinity;
+  for (const tile of candidates) {
+    const surround = encirclementStatus(state, target, unit.faction, {
+      id: unit.id,
+      x: tile.x,
+      y: tile.y,
+    });
+    const score =
+      (surround.multiplier - 1) * 180 -
+      manhattan(unit, tile) * 7 -
+      incomingThreatAt(state, unit, tile) * 0.18;
+    if (score > bestScore) {
+      bestScore = score;
+      best = tile;
+    }
+  }
+  return best;
+}
+
+function bestRetreatTile(
+  state: GameState,
+  unit: Unit,
+  tiles: ReachableTile[],
+): ReachableTile | null {
+  const logistics = livingUnits(state, unit.faction).filter((ally) => ally.type === "logistics");
+  let best: ReachableTile | null = null;
+  let bestScore = -Infinity;
+  for (const tile of tiles) {
+    const occupant = unitAt(state, tile.x, tile.y);
+    if (occupant && occupant.id !== unit.id) continue;
+    const nearestLogistics = logistics.length
+      ? Math.min(...logistics.map((ally) => manhattan(tile, ally)))
+      : 6;
+    const score =
+      tileAt(state, tile.x, tile.y).defense * 55 +
+      formationSupportAt(state, unit, tile) * 8 -
+      incomingThreatAt(state, unit, tile) * 0.5 -
+      nearestLogistics * 2;
+    if (score > bestScore) {
+      bestScore = score;
+      best = tile;
+    }
+  }
   return best;
 }
 
@@ -215,11 +437,22 @@ function bestApproachTile(
 export function runEnemyPhase(state: GameState, events: GameEvent[]): void {
   const order = livingUnits(state, "enemy")
     .slice()
-    .sort((a, b) => a.id.localeCompare(b.id));
+    .sort((a, b) => {
+      const priority: Record<Unit["type"], number> = {
+        artillery: 0,
+        mortar: 1,
+        mg: 2,
+        tank: 3,
+        rifle: 4,
+        logistics: 5,
+      };
+      return priority[a.type] - priority[b.type] || a.id.localeCompare(b.id);
+    });
 
   for (const unit of order) {
     if (!unit.alive || unit.hasActed) continue;
     if (state.status !== "playing") return;
+    const battlePlan = buildEnemyBattlePlan(state);
 
     if (performCapture(state, unit, events)) continue;
 
@@ -234,7 +467,7 @@ export function runEnemyPhase(state: GameState, events: GameEvent[]): void {
         .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp || a.id.localeCompare(b.id))[0];
       if (wounded) {
         const tiles = reachableTiles(state, unit);
-        const approach = bestApproachTile(state, unit, tiles, wounded);
+        const approach = bestApproachTile(state, unit, tiles, wounded, battlePlan);
         if (approach && approach.cost > 0) {
           performMove(state, unit, { x: approach.x, y: approach.y }, events);
         }
@@ -257,7 +490,28 @@ export function runEnemyPhase(state: GameState, events: GameEvent[]): void {
       }
     }
 
-    const plan = bestAttackPlan(state, unit, tiles);
+    const plan = bestAttackPlan(state, unit, tiles, battlePlan);
+
+    const onObjective = state.objectives.some(
+      (objective) => objective.x === unit.x && objective.y === unit.y && objective.owner === "enemy",
+    );
+    const hasRecoveryLine = livingUnits(state, "enemy").some(
+      (ally) => ally.type === "logistics" && manhattan(ally, unit) <= 5,
+    );
+    if (
+      unit.hp / unit.maxHp < 0.34 &&
+      !onObjective &&
+      hasRecoveryLine &&
+      formationSupportAt(state, unit, unit) > 0 &&
+      (!plan || plan.score < 28)
+    ) {
+      const retreat = bestRetreatTile(state, unit, tiles);
+      if (retreat && retreat.cost > 0) {
+        performMove(state, unit, { x: retreat.x, y: retreat.y }, events);
+      }
+      if (unit.alive && !unit.hasActed) performWait(state, unit);
+      continue;
+    }
 
     if (plan) {
       if (plan.tile.cost > 0) {
@@ -267,9 +521,17 @@ export function runEnemyPhase(state: GameState, events: GameEvent[]): void {
       continue;
     }
 
-    const goal = goalFor(state, unit);
+    const retakeGoal = ["m3-chongchon", "m6-hoengsong"].includes(state.missionId)
+      ? lostObjective(state, unit)
+      : null;
+    const goal =
+      retakeGoal ??
+      defensiveAnchor(state, unit) ??
+      withdrawalCutoffGoal(state, unit) ??
+      flankingGoal(state, unit, battlePlan) ??
+      goalFor(state, unit);
     if (goal) {
-      const approach = bestApproachTile(state, unit, tiles, goal);
+      const approach = bestApproachTile(state, unit, tiles, goal, battlePlan);
       if (approach && approach.cost > 0) {
         performMove(state, unit, { x: approach.x, y: approach.y }, events);
       }

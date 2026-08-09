@@ -1,14 +1,31 @@
 # 美术方向与生成记录
 
-全部生成图均采用内置 image generation 路径生成，再复制到 `public/assets/`。主角肖像只生成一次并在所有关卡复用；当前 23 位历史将领均有稳定肖像映射，8 张地图兵种头像和 16 张地形从固定网格母版裁切。金钟五、钟国楚因本轮史实纠错单独补绘，并沿用相同裁切、色调与光照。所有将领图均是风格化重建，不冒充档案原照。
+全部生成图均采用内置 image generation 路径生成，再复制到 `public/assets/`。所有将领图均是风格化重建，不冒充档案原照。2026-08-09 起进入 V2 迁移：不再追求“上色档案照”，而改用清晰、彩色、可缩略识别的战场绘画；每张肖像作为独立资产生成和审校，不再从新母版中批量裁切。
 
 ## 统一视觉规范
 
-- 媒介：将领/兵种采用克制的上色档案照质感，地形采用俯视水粉贴图，功能图标采用单色军用手册式 SVG。
-- 色彩：志愿军为低饱和橄榄绿、卡其、木色；联合国军增加低饱和砖红识别色。
+- 媒介：将领/兵种采用鲜明但克制的手绘战棋角色画，地形采用俯视水粉贴图，功能图标采用单色军用手册式 SVG。
+- 色彩：保留橄榄绿、卡其、木色与钢蓝的历史基底，但增加冷暖明暗分离；禁止统一褐色滤镜。
 - 年代：只允许1950—1953年服装、钢盔、枪械与车辆轮廓。
 - 禁止：现代迷彩、战术背心、导轨光学瞄具、M16、M249、AK系、RPG-7、现代肩章和现代装甲车辆。
-- 肖像用途：游戏化复合绘画，不冒充档案照片。
+- 肖像用途：游戏化复合绘画，不冒充档案照片；48px 缩略图仍须能辨认脸、军种与阵营。
+- 禁止质感：褪色、胶片颗粒、裂纸、旧相框、统一棕褐色、假档案编号。
+
+## 2026-08-09 V2 迁移
+
+首批已替换高大全、彭德怀、金钟五、李奇微四张核心肖像，炒面袋、绷带、爆破筒、阵中手册四个独立物品图标，以及志愿军、韩国陆军各 8 张普通单位肖像。美、英、法普通单位与其余历史将领仍保留稳定旧文件，后续按关卡逐批迁移，避免一次替换导致人物身份漂移。
+
+肖像统一提示词骨架：
+
+```text
+STYLE-TRANSFER EDIT for an existing Korean War tactical RPG portrait. Preserve the same person, facial identity, age, gaze, pose, headgear and historically plausible 1950-1953 uniform. Change only the rendering: vivid hand-painted tactical game portrait, crisp graphic shapes, natural olive-drab/khaki/steel-blue/muted earth palette, strong readable key light, restrained battlefield atmosphere, chest-up centered composition, readable at 48px. No sepia, monochrome, faded old-photo look, film grain, cracked paper, antique border, text, watermark, invented medals, fantasy armor or modern gear.
+```
+
+物品统一提示词骨架：
+
+```text
+A single square Korean War tactical RPG inventory icon. One historically plausible 1950s field object, vivid hand-painted gouache, crisp silhouette, natural olive/khaki/charcoal palette, isolated on a simple dark neutral painted background, generous padding, readable at 48px. No sepia photo effect, antique paper, text, logo, flag, watermark or modern packaging.
+```
 
 ## 2026-08-08 刷新提示词记录
 
@@ -88,4 +105,23 @@ Reference approach: historically grounded in well-known 1950-1953 archival photo
 Style/medium: restrained gouache-and-ink strategy-game portraits over aged field-map paper; realistic anatomy; muted olive, khaki, charcoal and faded brick red.
 Composition/framing: same angle, scale and square cell framing; suitable for deterministic cropping and readable at 80px.
 Constraints: no text, nameplates, flags, invented medals, modern insignia, watermark, or extra people.
+```
+
+## 地图连接件
+
+- 道路与河流不能把同一张直线贴图机械铺满。渲染时读取北、东、南、西相邻地块，自动选择纵向、横向、斜向转弯、三岔或交叉连接。
+- 双格宽道路和宽河面按主轴合并识别，避免把并排行车带或水面误画成连续十字路口。
+- 道路穿过河带不等于桥梁：只有历史地点或目标明确标为“公路桥/桥梁”时使用桥面贴图；“渡河带”“桥头堡”和普通河谷仍表现为浅滩或渡口。
+- 桥面和河流必须正交，常态与雪地各有独立贴图；横向桥可由纵向基础件旋转得到。
+
+常态桥梁提示词：
+
+```text
+Create one square, top-down orthographic terrain tile for a serious Korean War operational tactics game, autumn Korea circa 1950. A narrow shallow blue-green river flows clearly from the LEFT edge to the RIGHT edge, with visible directional ripples and rocky muddy banks that connect seamlessly at both horizontal edges. A single-lane weathered timber-and-earth military road bridge crosses from the TOP edge to the BOTTOM edge, with the dirt road connecting seamlessly at both vertical edges. The bridge deck must visibly sit above and perpendicular to the water, with simple timber rails and abutments. Hand-painted realistic game texture, muted olive, umber, slate blue and tan palette, crisp tactical readability at small size, even overhead lighting, no cast perspective, no units, no vehicles, no people, no text, no symbols, no border, no grid lines, no UI, no transparent background. The tile must read correctly when cropped square and downscaled to 128x128.
+```
+
+雪地桥梁提示词：
+
+```text
+Create one square, top-down orthographic WINTER terrain tile for a serious Korean War operational tactics game, winter Korea circa 1950. A narrow partly icy blue-gray river flows clearly from the LEFT edge to the RIGHT edge, with visible current lanes, broken thin ice and rocky snow-lined banks that connect seamlessly at both horizontal edges. A single-lane weathered timber-and-packed-snow military road bridge crosses from the TOP edge to the BOTTOM edge, with the snowy dirt road connecting seamlessly at both vertical edges. The bridge deck must visibly sit above and perpendicular to the water, with simple timber rails, abutments, wheel-worn snow and restrained frost. Hand-painted realistic game texture, muted cold gray-blue, off-white, umber and charcoal palette, crisp tactical readability at small size, even overhead lighting, no cast perspective, no units, no vehicles, no people, no text, no symbols, no border, no grid lines, no UI, no transparent background. The tile must read correctly when cropped square and downscaled to 128x128.
 ```

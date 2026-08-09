@@ -8,6 +8,7 @@ import { MISSION_LIST } from "../src/content/missions";
 import { WEAPONS, WEAPON_HISTORY, weaponFits, weaponForEquipment } from "../src/content/weapons";
 import { createCampaign, startMission } from "../src/core/campaign";
 import {
+  BRIDGE_ICON,
   COMMANDER_PORTRAIT,
   RANK_INSIGNIA,
   TERRAIN_ICON,
@@ -43,6 +44,11 @@ describe("历史战役内容", () => {
       expect(mission.weather?.options.length).toBeGreaterThan(0);
       expect(Object.keys(mission.playerEquipment ?? {}).length).toBe(6);
       expect(mission.places?.length ?? 0).toBeGreaterThan(0);
+      for (const place of mission.places ?? []) {
+        expect(place.id).toBeTruthy();
+        expect(place.historicalContext).toBeTruthy();
+        expect(place.tacticalHint).toBeTruthy();
+      }
       expect(mission.scripted?.length ?? 0).toBeGreaterThan(0);
     }
   });
@@ -125,6 +131,8 @@ describe("历史战役内容", () => {
       expect(publicAssetExists(TERRAIN_ICON[id])).toBe(true);
       expect(publicAssetExists(TERRAIN_ICON_SNOW[id])).toBe(true);
     }
+    expect(publicAssetExists(BRIDGE_ICON.clear)).toBe(true);
+    expect(publicAssetExists(BRIDGE_ICON.snow)).toBe(true);
   });
 
   it("地名与脚本事件坐标落在地图内且不在峭壁上", () => {

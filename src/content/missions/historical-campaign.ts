@@ -117,9 +117,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: [],
     itemDrops: [{ x: 6, y: 8, options: ["medkit", "bandage", "ration"] }, { x: 13, y: 8, options: ["medkit", "bandage", "ration"] }],
     places: [
-      { x: 9, y: 12, name: "温井" },
-      { x: 9, y: 6, name: "两水洞峡谷" },
-      { x: 10, y: 2, name: "北镇方向" },
+      { id: "onjong", x: 9, y: 12, name: "温井", historicalContext: "温井是第一次战役初期的关键接触地域；本关把战斗收束到先头部队与公路节点。", tacticalHint: "伏击线得手后必须继续南下，不能把歼敌当成占领。" },
+      { id: "liangshuidong", x: 9, y: 6, name: "两水洞峡谷", historicalContext: "韩军第6师第2团先头第3营及炮兵中队沿公路进入峡谷地带。", tacticalHint: "利用两侧高地建立对向封锁，触发包围加成并截断纵队。" },
+      { id: "bukjin-axis", x: 10, y: 2, name: "北镇方向", historicalContext: "北侧公路代表敌军先头与后续部队进入温井地区的轴线。", tacticalHint: "不要把全部兵力压在谷底；保留一支部队监视北向增援。" },
     ],
     scripted: [
       { kind: "nightAssault", turns: [1, 3], attackBonus: 0.18, note: "黄昏夜袭：志愿军近战火力占优" },
@@ -190,9 +190,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: [],
     itemDrops: [{ x: 5, y: 8, options: ["medkit", "at_charge", "satchel", "field_manual"] }, { x: 14, y: 8, options: ["at_charge"] }],
     places: [
-      { x: 10, y: 4, name: "云山城" },
-      { x: 10, y: 10, name: "城南公路桥" },
-      { x: 4, y: 8, name: "清川支流" },
+      { id: "unsan-town", x: 10, y: 4, name: "云山城", historicalContext: "云山战斗发生在美韩换防与接触混乱中，城区是北侧防御与交通的核心。", tacticalHint: "先压缩城区守军，再让步兵占领；远程火力留给桥头反扑。" },
+      { id: "unsan-south-bridge", x: 10, y: 10, name: "城南公路桥", historicalContext: "城南道路是守军向南撤出、增援向北接应的共同交通轴。", tacticalHint: "切断桥头比平均消耗敌军更重要；用机枪或迫击炮覆盖道路。" },
+      { id: "chongchon-tributary", x: 4, y: 8, name: "清川支流", historicalContext: "河流与道路共同限定云山地区的机动方向，关卡只表达相对地理关系。", tacticalHint: "河流会把机动压向桥梁；提前控制出口可形成围堵。" },
     ],
     supplyPoints: [{ x: 5, y: 5 }, { x: 14, y: 9 }],
     scripted: [
@@ -259,9 +259,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: [],
     itemDrops: [{ x: 4, y: 8, options: ["medkit", "bandage", "ration"] }, { x: 15, y: 8, options: ["at_charge", "arty_support"] }],
     places: [
-      { x: 5, y: 5, name: "三所里" },
-      { x: 14, y: 5, name: "龙源里" },
-      { x: 5, y: 1, name: "清川江战线" },
+      { id: "samsori", x: 5, y: 5, name: "三所里", historicalContext: "三所里是第38军第113师急行穿插所争夺的敌后公路节点之一。", tacticalHint: "时间优先于歼敌；从山地绕过正面火力后快速占点。" },
+      { id: "yongwon", x: 14, y: 5, name: "龙源里", historicalContext: "龙源里与三所里共同构成对南撤道路的截断，本关把两点压缩在同一张战术地图。", tacticalHint: "两翼同时推进，避免占领一端后再横穿整张地图。" },
+      { id: "chongchon-front", x: 5, y: 1, name: "清川江战线", historicalContext: "清川江代表更大的战役背景，并不是本关必须占领的单一据点。", tacticalHint: "不要被北缘敌军牵走主力；任务是穿插到道路节点。" },
     ],
     scripted: [
       { kind: "nightAssault", turns: [1, 3], attackBonus: 0.15, note: "穿插夜战：近战加成" },
@@ -333,10 +333,10 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     itemDrops: [{ x: 5, y: 9, options: ["medkit", "at_charge", "satchel", "field_manual"] }, { x: 13, y: 9, options: ["at_charge"] }],
     places: [
-      { x: 7, y: 3, name: "Fox连防御高地" },
-      { x: 6, y: 1, name: "柳潭里方向" },
-      { x: 15, y: 12, name: "下碣隅里方向" },
-      { x: 16, y: 4, name: "长津湖" },
+      { id: "fox-hill", x: 7, y: 3, name: "Fox连防御高地", historicalContext: "Fox连守住死鹰岭通路；本关不把这处高地误写成志愿军最终控制目标。", tacticalHint: "这里是敌军火力支撑点，绕行或压制比正面久攻更稳妥。" },
+      { id: "yudam-axis", x: 6, y: 1, name: "柳潭里方向", historicalContext: "陆战队纵队由柳潭里方向沿主补给路向南收缩。", tacticalHint: "北段路障只能迟滞，预留脱离路线，避免被后续纵队缠住。" },
+      { id: "hagaru-axis", x: 15, y: 12, name: "下碣隅里方向", historicalContext: "下碣隅里是撤退纵队的收拢与接应方向。", tacticalHint: "南侧清障分队会反向夹击；不要让后勤留在公路中心。" },
+      { id: "chosin-reservoir", x: 16, y: 4, name: "长津湖", historicalContext: "湖区、山路与极寒共同限制机动；棋盘只表达道路与湖岸的相对关系。", tacticalHint: "雪地高地代价很高，沿道路机动快，但更容易遭受夹击。" },
     ],
     supplyPoints: [{ x: 5, y: 7 }, { x: 12, y: 8 }],
     scripted: [
@@ -402,9 +402,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: [],
     itemDrops: [{ x: 6, y: 7, options: ["medkit", "bandage", "ration"] }, { x: 13, y: 7, options: ["at_charge", "arty_support"] }],
     places: [
-      { x: 8, y: 4, name: "临津江" },
-      { x: 12, y: 9, name: "议政府北侧山口" },
-      { x: 10, y: 12, name: "议政府方向" },
+      { id: "imjin-crossing", x: 8, y: 4, name: "临津江", historicalContext: "第三次战役西线由临津江方向突破，关卡以一处渡河带表现夜间渡江。", tacticalHint: "先用近战夜袭压制渡口，再把远程单位送过河。" },
+      { id: "uigongbu-pass", x: 12, y: 9, name: "议政府北侧山口", historicalContext: "山口代表突破后向议政府方向发展的纵深节点，而非把整场战役压缩为攻占汉城。", tacticalHint: "渡河后不要停在开阔走廊；用两翼高地掩护步兵占点。" },
+      { id: "uigongbu-axis", x: 10, y: 12, name: "议政府方向", historicalContext: "南向道路连接后续战役发展方向，只作为地图边界与历史坐标。", tacticalHint: "纵深炮兵会覆盖道路，分散队形后再接近终点。" },
     ],
     scripted: [
       { kind: "nightAssault", turns: [1, 3], attackBonus: 0.12, note: "三八线夜袭" },
@@ -468,8 +468,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: [],
     itemDrops: [{ x: 6, y: 8, options: ["medkit", "bandage", "ration"] }, { x: 13, y: 8, options: ["at_charge"] }],
     places: [
-      { x: 10, y: 6, name: "横城北侧公路节点" },
-      { x: 7, y: 10, name: "原州方向" },
+      { id: "hoengsong-north-road", x: 10, y: 6, name: "横城北侧公路节点", historicalContext: "横城反击中，雪夜突破与切断撤退轴比正面逐点消耗更关键。", tacticalHint: "从两翼山路接近，在公路节点两侧形成对向控制。" },
+      { id: "wonju-axis", x: 7, y: 10, name: "原州方向", historicalContext: "东南道路代表联合国军向原州方向后撤和重新组织防线的轴线。", tacticalHint: "道路出口是天然瓶颈；先封出口，再处理被隔开的火力点。" },
     ],
     scripted: [
       { kind: "nightAssault", turns: [1, 3], attackBonus: 0.14, note: "横城夜袭" },
@@ -531,8 +531,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: Array.from({ length: 20 }, (_, x) => ({ x, y: 0 })),
     itemDrops: [{ x: 7, y: 9, options: ["medkit", "bandage", "ration"] }, { x: 12, y: 9, options: ["medkit", "at_charge", "satchel", "field_manual"] }],
     places: [
-      { x: 10, y: 6, name: "砥平里" },
-      { x: 10, y: 1, name: "北撤通道" },
+      { id: "chipyongni", x: 10, y: 6, name: "砥平里", historicalContext: "砥平里是道路枢纽，守军依托周围丘陵形成环形阵地并获得炮兵、空中与后续装甲支援。", tacticalHint: "本关不要求占领城镇；只需外线牵制后及时脱离。" },
+      { id: "chipyongni-withdrawal", x: 10, y: 1, name: "北撤通道", historicalContext: "志愿军在攻击受挫、补给压力增加后脱离接触；关卡把保存部队写进胜利条件。", tacticalHint: "达到最低交战要求后分批北撤，利用控制区拖慢追兵。" },
     ],
     scripted: [
       { kind: "barrage", turns: [4, 7], damage: 5, note: "联合国军炮兵与空中支援压制" },
@@ -597,10 +597,10 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: [],
     itemDrops: [{ x: 6, y: 8, options: ["medkit", "bandage", "ration"] }, { x: 13, y: 8, options: ["at_charge", "arty_support"] }],
     places: [
-      { x: 10, y: 5, name: "桥头堡" },
-      { x: 10, y: 11, name: "235高地" },
-      { x: 10, y: 7, name: "雪马里" },
-      { x: 5, y: 4, name: "临津江" },
+      { id: "imjin-bridgehead", x: 10, y: 5, name: "桥头堡", historicalContext: "渡过临津江后，桥头堡决定后续兵力能否进入南岸纵深。", tacticalHint: "先建立连续阵线，不要让单支步兵孤立在南岸。" },
+      { id: "gloster-hill", x: 10, y: 11, name: "235高地", historicalContext: "235高地与英格洛斯特郡团收缩防御相关，是本关纵深终点。", tacticalHint: "高地守军互相掩护强；先断开侧翼，再集中火力占领。" },
+      { id: "solma-ri", x: 10, y: 7, name: "雪马里", historicalContext: "雪马里谷地连接渡河轴与高地防御区，地形把战斗压缩在狭窄纵深。", tacticalHint: "控制谷地两侧比挤在中央道路更能阻断增援。" },
+      { id: "imjin-river", x: 5, y: 4, name: "临津江", historicalContext: "临津江是战役地理骨架；关卡只表现一段渡河与南岸推进。", tacticalHint: "河流限制横向换线，过河前先确定每支部队的进攻轴。" },
     ],
     scripted: [
       { kind: "barrage", turns: [4, 7], damage: 4, note: "英军炮火拦阻射击" },
@@ -668,9 +668,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     itemDrops: [{ x: 5, y: 7, options: ["medkit", "at_charge", "satchel", "field_manual"] }, { x: 14, y: 7, options: ["at_charge", "arty_support"] }],
     places: [
-      { x: 10, y: 4, name: "第二阻击线" },
-      { x: 7, y: 6, name: "前沿公路口" },
-      { x: 10, y: 12, name: "涟川追击方向" },
+      { id: "cheorwon-second-line", x: 10, y: 4, name: "第二阻击线", historicalContext: "铁原方向的防御以逐次迟滞和保存主力为目的，不是守住单一格位到最后。", tacticalHint: "第一线接敌后退到这里重组，避免同时被多支敌军控制。" },
+      { id: "cheorwon-road-mouth", x: 7, y: 6, name: "前沿公路口", historicalContext: "公路口代表联合国军追击兵力进入阻击地域的主要轴线。", tacticalHint: "用机枪和远程火力封口，步兵不要过早越过公路。" },
+      { id: "yeoncheon-axis", x: 10, y: 12, name: "涟川追击方向", historicalContext: "南侧边界表示联合国军由涟川方向北进的追击轴。", tacticalHint: "增援会沿道路集中出现，炮兵应预先覆盖而不是临时转场。" },
     ],
     supplyPoints: [{ x: 9, y: 5 }, { x: 11, y: 3 }],
     scripted: [
@@ -740,10 +740,10 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: [],
     itemDrops: [{ x: 8, y: 8, options: ["medkit", "arty_support"] }, { x: 11, y: 8, options: ["medkit", "at_charge", "satchel", "field_manual"] }],
     places: [
-      { x: 7, y: 4, name: "597.9高地" },
-      { x: 12, y: 4, name: "537.7北山" },
-      { x: 8, y: 5, name: "坑道后口" },
-      { x: 10, y: 2, name: "五圣山纵深" },
+      { id: "hill-597", x: 7, y: 4, name: "597.9高地", historicalContext: "597.9高地与537.7北山构成上甘岭战场的核心前沿阵地。", tacticalHint: "不要把全部单位堆在山顶；坑道与侧后阵地需要保留预备队。" },
+      { id: "hill-537", x: 12, y: 4, name: "537.7北山", historicalContext: "双方围绕表面阵地反复争夺，炮火与坑道体系决定持续作战能力。", tacticalHint: "在炮击回合前分散，炮击后再从坑道方向补入前沿。" },
+      { id: "tunnel-rear", x: 8, y: 5, name: "坑道后口", historicalContext: "坑道使守军在强烈炮火后仍能保存人员、补充前沿并组织反击。", tacticalHint: "把后勤和重伤单位留在这里，作为前沿轮换的安全节点。" },
+      { id: "wushengshan", x: 10, y: 2, name: "五圣山纵深", historicalContext: "五圣山方向是上甘岭阵地体系的纵深背景，本关不把整个山系压成一个目标格。", tacticalHint: "纵深不是退缩失败；保持一条可轮换的补给线比死守前沿更重要。" },
     ],
     supplyPoints: [{ x: 8, y: 5 }, { x: 11, y: 5 }],
     scripted: [
@@ -816,9 +816,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: [],
     itemDrops: [{ x: 6, y: 8, options: ["medkit", "arty_support"] }, { x: 13, y: 8, options: ["medkit", "arty_support"] }],
     places: [
-      { x: 7, y: 6, name: "西支撑点" },
-      { x: 12, y: 6, name: "东支撑点" },
-      { x: 10, y: 6, name: "交通壕" },
+      { id: "pork-chop-west", x: 7, y: 6, name: "西支撑点", historicalContext: "石岘洞北山争夺围绕相互支撑的山脊阵地展开，而不是单一山头的一次冲锋。", tacticalHint: "先压制一侧火力，再沿交通壕转向另一侧，避免兵力平均分散。" },
+      { id: "pork-chop-east", x: 12, y: 6, name: "东支撑点", historicalContext: "东西支撑点共同维持前哨阵地；任一侧孤立都会削弱相互掩护。", tacticalHint: "利用包围机制切断两点之间的覆盖，再完成连续占领。" },
+      { id: "pork-chop-trench", x: 10, y: 6, name: "交通壕", historicalContext: "交通壕连接前沿支撑点，承担隐蔽机动和补充作用。", tacticalHint: "控制中间通路可以阻止守军横向增援。" },
     ],
     scripted: [
       { kind: "barrage", turns: [1], damage: 7, target: "enemy", note: "第23军第67师三分钟炮火急袭" },
@@ -882,9 +882,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     evacZone: [],
     itemDrops: [{ x: 6, y: 8, options: ["medkit", "arty_support"] }, { x: 13, y: 8, options: ["at_charge", "arty_support"] }],
     places: [
-      { x: 7, y: 7, name: "轿岩山主峰" },
-      { x: 11, y: 6, name: "轿岩山中东峰" },
-      { x: 10, y: 10, name: "金城川" },
+      { id: "kyoryang-main", x: 7, y: 7, name: "轿岩山主峰", historicalContext: "轿岩山位于联合国军前沿防御地带，主峰与中、东峰共同构成制高点体系。", tacticalHint: "开局炮火后立刻抢占接近路线，避免守军恢复完整掩护。" },
+      { id: "kyoryang-east", x: 11, y: 6, name: "轿岩山中东峰", historicalContext: "中东峰与主峰相互支撑，本关以双目标表现连续攻坚。", tacticalHint: "先切断峰间通路再逐点夺取，三面控制能显著提高突破效率。" },
+      { id: "kumsong-river", x: 10, y: 10, name: "金城川", historicalContext: "金城川划分突出部纵深并限制部队横向机动，是战役地理的重要组成。", tacticalHint: "雨天河谷机动缓慢；预先分配两翼部队，减少临场横移。" },
     ],
     scripted: [
       { kind: "barrage", turns: [1], damage: 8, target: "enemy", note: "志愿军开局炮火准备" },

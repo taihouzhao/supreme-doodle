@@ -433,6 +433,25 @@ body {
   line-height: 1.35;
 }
 
+.card__history {
+  display: grid;
+  gap: 0.28rem;
+  margin-top: 0.42rem;
+  padding-top: 0.38rem;
+  border-top: 1px dashed var(--line);
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.42;
+}
+
+.card__history strong {
+  display: inline-block;
+  margin-right: 0.35rem;
+  color: var(--gold);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+}
+
 .hud-sheet .actions {
   margin-top: 0.45rem;
   gap: 0.28rem;
@@ -2224,7 +2243,7 @@ select:focus-visible,
 
   .sheet--brief {
     padding: 0.85rem 0.75rem 0.7rem;
-    max-height: min(94dvh, 920px);
+    max-height: min(calc(100dvh - 2rem), 920px);
   }
 
   .hq-tab {

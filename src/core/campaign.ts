@@ -32,6 +32,7 @@ export interface MissionOutcome {
   weaponsGained: WeaponId[];
   rosterAfter: number;
   veteransAfter: number;
+  landmarksDiscovered: string[];
 }
 
 export type ItemLoadout = Partial<Record<ItemId, number>>;
@@ -606,6 +607,9 @@ export function finishMission(
     weaponsGained,
     rosterAfter: roster.length,
     veteransAfter: roster.filter((u) => veterancyLevel(u.exp) >= 3).length,
+    landmarksDiscovered: finalState.places
+      .filter((place) => (finalState.discoveredPlaceIds ?? []).includes(place.id ?? `${place.x},${place.y}`))
+      .map((place) => place.name),
   };
 
   next.history.push(outcome);

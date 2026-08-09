@@ -1,8 +1,11 @@
 import { TERRAIN } from "../content/terrain";
+import { resupplyOutcome, unitAt } from "../core/grid";
 import type { Faction, GameState, Objective, TerrainId, Unit, UnitTypeId, Vec2 } from "../core/types";
-import { ITEM_ICON, UI_ICON, UNIT_ROLE_ICON, terrainIcon, unitPortrait } from "./assets";
+import { BRIDGE_ICON, ITEM_ICON, UI_ICON, UNIT_ROLE_ICON, terrainIcon, unitPortrait } from "./assets";
+import { buildAttackPreview } from "./combatPreview";
 import { imageCache } from "./imageCache";
 import type { VisualFrame } from "./presentation";
+import { bridgeAxisAt, CONNECTION, terrainConnectionMask } from "./terrainConnections";
 import { FACTION_STYLE, HIGHLIGHT, TERRAIN_STYLE } from "./theme";
 
 /** 大格但不过分：整图通常略大于视口，靠拖拽 / 方向键浏览 */
@@ -73,6 +76,7 @@ export class Board {
   private camAtDragStartY = 0;
   private didPan = false;
   private onTap: ((tile: Vec2) => void) | null = null;
+  private hoveredTile: Vec2 | null = null;
 
   constructor(canvas: HTMLCanvasElement, onAssetsReady?: () => void) {
     this.canvas = canvas;
@@ -189,9 +193,16 @@ export class Board {
       this.dragStartY = event.clientY;
       this.camAtDragStartX = this.cameraX;
       this.camAtDragStartY = this.cameraY;
+      this.setHoveredTile(null);
       el.setPointerCapture(event.pointerId);
     });
     el.addEventListener("pointermove", (event) => {
+      if (this.pointerId === null) {
+        if (event.pointerType !== "touch") {
+          this.setHoveredTile(this.toTile(event.clientX, event.clientY));
+        }
+        return;
+      }
       if (this.pointerId !== event.pointerId) return;
       const dx = event.clientX - this.dragStartX;
       const dy = event.clientY - this.dragStartY;
@@ -216,9 +227,19 @@ export class Board {
       if (wasPan) return;
       const tile = this.toTile(event.clientX, event.clientY);
       if (tile && this.onTap) this.onTap(tile);
+      if (event.pointerType !== "touch") this.setHoveredTile(tile);
     };
     el.addEventListener("pointerup", end);
     el.addEventListener("pointercancel", end);
+    el.addEventListener("pointerleave", () => {
+      if (this.pointerId === null) this.setHoveredTile(null);
+    });
+  }
+
+  private setHoveredTile(tile: Vec2 | null): void {
+    if (this.hoveredTile?.x === tile?.x && this.hoveredTile?.y === tile?.y) return;
+    this.hoveredTile = tile;
+    if (this.state) this.draw();
   }
 
   /**
@@ -300,6 +321,24 @@ export class Board {
     ctx.globalAlpha = prev * alpha;
     ctx.drawImage(img, dx, dy, dw, dh);
     ctx.globalAlpha = prev;
+    return true;
+  }
+
+  private drawImageQuarterTurn(
+    src: string,
+    dx: number,
+    dy: number,
+    size: number,
+    turns: number,
+  ): boolean {
+    const img = imageCache.get(src);
+    if (!img) return false;
+    const { ctx } = this;
+    ctx.save();
+    ctx.translate(dx + size / 2, dy + size / 2);
+    ctx.rotate((Math.PI / 2) * turns);
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    ctx.restore();
     return true;
   }
 
@@ -418,6 +457,8 @@ export class Board {
     if (visual?.promoteBurst) {
       this.drawPromoteBurst(state, visual);
     }
+
+    this.drawHoverPreview(state);
 
     ctx.restore();
     this.drawMinimap(state, dpr);
@@ -623,20 +664,185 @@ export class Board {
       ctx.fillRect(x * tile, y * tile, tile, tile);
     }
 
-    // 整格贴图铺满
-    const drawn = this.drawImage(
-      terrainIcon(terrainId, state.weather),
-      x * tile,
-      y * tile,
-      tile,
-      tile,
-      1,
-    );
+    // 道路与河流按相邻格自动连接；其他地形仍直接铺贴图。
+    const drawn =
+      terrainId === "road" || terrainId === "river"
+        ? this.drawConnectedTerrain(state, x, y, terrainId)
+        : this.drawImage(
+            terrainIcon(terrainId, state.weather),
+            x * tile,
+            y * tile,
+            tile,
+            tile,
+            1,
+          );
     if (!drawn) this.drawTerrainIconFallback(terrainId, x, y);
 
     ctx.strokeStyle = snow ? "rgba(60, 70, 78, 0.22)" : "rgba(20, 24, 16, 0.18)";
     ctx.lineWidth = Math.max(1, tile * 0.02);
     ctx.strokeRect(x * tile + 0.5, y * tile + 0.5, tile - 1, tile - 1);
+  }
+
+  private drawConnectedTerrain(
+    state: GameState,
+    x: number,
+    y: number,
+    terrain: "road" | "river",
+  ): boolean {
+    const { ctx, tile } = this;
+    const dx = x * tile;
+    const dy = y * tile;
+    if (terrain === "road") {
+      const bridge = bridgeAxisAt(state, x, y);
+      if (bridge) {
+        const src = BRIDGE_ICON[state.weather === "snow" ? "snow" : "clear"];
+        return this.drawImageQuarterTurn(src, dx, dy, tile, bridge === "east-west" ? 1 : 0);
+      }
+    }
+
+    const mask = terrainConnectionMask(state, x, y, terrain);
+    const vertical = mask & (CONNECTION.north | CONNECTION.south);
+    const horizontal = mask & (CONNECTION.east | CONNECTION.west);
+    const count = [CONNECTION.north, CONNECTION.east, CONNECTION.south, CONNECTION.west]
+      .filter((bit) => (mask & bit) !== 0).length;
+
+    // 直线与端点保留原始高细节贴图，仅按轴旋转。
+    if (count <= 1 || (vertical === 5 && horizontal === 0)) {
+      return this.drawImageQuarterTurn(terrainIcon(terrain, state.weather), dx, dy, tile, 0);
+    }
+    if (horizontal === 10 && vertical === 0) {
+      return this.drawImageQuarterTurn(terrainIcon(terrain, state.weather), dx, dy, tile, 1);
+    }
+
+    // 转弯、三岔和交叉使用连接笔刷；曲线在相邻正交格之间形成清楚的斜向走势。
+    const baseDrawn = this.drawImage(
+      terrainIcon("plain", state.weather),
+      dx,
+      dy,
+      tile,
+      tile,
+    );
+    const cx = dx + tile / 2;
+    const cy = dy + tile / 2;
+    const points: Array<{ x: number; y: number }> = [];
+    if (mask & CONNECTION.north) points.push({ x: cx, y: dy - tile * 0.02 });
+    if (mask & CONNECTION.east) points.push({ x: dx + tile * 1.02, y: cy });
+    if (mask & CONNECTION.south) points.push({ x: cx, y: dy + tile * 1.02 });
+    if (mask & CONNECTION.west) points.push({ x: dx - tile * 0.02, y: cy });
+
+    const strokeConnector = (width: number, colour: string) => {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.lineCap = "butt";
+      ctx.lineJoin = "round";
+      if (points.length === 2) {
+        ctx.beginPath();
+        ctx.moveTo(points[0]!.x, points[0]!.y);
+        ctx.quadraticCurveTo(cx, cy, points[1]!.x, points[1]!.y);
+        ctx.stroke();
+      } else {
+        for (const point of points) {
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(point.x, point.y);
+          ctx.stroke();
+        }
+      }
+    };
+
+    ctx.save();
+    if (terrain === "road") {
+      strokeConnector(tile * 0.48, state.weather === "snow" ? "#70695d" : "#5b4934");
+      strokeConnector(tile * 0.36, state.weather === "snow" ? "#b9afa0" : "#a78961");
+      strokeConnector(tile * 0.055, state.weather === "snow" ? "rgba(82,73,63,.55)" : "rgba(68,48,28,.5)");
+    } else {
+      strokeConnector(tile * 0.68, state.weather === "snow" ? "#6c7779" : "#514b38");
+      strokeConnector(tile * 0.55, state.weather === "snow" ? "#718b91" : "#456f73");
+      strokeConnector(tile * 0.07, state.weather === "snow" ? "rgba(235,245,245,.7)" : "rgba(190,220,214,.6)");
+    }
+    ctx.restore();
+    return baseDrawn;
+  }
+
+  private drawHoverPreview(state: GameState): void {
+    const hovered = this.hoveredTile;
+    const selected = state.units.find((unit) => unit.id === this.overlay.selectedUnitId);
+    if (!hovered || !selected || selected.hasActed || this.overlay.visual?.busy) {
+      this.canvas.style.cursor = "default";
+      return;
+    }
+    const index = hovered.y * state.width + hovered.x;
+    const target = unitAt(state, hovered.x, hovered.y);
+    if (!target) {
+      this.canvas.style.cursor = "default";
+      return;
+    }
+
+    let title = "";
+    let tone: "attack" | "resupply" = "attack";
+    const lines: string[] = [];
+    if (this.overlay.attackTargets.has(index) && target.faction !== selected.faction) {
+      const preview = buildAttackPreview(state, selected, target);
+      title = `攻击预判 · ${target.name}`;
+      lines.push(`预计伤害  −${preview.damage.min}～${preview.damage.max}`);
+      lines.push(`敌军生命  ${target.hp} → ${preview.defenderHpAfter.min}～${preview.defenderHpAfter.max}`);
+      lines.push(
+        preview.counter
+          ? `可能反击  −${preview.counter.min}～${preview.counter.max}`
+          : "可能反击  无",
+      );
+      if (preview.rout !== "none") lines.push(preview.rout === "certain" ? "结果  确定击溃" : "结果  可能击溃");
+    } else if (this.overlay.resupplyTiles.has(index) && target.faction === selected.faction) {
+      const preview = resupplyOutcome(state, selected, target);
+      tone = "resupply";
+      title = `补充预判 · ${target.name}`;
+      if (preview.personnel > 0) {
+        lines.push(`作战部队  +${preview.personnel} · ${target.hp} → ${preview.targetHpAfter}`);
+        lines.push(`后勤兵员  −${preview.personnel} · ${selected.hp} → ${preview.sourceHpAfter}`);
+      }
+      if (preview.fatigueRelief > 0) lines.push(`疲劳缓解  −${preview.fatigueRelief}`);
+      if (preview.ammoRestored) lines.push("弹药窗口  恢复 3 回合");
+    } else {
+      this.canvas.style.cursor = "default";
+      return;
+    }
+
+    this.canvas.style.cursor = "pointer";
+    const { ctx, tile } = this;
+    const lineHeight = tile * 0.25;
+    const width = tile * 3.25;
+    const height = tile * (0.56 + lines.length * 0.25);
+    const dpr = window.devicePixelRatio || 1;
+    const viewLeft = this.cameraX * dpr;
+    const viewTop = this.cameraY * dpr;
+    const viewRight = viewLeft + this.viewCssW * dpr;
+    const viewBottom = viewTop + this.viewCssH * dpr;
+    let left = (hovered.x + 1.05) * tile;
+    let top = hovered.y * tile - tile * 0.08;
+    if (left + width > viewRight - tile * 0.1) left = hovered.x * tile - width - tile * 0.05;
+    if (top + height > viewBottom - tile * 0.1) top = viewBottom - height - tile * 0.1;
+    left = Math.max(viewLeft + tile * 0.1, left);
+    top = Math.max(viewTop + tile * 0.1, top);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(20, 24, 20, 0.94)";
+    ctx.strokeStyle = tone === "attack" ? "#e48a76" : "#68c59d";
+    ctx.lineWidth = Math.max(2, tile * 0.035);
+    ctx.beginPath();
+    ctx.roundRect(left, top, width, height, tile * 0.12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = tone === "attack" ? "#ffd7cc" : "#c9f3df";
+    ctx.font = `700 ${Math.round(tile * 0.18)}px "Noto Sans SC", sans-serif`;
+    ctx.fillText(title, left + tile * 0.16, top + tile * 0.24);
+    ctx.fillStyle = "#f1eee2";
+    ctx.font = `600 ${Math.round(tile * 0.16)}px "Noto Sans SC", sans-serif`;
+    lines.forEach((line, lineIndex) => {
+      ctx.fillText(line, left + tile * 0.16, top + tile * 0.5 + lineIndex * lineHeight);
+    });
+    ctx.restore();
   }
 
   private drawTerrainIconFallback(terrainId: TerrainId, x: number, y: number): void {

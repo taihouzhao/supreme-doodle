@@ -17,6 +17,10 @@ export const BALANCE = {
   coordination: { perAlly: 0.04, cap: 0.16 },
   /** 守方相邻/可反击单位带来的互相掩护。 */
   defensiveSupport: { perAlly: 0.045, cap: 0.16 },
+  /** 真正围住目标的奖励：对向封锁或至少三面受控，而不是只在攻方身边站队。 */
+  encirclement: { opposedAxes: 0.14, threeSides: 0.2, fourSides: 0.26 },
+  /** 脱离敌方控制区的额外移动消耗；让堵口和包围有实际意义。 */
+  disengagement: { perEnemy: 1, cap: 3 },
   /** 击溃敌军后俘虏小部分兵员的确定性随机参数。 */
   prisoners: { chance: 0.45, min: 2, max: 8 },
   /** 疲劳影响 */

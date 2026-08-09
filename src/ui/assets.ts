@@ -41,6 +41,12 @@ export function terrainIcon(terrain: TerrainId, weather: Weather): string {
   return weather === "snow" ? TERRAIN_ICON_SNOW[terrain] : TERRAIN_ICON[terrain];
 }
 
+/** 道路跨越河流时使用的正交桥面；横向桥由画布旋转得到。 */
+export const BRIDGE_ICON: Record<"clear" | "snow", string> = {
+  clear: `/assets/terrain/bridge.png${V}`,
+  snow: `/assets/terrain/bridge-snow.png${V}`,
+};
+
 export const UNIT_ICON: Record<UnitTypeId, Record<Faction, string>> = {
   rifle: {
     player: `/assets/units/rifle-player-v3.png${V}`,
@@ -121,12 +127,12 @@ export function rankInsignia(id: string): string {
 
 export const ITEM_ICON: Record<ItemId, string> = {
   medkit: `/assets/items/medkit.png${V}`,
-  bandage: `/assets/items/medkit.png${V}`,
-  ration: `/assets/items/medkit.png${V}`,
+  bandage: `/assets/items/bandage-v2.png${V}`,
+  ration: `/assets/items/ration-v2.png${V}`,
   at_charge: `/assets/items/at-charge.png${V}`,
-  satchel: `/assets/items/at-charge.png${V}`,
+  satchel: `/assets/items/satchel-v2.png${V}`,
   arty_support: `/assets/items/arty-support.png${V}`,
-  field_manual: `/assets/items/arty-support.png${V}`,
+  field_manual: `/assets/items/field-manual-v2.png${V}`,
 };
 
 export const UI_ICON = {
@@ -149,16 +155,16 @@ export const UI_ICON = {
 } as const;
 
 export const COMMANDER_PORTRAIT: Record<string, string> = {
-  "gao-daquan": `/assets/commanders/gao-daquan.png${V}`,
-  "peng-dehuai": `/assets/commanders/peng-dehuai.png${V}`,
+  "gao-daquan": `/assets/commanders/gao-daquan-v2.png${V}`,
+  "peng-dehuai": `/assets/commanders/peng-dehuai-v2.png${V}`,
   "wu-xinquan": `/assets/commanders/wu-xinquan.png${V}`,
   "song-shilun": `/assets/commanders/song-shilun.png${V}`,
   "qin-jiwei": `/assets/commanders/qin-jiwei.png${V}`,
-  "matthew-ridgway": `/assets/commanders/matthew-ridgway.png${V}`,
+  "matthew-ridgway": `/assets/commanders/matthew-ridgway-v2.png${V}`,
   "oliver-smith": `/assets/commanders/oliver-smith.png${V}`,
   "wen-yucheng": `/assets/commanders/wen-yucheng.png${V}`,
   "paik-sun-yup": `/assets/commanders/paik-sun-yup.png${V}`,
-  "kim-jong-oh": `/assets/commanders/kim-jong-oh.png${V}`,
+  "kim-jong-oh": `/assets/commanders/kim-jong-oh-v2.png${V}`,
   "hobart-gay": `/assets/commanders/hobart-gay.png${V}`,
   "liang-xingchu": `/assets/commanders/liang-xingchu.png${V}`,
   "walton-walker": `/assets/commanders/walton-walker.png${V}`,
@@ -178,7 +184,10 @@ export const COMMANDER_PORTRAIT: Record<string, string> = {
 const identityPool = (group: UnitPortraitGroup): string[] =>
   Array.from(
     { length: 8 },
-    (_, index) => `/assets/unit-identities/${group}-${String(index + 1).padStart(2, "0")}.png${V}`,
+    (_, index) => {
+      const migrated = group === "pva" || group === "rok" ? "-v2" : "";
+      return `/assets/unit-identities/${group}-${String(index + 1).padStart(2, "0")}${migrated}.png${V}`;
+    },
   );
 
 /** 单关最多 8 名同一历史阵营普通单位；每个槽都是不同人物。 */
@@ -223,6 +232,7 @@ export function allAssetUrls(): string[] {
   return [
     ...Object.values(TERRAIN_ICON),
     ...Object.values(TERRAIN_ICON_SNOW),
+    ...Object.values(BRIDGE_ICON),
     ...Object.values(UNIT_ICON).flatMap((pair) => Object.values(pair)),
     ...Object.values(UNIT_ROLE_ICON),
     ...Object.values(WEAPON_ICON),

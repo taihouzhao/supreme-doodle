@@ -348,6 +348,7 @@ export function createMissionState(setup: MissionSetup): GameState {
     captureStreak: 0,
     deployedCount: units.filter((u) => u.faction === "player").length,
     places: (mission.places ?? []).map((place) => ({ ...place })),
+    discoveredPlaceIds: [],
     scripted: (mission.scripted ?? []).map((rule) => ({ ...rule })),
     status: "playing",
     stats: {
@@ -357,6 +358,7 @@ export function createMissionState(setup: MissionSetup): GameState {
       damageDealt: 0,
       damageTaken: 0,
       prisonersCaptured: 0,
+      landmarksDiscovered: 0,
     },
     resultReason: "",
   };

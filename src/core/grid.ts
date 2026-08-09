@@ -1,4 +1,5 @@
 import { TERRAIN } from "../content/terrain";
+import { BALANCE } from "../content/balance";
 import { LOGISTICS, UNIT_TYPES } from "../content/units";
 import { WEAPONS } from "../content/weapons";
 import type { GameState, TerrainDef, Unit, Vec2 } from "./types";
@@ -42,6 +43,68 @@ const NEIGHBOURS: readonly Vec2[] = [
   { x: -1, y: 0 },
 ];
 
+export interface EncirclementStatus {
+  controlledSides: number;
+  opposedAxis: boolean;
+  encircled: boolean;
+  multiplier: number;
+}
+
+/** 指定格周围有多少个敌方单位直接建立控制区。 */
+export function enemyZocCountAt(
+  state: GameState,
+  unit: Pick<Unit, "faction">,
+  x: number,
+  y: number,
+): number {
+  return NEIGHBOURS.reduce((count, step) => {
+    const other = unitAt(state, x + step.x, y + step.y);
+    return other && other.faction !== unit.faction ? count + 1 : count;
+  }, 0);
+}
+
+/**
+ * 包围必须发生在守方四周：两支部队占住对向格，或至少三面受控。
+ * 这与“攻方身边有友军”的普通夹击分开，给围堵路线一个清晰、可预测的收益。
+ */
+export function encirclementStatus(
+  state: GameState,
+  defender: Unit,
+  attackingFaction: Unit["faction"],
+  projectedAttacker?: { id: string; x: number; y: number },
+): EncirclementStatus {
+  const controlled = NEIGHBOURS.map((step) => {
+    const x = defender.x + step.x;
+    const y = defender.y + step.y;
+    if (projectedAttacker && projectedAttacker.x === x && projectedAttacker.y === y) return true;
+    const unit = unitAt(state, x, y);
+    if (!unit || unit.faction !== attackingFaction) return false;
+    if (projectedAttacker && unit.id === projectedAttacker.id) return false;
+    return true;
+  });
+  const controlledSides = controlled.filter(Boolean).length;
+  const opposedAxis = (controlled[0] && controlled[2]) || (controlled[1] && controlled[3]);
+  const encircled = Boolean(opposedAxis || controlledSides >= 3);
+  let bonus = 0;
+  if (controlledSides >= 4) bonus = BALANCE.encirclement.fourSides;
+  else if (controlledSides >= 3) bonus = BALANCE.encirclement.threeSides;
+  else if (opposedAxis) bonus = BALANCE.encirclement.opposedAxes;
+  return { controlledSides, opposedAxis: Boolean(opposedAxis), encircled, multiplier: 1 + bonus };
+}
+
+/** 从接触中脱离的额外成本；多面受压时会显著拖慢撤出。 */
+export function disengagementCostAt(
+  state: GameState,
+  unit: Pick<Unit, "faction">,
+  x: number,
+  y: number,
+): number {
+  return Math.min(
+    BALANCE.disengagement.cap,
+    enemyZocCountAt(state, unit, x, y) * BALANCE.disengagement.perEnemy,
+  );
+}
+
 export interface ReachableTile {
   x: number;
   y: number;
@@ -53,11 +116,7 @@ export interface ReachableTile {
  * 进入控制区必须停下，部队无法沿着敌人边缘长距离穿插。
  */
 export function inEnemyZoc(state: GameState, unit: Unit, x: number, y: number): boolean {
-  for (const step of NEIGHBOURS) {
-    const other = unitAt(state, x + step.x, y + step.y);
-    if (other && other.alive && !other.evacuated && other.faction !== unit.faction) return true;
-  }
-  return false;
+  return enemyZocCountAt(state, unit, x, y) > 0;
 }
 
 /**
@@ -93,7 +152,8 @@ export function reachableTiles(state: GameState, unit: Unit): ReachableTile[] {
       const blocker = unitAt(state, nx, ny);
       if (blocker && blocker.faction !== unit.faction) continue;
 
-      const cost = current.cost + tileAt(state, nx, ny).moveCost;
+      const disengage = isOrigin ? disengagementCostAt(state, unit, current.x, current.y) : 0;
+      const cost = current.cost + tileAt(state, nx, ny).moveCost + disengage;
       if (cost > budget) continue;
       const nextKey = key(nx, ny);
       if (cost >= (best.get(nextKey) ?? Infinity)) continue;
@@ -171,7 +231,9 @@ function searchPath(
       const isDest = nx === to.x && ny === to.y;
       if (blocker && blocker.id !== unit.id && isDest) continue;
 
-      const cost = current.cost + tileAt(state, nx, ny).moveCost;
+      const disengage =
+        respectZoc && isOrigin ? disengagementCostAt(state, unit, current.x, current.y) : 0;
+      const cost = current.cost + tileAt(state, nx, ny).moveCost + disengage;
       if (cost > budget) continue;
       const nextKey = key(nx, ny);
       if (cost >= (best.get(nextKey) ?? Infinity)) continue;
@@ -244,14 +306,42 @@ export function needsResupply(state: GameState, ally: Unit): boolean {
   return ally.hp < ally.maxHp || ally.fatigue > 0 || needsAmmo;
 }
 
+export interface ResupplyOutcome {
+  personnel: number;
+  fatigueRelief: number;
+  ammoRestored: boolean;
+  sourceHpAfter: number;
+  targetHpAfter: number;
+}
+
+/** 与实际补充共用的纯计算：不修改单位，也不消耗随机流。 */
+export function resupplyOutcome(state: GameState, unit: Unit, target: Unit): ResupplyOutcome {
+  const missing = Math.max(0, target.maxHp - target.hp);
+  const transferable = Math.max(0, unit.hp - LOGISTICS.minimumPersonnel);
+  const personnel = Math.min(LOGISTICS.personnelPerAction, transferable, missing);
+  const fatigueRelief = Math.min(LOGISTICS.fatigueRelief, target.fatigue);
+  const ammoRestored =
+    target.faction === "player" &&
+    state.scripted.some((rule) => rule.kind === "supplyWindow" && state.turn > rule.untilTurn) &&
+    (target.supplyRestoredUntil ?? 0) < state.turn;
+  return {
+    personnel,
+    fatigueRelief,
+    ammoRestored,
+    sourceHpAfter: unit.hp - personnel,
+    targetHpAfter: target.hp + personnel,
+  };
+}
+
 /** 后勤可补充的正交相邻友军（未满员、仍有疲劳，或我方弹药窗口已过期） */
 export function resupplyTargets(state: GameState, unit: Unit): Unit[] {
   if (unit.type !== "logistics" || !unit.alive || unit.evacuated) return [];
-  const canTransferPersonnel = unit.hp > LOGISTICS.minimumPersonnel;
   return adjacentFriendlyUnits(state, unit).filter((ally) => {
     if (!needsResupply(state, ally)) return false;
+    const outcome = resupplyOutcome(state, unit, ally);
     // 缺编需要真实人力；后勤队降到最低机动编制后仍可处理疲劳/弹药，但不会再凭空回血。
-    return canTransferPersonnel || ally.hp >= ally.maxHp;
+    if (ally.hp < ally.maxHp && outcome.personnel <= 0) return false;
+    return outcome.personnel > 0 || outcome.fatigueRelief > 0 || outcome.ammoRestored;
   });
 }
 

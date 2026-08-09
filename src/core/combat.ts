@@ -9,6 +9,7 @@ import {
   attackRange,
   coordinationAllies,
   defensiveSupportAllies,
+  encirclementStatus,
   manhattan,
   tileAt,
 } from "./grid";
@@ -99,6 +100,11 @@ export function damageComponents(
         defensiveSupportAllies(state, defender, attacker) * BALANCE.defensiveSupport.perAlly,
       ),
   );
+  const encirclement = encirclementStatus(state, defender, attacker.faction, {
+    id: attacker.id,
+    x: attacker.x,
+    y: attacker.y,
+  }).multiplier;
 
   let rawDefense =
     attackerDef.indirect && defenderTile.defense > 0
@@ -131,6 +137,7 @@ export function damageComponents(
         fatigue *
         flank *
         coordination *
+        encirclement *
         terrain *
         defenderVeterancy *
         defensiveSupport *
@@ -152,6 +159,7 @@ export function damageComponents(
     fatigue,
     flank,
     coordination,
+    encirclement,
     terrain,
     defenderVeterancy,
     defensiveSupport,

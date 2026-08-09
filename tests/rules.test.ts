@@ -3,12 +3,15 @@ import { BALANCE } from "../src/content/balance";
 import { getMission } from "../src/content/missions";
 import { UNIT_TYPES, veterancyLevel } from "../src/content/units";
 import { canCounter, damageComponents, estimateDamage } from "../src/core/combat";
+import { runEnemyPhase } from "../src/core/enemyAi";
 import { applyAction, legalActions } from "../src/core/engine";
 import {
   canAttack,
   coordinationAllies,
   defensiveSupportAllies,
+  encirclementStatus,
   reachableTiles,
+  resupplyOutcome,
   resupplyTargets,
   tileAt,
 } from "../src/core/grid";
@@ -19,7 +22,7 @@ import {
   requiredEvacuations,
   victoryProgress,
 } from "../src/core/mission";
-import { performAttack, performResupply } from "../src/core/resolve";
+import { performAttack, performMove, performResupply } from "../src/core/resolve";
 import { deriveSeed } from "../src/core/rng";
 import type { GameEvent, GameState, Unit } from "../src/core/types";
 import { fullInventory, testRosterUnit } from "./helpers/roster";
@@ -70,6 +73,17 @@ describe("地形与移动", () => {
     const state = scenario();
     const unit = state.units.find((u) => u.id === "p0")!;
     expect(movementBudget(unit, "rain")).toBeLessThan(movementBudget(unit, "clear"));
+  });
+
+  it("从多支敌军控制区脱离会额外消耗移动力", () => {
+    const state = scenario();
+    state.tiles = state.tiles.map(() => "plain");
+    const player = put(state, "p0", 6, 6);
+    player.mpLeft = 8;
+    put(state, "e0", 6, 5);
+    put(state, "e1", 5, 6);
+    const exit = reachableTiles(state, player).find((tile) => tile.x === 7 && tile.y === 6);
+    expect(exit?.cost).toBe(4); // 平地 2 + 两面接敌脱离 2
   });
 });
 
@@ -129,6 +143,12 @@ describe("后勤补充", () => {
     ally.hp = 40;
     ally.fatigue = 30;
     expect(resupplyTargets(state, logistics).map((u) => u.id)).toContain(ally.id);
+    expect(resupplyOutcome(state, logistics, ally)).toMatchObject({
+      personnel: 28,
+      fatigueRelief: 18,
+      targetHpAfter: 68,
+      sourceHpAfter: logistics.hp - 28,
+    });
     const events: GameEvent[] = [];
     expect(performResupply(state, logistics, ally, events)).toBe(true);
     expect(ally.hp).toBe(68);
@@ -210,6 +230,42 @@ describe("战斗", () => {
     coveringAttacker.alive = false;
     coveringDefender.alive = false;
   });
+
+  it("对向封锁会形成可解释的包围加成", () => {
+    const state = scenario();
+    state.tiles = state.tiles.map(() => "plain");
+    const attacker = put(state, "p0", 6, 6);
+    const defender = put(state, "e0", 6, 5);
+    put(state, "p1", 6, 4);
+    const surround = encirclementStatus(state, defender, "player", attacker);
+    expect(surround.encircled).toBe(true);
+    expect(surround.opposedAxis).toBe(true);
+    expect(damageComponents(state, attacker, defender, 1).encirclement).toBeGreaterThan(1);
+  });
+});
+
+describe("联合军协同 AI", () => {
+  it("同一敌方阶段会优先集火受创目标", () => {
+    const state = scenario();
+    state.tiles = state.tiles.map(() => "plain");
+    state.objectives = [];
+    state.phase = "enemy";
+    const wounded = put(state, "p0", 6, 5);
+    wounded.hp = Math.max(12, Math.round(wounded.maxHp * 0.22));
+    const healthy = put(state, "p1", 7, 5);
+    healthy.hp = healthy.maxHp;
+    const first = put(state, "e0", 6, 6);
+    const second = put(state, "e1", 5, 5);
+    first.mpLeft = 0;
+    second.mpLeft = 0;
+    first.hasActed = false;
+    second.hasActed = false;
+    state.units = [wounded, healthy, first, second];
+    const events: GameEvent[] = [];
+    runEnemyPhase(state, events);
+    const attacks = events.filter((event): event is Extract<GameEvent, { type: "attacked" }> => event.type === "attacked");
+    expect(attacks[0]?.defenderId).toBe(wounded.id);
+  });
 });
 
 describe("规则动作", () => {
@@ -229,6 +285,22 @@ describe("规则动作", () => {
   it("合法动作列表不为空", () => {
     const state = scenario();
     expect(legalActions(state).length).toBeGreaterThan(0);
+  });
+});
+
+describe("战场地标", () => {
+  it("部队抵达地标时解锁战地注记并写入统计", () => {
+    const state = scenario();
+    state.tiles = state.tiles.map(() => "plain");
+    const place = state.places.find((entry) => entry.id === "chongchon-tributary")!;
+    const player = put(state, "p0", place.x - 1, place.y);
+    player.mpLeft = 10;
+    state.units = [player];
+    const events: GameEvent[] = [];
+    expect(performMove(state, player, place, events)).toBe(true);
+    expect(state.discoveredPlaceIds).toContain(place.id);
+    expect(state.stats.landmarksDiscovered).toBe(1);
+    expect(events.some((event) => event.type === "landmarkDiscovered")).toBe(true);
   });
 });
 

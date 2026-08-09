@@ -115,8 +115,9 @@ describe("敌方控制区", () => {
     // 向南脱离接触没问题
     expect(reach.some((t) => t.x === 6 && t.y === 8)).toBe(true);
     // 侧移到敌人身侧后必须停下，想继续北上只能绕远
-    expect(costOf(state, unit, 5, 5)).toBe(4);
-    expect(costOf(state, unit, 5, 4)!).toBeGreaterThan(4);
+    // 从一个敌军控制区脱离需额外消耗 1 点，侧移本身仍会在控制区停止。
+    expect(costOf(state, unit, 5, 5)).toBe(5);
+    expect(costOf(state, unit, 5, 4)!).toBeGreaterThan(5);
   });
 
   it("路径重建同样遵守控制区", () => {

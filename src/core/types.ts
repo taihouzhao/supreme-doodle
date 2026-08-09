@@ -126,6 +126,10 @@ export interface ItemDef {
   fatigueRelief?: number;
   /** 使用后获得经验 */
   expGain?: number;
+  /** 物资在朝鲜战场中的历史背景；只用于叙事与教学，不参与结算。 */
+  historicalContext?: string;
+  /** 提醒玩家这件物资对应的战术选择。 */
+  tacticalUse?: string;
 }
 
 export interface Unit {
@@ -208,13 +212,21 @@ export interface MissionStats {
   damageTaken: number;
   /** 俘虏敌军后转入己方后勤/作战编制的人员数。 */
   prisonersCaptured?: number;
+  /** 已经由玩家部队抵达并解锁的战场地标数量。 */
+  landmarksDiscovered?: number;
 }
 
-/** 地图地名标注 */
+/** 地图地名标注，也是把史实与当前战术决策连起来的最小叙事单元。 */
 export interface PlaceLabel {
+  /** 稳定 id；旧配置缺省时使用坐标派生。 */
+  id?: string;
   x: number;
   y: number;
   name: string;
+  /** 只写经关卡档案核验过的史实意义。 */
+  historicalContext?: string;
+  /** 告诉玩家为什么这个地标会改变当下走法。 */
+  tacticalHint?: string;
 }
 
 /** 史实脚本规则：把各关的历史特征做成可结算的规则 */
@@ -255,6 +267,8 @@ export interface GameState {
   stats: MissionStats;
   /** 地图上的真实地名 */
   places: PlaceLabel[];
+  /** 玩家部队实际抵达过的地标；结果页据此生成战场学习回顾。 */
+  discoveredPlaceIds?: string[];
   /** 本关生效的史实脚本 */
   scripted: ScriptedRule[];
   /** 胜负原因，供界面与报告使用 */
@@ -286,6 +300,8 @@ export interface DamageBreakdown {
   coordination?: number;
   /** 守方邻近单位对本次攻击的掩护修正（小于 1 表示减伤）。 */
   defensiveSupport?: number;
+  /** 对守方形成对向封锁或三面合围时的攻击修正。 */
+  encirclement?: number;
   weather: number;
   setup: number;
   highGround: number;
@@ -347,6 +363,13 @@ export type GameEvent =
       unitId: string;
       sourceId: string;
       amount: number;
+    }
+  | {
+      type: "landmarkDiscovered";
+      placeId: string;
+      placeName: string;
+      historicalContext?: string;
+      tacticalHint?: string;
     }
   | { type: "scripted"; kind: ScriptedRule["kind"]; note: string; unitIds: string[]; damage: number }
   | { type: "evacuated"; unitId: string }

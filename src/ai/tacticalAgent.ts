@@ -3,6 +3,7 @@ import { UNIT_TYPES } from "../content/units";
 import { getMission } from "../content/missions";
 import { COUNTER_RATIO, estimateDamageFrom, itemDamage } from "../core/combat";
 import {
+  encirclementStatus,
   livingUnits,
   manhattan,
   orthogonalNeighbours,
@@ -35,7 +36,7 @@ const WEIGHTS = {
   danger: 0.5,
   moveCost: 0.1,
   idlePenalty: 15,
-  breakthroughPull: 10,
+  breakthroughPull: 14,
   holdPull: 3,
   garrison: 45,
   withdrawPull: 7,
@@ -45,6 +46,7 @@ const WEIGHTS = {
   retreatDangerRatio: 0.4,
   cohesion: 7,
   cohesionCap: 21,
+  encirclement: 150,
 };
 
 /** 保持互相掩护：相邻友军既有集火加成，也能分摊敌方火力 */
@@ -239,11 +241,26 @@ function planCombat(state: GameState, unit: Unit, danger: number[]): Plan | null
 
       // 集火：优先补刀已经受创的目标，让敌人尽快离场而不是平摊伤害
       const focus = (1 - target.hp / target.maxHp) * WEIGHTS.focusFire;
+      const encirclementRelevant =
+        state.missionKind !== "breakthrough" ||
+        state.objectives
+          .filter((objective) => objective.kind === "capture" && objective.owner !== "player")
+          .some((objective) => manhattan(objective, target) <= 3);
+      const encirclement = encirclementRelevant
+        ? (encirclementStatus(state, target, unit.faction, {
+            id: unit.id,
+            x: tile.x,
+            y: tile.y,
+          }).multiplier -
+            1) *
+          WEIGHTS.encirclement
+        : 0;
 
       const score =
         damage * (lethal ? WEIGHTS.lethalMultiplier : 1) +
         focus -
         counter * WEIGHTS.counter +
+        encirclement +
         positional -
         deathRisk(unit, dangerAt(state, danger, tile) + counter);
 

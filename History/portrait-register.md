@@ -1,15 +1,15 @@
 # 历史将领肖像与军衔登记表
 
-校核日期：2026-08-08。游戏肖像是依据人物公开历史形象、战时年龄与制服制作的统一风格重绘，**全部属于风格化重建，不是历史原始照片**。同一人物在十二关中固定使用同一 portrait id；军衔栏严格取该关发生时的身份。
+校核日期：2026-08-09。游戏肖像是依据人物公开历史形象、战时年龄与制服制作的统一风格重绘，**全部属于风格化重建，不是历史原始照片**。同一人物在十二关中固定使用同一 portrait id；军衔栏严格取该关发生时的身份。V2 文件采用彩色战场绘画方向，未标 V2 的肖像保持旧映射并等待逐批复核。
 
 | portrait id | 人物 | 战时身份（游戏采用） | 军衔显示 | 文件 | 资产性质 |
 |---|---|---|---|---|---|
 | `wen-yucheng` | 温玉成 | 志愿军第40军军长 | 职务制（无军衔） | `commanders/wen-yucheng.png` | 风格化重建（非原照） |
-| `kim-jong-oh` | 金钟五 | 韩国陆军第6步兵师师长 | 准将 | `commanders/kim-jong-oh.png` | 风格化重建（非原照） |
+| `kim-jong-oh` | 金钟五 | 韩国陆军第6步兵师师长 | 准将 | `commanders/kim-jong-oh-v2.png` | V2 风格化重建（非原照） |
 | `wu-xinquan` | 吴信泉 | 志愿军第39军军长 | 职务制（无军衔） | `commanders/wu-xinquan.png` | 风格化重建（非原照） |
 | `liang-xingchu` | 梁兴初 | 志愿军第38军军长 | 职务制（无军衔） | `commanders/liang-xingchu.png` | 风格化重建（非原照） |
 | `song-shilun` | 宋时轮 | 志愿军第9兵团司令员 | 职务制（无军衔） | `commanders/song-shilun.png` | 风格化重建（非原照） |
-| `peng-dehuai` | 彭德怀 | 志愿军司令员兼政治委员 | 职务制（无军衔） | `commanders/peng-dehuai.png` | 风格化重建（非原照） |
+| `peng-dehuai` | 彭德怀 | 志愿军司令员兼政治委员 | 职务制（无军衔） | `commanders/peng-dehuai-v2.png` | V2 风格化重建（非原照） |
 | `fu-chongbi` | 傅崇碧 | 志愿军第63军军长 | 职务制（无军衔） | `commanders/fu-chongbi.png` | 风格化重建（非原照） |
 | `qin-jiwei` | 秦基伟 | 志愿军第15军军长 | 职务制（无军衔） | `commanders/qin-jiwei.png` | 风格化重建（非原照） |
 | `zhong-guochu` | 钟国楚 | 志愿军第23军军长 | 职务制（无军衔） | `commanders/zhong-guochu.png` | 风格化重建（非原照） |
@@ -19,7 +19,7 @@
 | `walton-walker` | 沃尔顿·沃克 | 美第8集团军司令 | 中将 | `commanders/walton-walker.png` | 风格化重建（非原照） |
 | `oliver-smith` | 奥利弗·史密斯 | 美陆战第1师师长 | 少将 | `commanders/oliver-smith.png` | 风格化重建（非原照） |
 | `edward-almond` | 爱德华·阿尔蒙德 | 美第10军军长 | 少将（m4、m6） | `commanders/edward-almond.png` | 风格化重建（非原照） |
-| `matthew-ridgway` | 马修·李奇微 | 美第8集团军司令 | 中将 | `commanders/matthew-ridgway.png` | 风格化重建（非原照） |
+| `matthew-ridgway` | 马修·李奇微 | 美第8集团军司令 | 中将 | `commanders/matthew-ridgway-v2.png` | V2 风格化重建（非原照） |
 | `paul-freeman` | 保罗·弗里曼 | 美第23步兵团团长 | 上校 | `commanders/paul-freeman.png` | 风格化重建（非原照） |
 | `ralph-monclar` | 拉尔夫·蒙克拉尔 | 法国联合国营营长 | 临时中校 | `commanders/ralph-monclar.png` | 风格化重建（非原照） |
 | `james-carne` | 詹姆斯·卡恩 | 英格洛斯特郡团第1营营长 | 中校 | `commanders/james-carne.png` | 风格化重建（非原照） |
@@ -30,7 +30,7 @@
 
 ## 虚构主角
 
-`gao-daquan`（高大全）是玩家主力角色，不列入历史人物。其脸型、发型、制服、配色与文件 `commanders/gao-daquan.png` 跨关固定；剧情不得把真实将领的个人经历嫁接给他。
+`gao-daquan`（高大全）是玩家主力角色，不列入历史人物。其脸型、发型、制服、配色与文件 `commanders/gao-daquan-v2.png` 跨关固定；剧情不得把真实将领的个人经历嫁接给他。
 
 ## 史料与显示规则
 

@@ -57,7 +57,7 @@ export function renderItemSlots(
     const def = ITEMS[entry.id];
     const active = pending === entry.id ? " is-active" : "";
     cells.push(
-      `<button type="button" class="slot${active}" data-action="use-item" data-value="${entry.id}" title="${esc(def.name)}：${esc(def.description)}" aria-label="${esc(`${def.name}，${entry.count}个，${itemEffectLabel(entry.id)}`)}" ${locked ? "disabled" : ""}>` +
+      `<button type="button" class="slot${active}" data-action="use-item" data-value="${entry.id}" title="${esc(def.name)}：${esc(def.description)}${def.historicalContext ? `｜${def.historicalContext}` : ""}" aria-label="${esc(`${def.name}，${entry.count}个，${itemEffectLabel(entry.id)}`)}" ${locked ? "disabled" : ""}>` +
         `<img class="slot__ico" src="${ITEM_ICON[entry.id]}" alt="" draggable="false" />` +
         `<span class="slot__count">${entry.count}</span>` +
         `<span class="slot__effect">${esc(def.name)}</span>` +
@@ -507,12 +507,15 @@ export class View {
     const terrain = TERRAIN[terrainId];
     const occupant = unitAt(battle, x, y);
     const objective = battle.objectives.find((o) => o.x === x && o.y === y);
+    const place = battle.places.find((entry) => entry.x === x && entry.y === y);
     const fieldItem = battle.fieldItems.find((i) => i.x === x && i.y === y);
     const evac = isEvacTile(battle, x, y);
 
     const title = occupant
       ? occupant.name
-      : objective
+      : place
+        ? place.name
+        : objective
         ? objective.name
         : evac
           ? "撤离带"
@@ -544,9 +547,16 @@ export class View {
 
     const regen = terrain.regen > 0 ? ` · 回血+${terrain.regen}/回合` : "";
     const blocked = terrain.passable ? "" : " · 不可通行";
+    const placeNote = place
+      ? `<div class="card__history">
+          ${place.historicalContext ? `<p><strong>战地注记</strong>${esc(place.historicalContext)}</p>` : ""}
+          ${place.tacticalHint ? `<p><strong>战术意义</strong>${esc(place.tacticalHint)}</p>` : ""}
+        </div>`
+      : "";
     return `<section class="card card--compact">
       <header class="card__head"><h2 class="card__title">${ico(titleIcon, "ico ico--sm")}${esc(title)}</h2></header>
       <p class="card__sub">${ico(TERRAIN_ICON[terrainId], "ico ico--xs")}${esc(terrain.name)} · 移 ${terrain.passable ? terrain.moveCost : "—"}${terrain.defense ? ` · ${esc(defenseText(terrain.defense))}` : ""}${regen}${blocked}${occupant ? ` · ${esc(UNIT_TYPES[occupant.type].name)} ${occupant.hp}/${occupant.maxHp}` : " · 无人"}${evac ? " · 撤离带" : ""}${extras}</p>
+      ${placeNote}
     </section>`;
   }
 
@@ -606,7 +616,7 @@ export class View {
             ${meter("机敏", unit.stats.agility)}
           </div>
           <p class="card__note">统率提夹击，智力提曲射与道具，武力提直射，耐力撑生命，机敏加机动。</p>
-          ${state.pendingItem ? `<p class="card__tip">${esc(ITEMS[state.pendingItem].name)}：${esc(ITEMS[state.pendingItem].description)}</p>` : ""}
+          ${state.pendingItem ? `<p class="card__tip"><strong>${esc(ITEMS[state.pendingItem].name)}</strong>：${esc(ITEMS[state.pendingItem].description)}${ITEMS[state.pendingItem].historicalContext ? `<br>${esc(ITEMS[state.pendingItem].historicalContext!)}` : ""}${ITEMS[state.pendingItem].tacticalUse ? `<br><b>战术：</b>${esc(ITEMS[state.pendingItem].tacticalUse!)}` : ""}</p>` : ""}
         </div>`
       : "";
 
@@ -1137,17 +1147,18 @@ export class View {
         const mission =
           state.mission ?? CHAPTER_ONE.missions.find((entry) => entry.id === outcome.missionId) ?? null;
         const historical = mission?.historicalOutcome ?? "";
+        const landmarks = outcome.landmarksDiscovered ?? [];
         return `<div class="sheet">
           <div class="sheet__result">${ico(won ? UI_ICON.resultWin : UI_ICON.resultLose, "ico ico--result")}</div>
           <p class="sheet__eyebrow">${won ? "任务完成" : "任务失败"}</p>
           <h1>${esc(outcome.reason)}</h1>
           <div class="result-compare">
             <article>
-              <strong>本关结果</strong>
-              <span>${won ? "你完成了战术目标" : "你未能完成战术目标"}：${esc(outcome.reason)}</span>
+              <strong>战场推演</strong>
+              <span>${won ? "你完成了这段战术职责" : "你未能完成这段战术职责"}：${esc(outcome.reason)}${mission?.historicalNote ? `。${esc(mission.historicalNote)}` : ""}</span>
             </article>
             <article>
-              <strong>史实对照</strong>
+              <strong>战役走向</strong>
               <span>${esc(historical || "本关未收录史实结局。")}</span>
             </article>
           </div>
@@ -1165,6 +1176,7 @@ export class View {
           ${outcome.returningUnitNames.length > 0 ? `<p class="result-detail"><strong>重伤归队：</strong>${esc(outcome.returningUnitNames.join("、"))}</p>` : ""}
           ${outcome.replacementNames.length > 0 ? `<p class="result-detail"><strong>补充编入：</strong>${esc(outcome.replacementNames.join("、"))}</p>` : ""}
           ${outcome.weaponsGained.length > 0 ? `<p class="result-detail"><strong>缴获/奖励：</strong>${esc(outcome.weaponsGained.map((id) => WEAPONS[id].name).join("、"))}</p>` : ""}
+          <p class="result-detail"><strong>抵达地标：</strong>${landmarks.length > 0 ? esc(landmarks.join("、")) : "本关未抵达已登记地标"}</p>
           <p class="sheet__note">${
             outcome.permanentLosses.length > 0
               ? "被击溃的伴随部队里有一部分永远回不来了。剧情将领本关结算后离开编制。"

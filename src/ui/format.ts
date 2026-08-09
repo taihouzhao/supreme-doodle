@@ -34,6 +34,7 @@ export function breakdownFactors(breakdown: DamageBreakdown): Factor[] {
     ["疲劳", breakdown.fatigue],
     ["夹击", breakdown.flank],
     ["火力呼应", breakdown.coordination ?? 1],
+    ["包围封锁", breakdown.encirclement ?? 1],
     ["目标地形", breakdown.terrain],
     ["目标防护", breakdown.defenderVeterancy],
     ["相互掩护", breakdown.defensiveSupport ?? 1],
@@ -78,6 +79,10 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     }
     case "prisonersCaptured":
       return `${unitLabel(state, event.unitId)} 收容 ${event.amount} 名俘虏，转入编制（来自 ${unitLabel(state, event.sourceId)}）`;
+    case "landmarkDiscovered": {
+      const hint = event.tacticalHint ? `；${event.tacticalHint}` : "";
+      return `抵达${event.placeName}：战地注记已解锁${hint}`;
+    }
     case "itemPicked":
       return `${unitLabel(state, event.unitId)} 拾取了${ITEMS[event.item].name}`;
     case "weaponPicked":

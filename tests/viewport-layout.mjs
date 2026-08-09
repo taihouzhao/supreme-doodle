@@ -126,7 +126,7 @@ async function inspectBrief(page) {
   const tabs = [
     ["staff", "任务目标"],
     ["ordnance", "战役库存"],
-    ["org", "查看五维成长"],
+    ["org", "兵员补充"],
   ];
   for (const [tab, expected] of tabs) {
     await page.locator(`[data-action="brief-tab"][data-value="${tab}"]`).click();
@@ -141,6 +141,11 @@ async function inspectBrief(page) {
       expected,
     );
   }
+  await page.waitForFunction(() =>
+    [...(document.querySelector(".sheet--hq")?.getAnimations() ?? [])].every(
+      (animation) => animation.playState === "finished",
+    ),
+  );
 
   return page.evaluate(() => {
     const box = (selector) => {
@@ -150,11 +155,12 @@ async function inspectBrief(page) {
       return { top: rect.top, right: rect.right, bottom: rect.bottom, left: rect.left };
     };
     const buttons = [...document.querySelectorAll('[data-action="brief-tab"]')];
-    const labels = [...document.querySelectorAll('.org-card__deploy input')].map((input) =>
+    const labels = [...document.querySelectorAll('.org-unit-row__deploy input')].map((input) =>
       input.getAttribute("aria-label"),
     );
     return {
       viewport: { width: window.innerWidth, height: window.innerHeight },
+      overlay: box(".overlay"),
       sheet: box(".sheet--hq"),
       footer: box(".hq-footer"),
       tabCount: buttons.length,
@@ -176,7 +182,10 @@ function assertBrief(layout) {
   assert.equal(new Set(layout.deployLabels).size, layout.deployLabels.length, "deploy controls need unique labels");
   assert.ok(layout.deployLabels.every(Boolean), "deploy controls need accessible names");
   assert.ok(layout.sheet.top >= -1 && layout.sheet.left >= -1, "HQ sheet clipped at top/left");
-  assert.ok(layout.sheet.right <= width + 1 && layout.sheet.bottom <= height + 1, "HQ sheet clipped at bottom/right");
+  assert.ok(
+    layout.sheet.right <= width + 1 && layout.sheet.bottom <= height + 1,
+    `HQ sheet clipped at bottom/right: ${JSON.stringify({ viewport: layout.viewport, overlay: layout.overlay, sheet: layout.sheet })}`,
+  );
   assert.ok(layout.footer.bottom <= height + 1, "HQ primary action is not reachable");
   assert.ok(layout.bodyScrollX <= 8, `HQ horizontal page scroll ${layout.bodyScrollX}px`);
 }

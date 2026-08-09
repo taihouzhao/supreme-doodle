@@ -16,6 +16,8 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     antiArmorOnly: false,
     range: 0,
     splash: false,
+    historicalContext: "前线救护与后送能力长期受运输线和敌军火力限制，医疗物资首先意味着把伤员带回编制。",
+    tacticalUse: "留给高价值或即将继续接敌的单位，避免把恢复浪费在安全位置。",
   },
   bandage: {
     id: "bandage",
@@ -27,18 +29,22 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     antiArmorOnly: false,
     range: 0,
     splash: false,
+    historicalContext: "单兵急救只能止住眼前伤势，不能替代后勤分队的人员补充与后送。",
+    tacticalUse: "用于小幅稳住战线，把后勤调拨留给严重缺编单位。",
   },
   ration: {
     id: "ration",
-    name: "干粮",
+    name: "炒面袋",
     targeting: "self",
-    description: "恢复体力，降低 35 疲劳",
+    description: "恢复体力，降低 35 疲劳；志愿军早期常用携行干粮",
     heal: 0,
     damage: 0,
     antiArmorOnly: false,
     range: 0,
     splash: false,
     fatigueRelief: 35,
+    historicalContext: "补给受阻时，炒面成为志愿军可直接携行、无需生火的基础口粮。",
+    tacticalUse: "让急行军后的部队恢复持续作战能力，但不能补回缺失兵员。",
   },
   at_charge: {
     id: "at_charge",
@@ -50,6 +56,8 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     antiArmorOnly: true,
     range: 1,
     splash: false,
+    historicalContext: "面对装甲优势，步兵往往依靠近距离反坦克器材和地形接敌，而不是远距离硬拼。",
+    tacticalUse: "利用森林、村庄或高地接近装甲单位后再使用。",
   },
   satchel: {
     id: "satchel",
@@ -61,6 +69,8 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     antiArmorOnly: false,
     range: 3,
     splash: false,
+    historicalContext: "爆破器材用于处理工事、路障与近距离火力点，效果依赖隐蔽接近。",
+    tacticalUse: "优先清除高防御据点，给后续步兵打开通路。",
   },
   arty_support: {
     id: "arty_support",
@@ -72,6 +82,8 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     antiArmorOnly: false,
     range: 6,
     splash: true,
+    historicalContext: "炮火支援的价值不只在杀伤，更在于打乱阵地协同并为突破制造窗口。",
+    tacticalUse: "等待两个以上敌军形成密集阵形，再打击中心格。",
   },
   field_manual: {
     id: "field_manual",
@@ -84,6 +96,8 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     range: 0,
     splash: false,
     expGain: 40,
+    historicalContext: "战斗经验来自对地形、火力与部队协同的复盘，而非职务或军衔变化。",
+    tacticalUse: "用于即将升级、且需要承担关键战术角色的伴随将领。",
   },
 };
 

@@ -11,6 +11,7 @@ import {
   manhattan,
   orthogonalNeighbours,
   pathCost,
+  resupplyOutcome,
   resupplyTargets,
   unitAt,
 } from "./grid";
@@ -85,6 +86,23 @@ export function routUnit(state: GameState, unit: Unit, events: GameEvent[]): voi
 function settleTileEntry(state: GameState, unit: Unit, events: GameEvent[]): void {
   if (unit.faction !== "player") return;
   const { x, y } = unit;
+
+  const place = state.places.find((entry) => entry.x === x && entry.y === y);
+  if (place) {
+    const placeId = place.id ?? `${place.x},${place.y}`;
+    state.discoveredPlaceIds ??= [];
+    if (!state.discoveredPlaceIds.includes(placeId)) {
+      state.discoveredPlaceIds.push(placeId);
+      state.stats.landmarksDiscovered = state.discoveredPlaceIds.length;
+      events.push({
+        type: "landmarkDiscovered",
+        placeId,
+        placeName: place.name,
+        historicalContext: place.historicalContext,
+        tacticalHint: place.tacticalHint,
+      });
+    }
+  }
 
   const pickedIndex = state.fieldItems.findIndex((i) => i.x === x && i.y === y);
   const picked = state.fieldItems[pickedIndex];
@@ -280,19 +298,9 @@ export function performResupply(
 ): boolean {
   if (unit.type !== "logistics") return false;
   if (!resupplyTargets(state, unit).some((ally) => ally.id === target.id)) return false;
-  const missing = target.maxHp - target.hp;
-  const transferable = Math.max(0, unit.hp - LOGISTICS.minimumPersonnel);
-  const personnel = Math.min(
-    LOGISTICS.personnelPerAction,
-    transferable,
-    Math.max(0, missing),
-  );
-  const fatigueRelief = Math.min(LOGISTICS.fatigueRelief, target.fatigue);
-  const needsAmmo =
-    target.faction === "player" &&
-    state.scripted.some((rule) => rule.kind === "supplyWindow" && state.turn > rule.untilTurn) &&
-    (target.supplyRestoredUntil ?? 0) < state.turn;
-  if (personnel <= 0 && fatigueRelief <= 0 && !needsAmmo) return false;
+  const preview = resupplyOutcome(state, unit, target);
+  const { personnel, fatigueRelief } = preview;
+  if (personnel <= 0 && fatigueRelief <= 0 && !preview.ammoRestored) return false;
   // 人员守恒：后勤减少多少，作战单位就增加多少，禁止凭空回血。
   unit.hp -= personnel;
   target.hp += personnel;
@@ -301,7 +309,7 @@ export function performResupply(
   if (
     target.faction === "player" &&
     state.scripted.some((rule) => rule.kind === "supplyWindow") &&
-    (needsAmmo || personnel > 0 || fatigueRelief > 0)
+    (preview.ammoRestored || personnel > 0 || fatigueRelief > 0)
   ) {
     target.supplyRestoredUntil = state.turn + LOGISTICS.ammoRestoreTurns;
   }
