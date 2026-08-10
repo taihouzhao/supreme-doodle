@@ -15,8 +15,8 @@ export const PROGRESS = {
   attackPerLevel: 0.018,
   defensePerLevel: 0.012,
   /** 经验：所有有效伤害统一口径，歼灭奖励明显高于单次擦伤。 */
-  expPerDamage: 0.1,
-  expPerRout: 6,
+  expPerDamage: 0.25,
+  expPerRout: 15,
   /** 升级曲线：升到 level+1 所需累计经验 */
   expForLevel(level: number): number {
     if (level <= 1) return 0;

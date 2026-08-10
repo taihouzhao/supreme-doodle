@@ -54,7 +54,6 @@ export function fullInventory(extra: Partial<Record<ItemId, number>> = {}): Reco
     field_manual: 0,
     plasma_unit: 0,
     surgeon_kit: 0,
-    compressed_ration: 0,
     bangalore: 0,
     shaped_charge_elite: 0,
     smoke_screen: 0,
