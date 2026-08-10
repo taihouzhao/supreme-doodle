@@ -213,8 +213,12 @@ export function createCampaign(chapterId: string, seed: number): CampaignState {
     if (owned < equipped) armory.push(unit.weapon);
   }
   const attachments = [...(chapter.startingAttachments ?? [])];
-  for (const unit of roster) {
-    if (unit.attachment && !attachments.includes(unit.attachment)) attachments.push(unit.attachment);
+  for (const attachment of new Set(
+    roster.map((unit) => unit.attachment).filter((id): id is AttachmentId => Boolean(id)),
+  )) {
+    const equipped = roster.filter((unit) => unit.attachment === attachment).length;
+    const owned = attachments.filter((id) => id === attachment).length;
+    for (let i = owned; i < equipped; i += 1) attachments.push(attachment);
   }
 
   return {
