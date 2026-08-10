@@ -1,6 +1,7 @@
 import { WEAPON_IDS } from "../content/weapons";
 import type {
   Faction,
+  AttachmentId,
   ItemId,
   TerrainId,
   Unit,
@@ -11,7 +12,7 @@ import type {
 } from "../core/types";
 
 /** Cache-bust when swapping generated art without renaming. */
-const V = "?v=8";
+const V = "?v=9";
 
 /** Static art under /assets (served from public/). */
 
@@ -116,6 +117,12 @@ const ITEM_ICON_FILES: Partial<Record<ItemId, string>> = {
   medkit: `/assets/items/medkit.png${V}`,
   bandage: `/assets/items/bandage-v2.png${V}`,
   ration: `/assets/items/ration-v2.png${V}`,
+  compressed_ration: `/assets/items/compressed-ration-v3.png${V}`,
+  water_purification: `/assets/items/water-purification-v3.png${V}`,
+  grenade_bundle: `/assets/items/grenade-bundle-v3.png${V}`,
+  smoke_grenade: `/assets/items/smoke-grenade-v3.png${V}`,
+  ammo_crate: `/assets/items/ammo-crate-v3.png${V}`,
+  signal_flare: `/assets/items/signal-flare-v3.png${V}`,
   at_charge: `/assets/items/at-charge.png${V}`,
   satchel: `/assets/items/satchel-v2.png${V}`,
   arty_support: `/assets/items/arty-support.png${V}`,
@@ -159,6 +166,21 @@ export function classDecorationIcon(decoration: string): string {
   return `/assets/ui/class/${decoration}.svg${V}`;
 }
 
+/** 附件图标与物品分离；型号相近的器材可复用，但通信/防寒使用独立 v3 资产。 */
+export const ATTACHMENT_ICON: Record<AttachmentId, string> = {
+  engineer_tools: `/assets/items/satchel-v2.png${V}`,
+  pack_train: `/assets/items/ration-v2.png${V}`,
+  field_telephone: `/assets/items/field-telephone-v3.png${V}`,
+  ammo_carrier: `/assets/items/ammo-crate-v3.png${V}`,
+  camouflage_net: `/assets/items/smoke-grenade-v3.png${V}`,
+  winter_kit: `/assets/items/winter-mittens-v3.png${V}`,
+  medic_team: `/assets/items/medkit.png${V}`,
+  motor_transport: `/assets/items/ammo-crate-v3.png${V}`,
+  artillery_tractor: `/assets/items/ammo-crate-v3.png${V}`,
+  scr300_radio: `/assets/items/field-telephone-v3.png${V}`,
+  rangefinder: `/assets/items/signal-flare-v3.png${V}`,
+  t52_vest: `/assets/items/winter-mittens-v3.png${V}`,
+};
 export const UI_ICON = {
   weatherClear: `/assets/ui/weather-clear.png${V}`,
   weatherRain: `/assets/ui/weather-rain.png${V}`,
@@ -204,6 +226,10 @@ export const COMMANDER_PORTRAIT: Record<string, string> = {
   "arthur-trudeau": `/assets/commanders/arthur-trudeau.png${V}`,
   "yang-yong": `/assets/commanders/yang-yong.png${V}`,
   "maxwell-taylor": `/assets/commanders/maxwell-taylor.png${V}`,
+  "hong-xuezhi": `/assets/commanders/hong-xuezhi-v3.png${V}`,
+  "cui-jianggong": `/assets/commanders/cui-jianggong-v3.png${V}`,
+  "yang-gensi": `/assets/commanders/yang-gensi-v3.png${V}`,
+  "huang-jiguang": `/assets/commanders/huang-jiguang-v3.png${V}`,
 };
 
 const identityPool = (group: UnitPortraitGroup): string[] =>
@@ -242,9 +268,12 @@ function fallbackPortraitIndex(unit: Pick<Unit, "id" | "commanderName">): number
 export function unitPortrait(
   unit: Pick<
     Unit,
-    "id" | "faction" | "commanderName" | "keyUnit" | "portraitGroup" | "portraitIndex"
+    "id" | "faction" | "commanderName" | "keyUnit" | "portraitGroup" | "portraitIndex" | "portraitId"
   >,
 ): string {
+  if (unit.portraitId && COMMANDER_PORTRAIT[unit.portraitId]) {
+    return COMMANDER_PORTRAIT[unit.portraitId]!;
+  }
   if (unit.keyUnit || unit.commanderName === "高大全") {
     return COMMANDER_PORTRAIT["gao-daquan"]!;
   }
@@ -261,6 +290,8 @@ export function allAssetUrls(): string[] {
     ...Object.values(UNIT_ICON).flatMap((pair) => Object.values(pair)),
     ...Object.values(UNIT_ROLE_ICON),
     ...Object.values(RANK_INSIGNIA),
+    ...Object.values(ITEM_ICON),
+    ...Object.values(ATTACHMENT_ICON),
     ...Object.values(UI_ICON),
     ...Object.values(COMMANDER_PORTRAIT),
     ...Object.values(UNIT_IDENTITY_PORTRAIT).flat(),

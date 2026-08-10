@@ -8,7 +8,7 @@ import { LOGISTICS, UNIT_TYPES } from "../content/units";
 import { WEAPONS, WEAPON_HISTORY } from "../content/weapons";
 import { UNIT_CLASSES, WEAPON_CATEGORY_LABELS, resolveClassId, unlockedCategories } from "../content/evolution";
 import { weaponCategory, weaponRarity } from "../content/weapons";
-import { equippableAttachments, equippableWeapons, freeAttachmentCount, freeWeaponCount, ownedAttachmentCount, ownedWeaponCount } from "../core/campaign";
+import { equippableAttachments, equippableWeapons, freeAttachmentCount, freeWeaponCount, ownedAttachmentCount, ownedWeaponCount, UNIT_BACKPACK_WEIGHT_CAP, WAREHOUSE_CAP } from "../core/campaign";
 import { effectiveStats, inventoryForUnit } from "../core/commander";
 import { effectiveIndirect } from "../core/equipment";
 import { attackRange, livingUnits, unitAt } from "../core/grid";
@@ -16,6 +16,7 @@ import { isEvacTile, movementBudget, type RosterUnit } from "../core/mission";
 import type { AttachmentId, GameState, ItemId, Unit, UnitClassId, WeaponId, Weather } from "../core/types";
 import {
   COMMANDER_PORTRAIT,
+  ATTACHMENT_ICON,
   ITEM_ICON,
   TERRAIN_ICON,
   UI_ICON,
@@ -34,7 +35,10 @@ function itemEffectLabel(item: ItemId): string {
   const def = ITEMS[item];
   if (def.heal > 0) return `+${def.heal}HP`;
   if (def.fatigueRelief) return `疲劳-${def.fatigueRelief}`;
+  if (def.ammoRestoreTurns) return `弹药窗+${def.ammoRestoreTurns}回合`;
   if (def.expGain) return `+${def.expGain}经验`;
+  if (def.utility === "smoke") return "烟幕1回合";
+  if (def.utility === "signal") return "信号1回合";
   if (def.damage > 0) return def.splash ? `${def.damage}溅射` : `${def.damage}伤`;
   return def.name;
 }
@@ -44,7 +48,7 @@ function meter(label: string, value: number, max = 100): string {
   return `<div class="meter" title="${esc(label)} ${value}"><span class="meter__lab">${esc(label)}</span><i style="width:${pct}%"></i><em>${value}</em></div>`;
 }
 
-/** 与内容表同源，不能静默吞掉第七种物资。 */
+/** 与内容表同源，不能静默吞掉新增物资。 */
 export const ITEM_SLOT_COUNT = ITEM_IDS.length;
 
 export function renderItemSlots(
@@ -62,7 +66,7 @@ export function renderItemSlots(
     const def = ITEMS[entry.id];
     const active = pending === entry.id ? " is-active" : "";
     cells.push(
-      `<button type="button" class="slot${active}" data-action="use-item" data-value="${entry.id}" title="${esc(def.name)}：${esc(def.description)}${def.historicalContext ? `｜${def.historicalContext}` : ""}" aria-label="${esc(`${def.name}，${entry.count}个，${itemEffectLabel(entry.id)}`)}" ${locked ? "disabled" : ""}>` +
+      `<button type="button" class="slot${active}" data-action="use-item" data-value="${entry.id}" title="${esc(def.name)}：${esc(def.description)}${def.historicalContext ? `｜${def.historicalContext}` : ""}" aria-label="${esc(`${def.name}，${entry.count}个，${itemEffectLabel(entry.id)}`)}" ${locked || (!def.heal && !def.damage && !def.fatigueRelief && !def.ammoRestoreTurns && !def.utility) ? "disabled" : ""}>` +
         `<img class="slot__ico" src="${ITEM_ICON[entry.id]}" alt="" draggable="false" />` +
         `<span class="slot__count">${entry.count}</span>` +
         `<span class="slot__effect">${esc(def.name)}</span>` +
@@ -410,10 +414,7 @@ export class View {
         attackTargets: this.session.attackTargets(),
         attackPreview: this.session.attackPreview(),
         attackImpactTiles: new Set(
-          (this.session.attackPreview()?.affected ?? []).map((impact) => {
-            const unit = battle.units.find((candidate) => candidate.id === impact.unitId);
-            return unit ? unit.y * battle.width + unit.x : -1;
-          }).filter((index) => index >= 0),
+          (this.session.attackPreview()?.impactTiles ?? []).map((at) => at.y * battle.width + at.x),
         ),
         resupplyTiles: this.session.resupplyTargets(),
         resupplyIdleTiles: this.session.resupplyIdleTiles(),
@@ -908,10 +909,10 @@ export class View {
             })
             .join("")}
         </select>
-        <small>${currentAttachment ? `${esc(currentAttachment.name)} · ${esc(currentAttachment.description)}` : "附件槽空置；附件不占用携行物资"}</small>
-        <div class="loadout" title="从战役库存分配本关携行；不分配则默认整库带入">
+        <small>${currentAttachment ? `${ico(ATTACHMENT_ICON[unit.attachment!], "ico ico--xs")} ${esc(currentAttachment.name)} · ${esc(currentAttachment.description)}` : "附件槽空置；附件不占用携行物资"}</small>
+        <div class="loadout" title="从战役库存分配本关携行；未分配时按兵种优先级自动装填">
           <strong>本关携行</strong>
-          ${itemControls || "<small>库存为空，或保持默认整库带入</small>"}
+          ${itemControls || "<small>库存为空，或将按兵种优先级自动装填</small>"}
         </div>
       </div>
     </li>`;
@@ -981,8 +982,10 @@ export class View {
       <ul class="sheet__roster">
         ${(mission.storyAllies ?? [])
           .map(
-            (ally, index) =>
-              `<li>${ico(unitIdentityPortrait("pva", state.campaign.roster.length + index), "ico ico--sm")}<span>${esc(ally.commander)}${esc(UNIT_TYPES[ally.type].name)}</span><span>${esc(ally.duty ?? `Lv.${ally.level}`)}</span></li>`,
+            (ally, index) => {
+              const portrait = ally.portrait ? COMMANDER_PORTRAIT[ally.portrait] : undefined;
+              return `<li>${ico(portrait ?? unitIdentityPortrait("pva", state.campaign.roster.length + index), "ico ico--sm")}<span>${esc(ally.commander)}${esc(UNIT_TYPES[ally.type].name)}</span><span>${esc(ally.duty ?? `Lv.${ally.level}`)}</span></li>`;
+            },
           )
           .join("")}
       </ul>
@@ -997,17 +1000,17 @@ export class View {
       .join("、");
     const warehouseCount = ITEM_IDS.reduce((sum, id) => sum + (state.campaign.inventory[id] ?? 0), 0);
     return `
-      <p class="sheet__hint">战役库存（战役仓库）：为各将领分配武器与本关携行；每名将领最多携带 3 件，仓库最多保留 6 件。</p>
+      <p class="sheet__hint">战役库存（战役仓库）：为各将领分配武器与本关携行；每名将领最多 3 格、${UNIT_BACKPACK_WEIGHT_CAP} 点负重，仓库最多保留 ${WAREHOUSE_CAP} 件。</p>
       <p class="sheet__hint">每支部队固定 1 件武器，可再装 0–1 件附件；换装只在库存有空闲实物时生效，不会自动按评分替换。</p>
       <p class="sheet__hint">附件库存：${Object.entries(state.campaign.attachments.reduce<Record<string, number>>((all, id) => ({ ...all, [id]: (all[id] ?? 0) + 1 }), {}))
         .map(([id, count]) => `${ATTACHMENTS[id as AttachmentId]?.name ?? id}×${count}`)
         .join("、") || "空"}</p>
-      <p class="sheet__hint">战役仓库 ${warehouseCount}/6：${stockLine || "空"} · ${
+      <p class="sheet__hint">战役仓库 ${warehouseCount}/${WAREHOUSE_CAP}：${stockLine || "空"} · ${
         hasManualLoadout
           ? `已分配：${ITEM_IDS.filter((id) => (loadoutUsed[id] ?? 0) > 0)
               .map((id) => `${ITEMS[id].name}×${loadoutUsed[id]}`)
               .join("、")}`
-          : "当前默认整库带入"
+          : "当前按兵种优先级自动装填"
       }</p>
       <ul class="armory">
         ${state.campaign.roster.map((unit) => this.ordnanceRow(state, unit)).join("")}
@@ -1248,7 +1251,7 @@ export class View {
           ${outcome.returningUnitNames.length > 0 ? `<p class="result-detail"><strong>重伤归队：</strong>${esc(outcome.returningUnitNames.join("、"))}</p>` : ""}
           ${outcome.replacementNames.length > 0 ? `<p class="result-detail"><strong>补充编入：</strong>${esc(outcome.replacementNames.join("、"))}</p>` : ""}
           ${outcome.weaponsGained.length > 0 ? `<p class="result-detail"><strong>缴获/奖励：</strong>${esc(outcome.weaponsGained.map((id) => WEAPONS[id].name).join("、"))}</p>` : ""}
-          ${(outcome.itemsGained?.length ?? 0) > 0 ? `<p class="result-detail"><strong>战利品：</strong>${esc((outcome.itemsGained ?? []).map((id) => ITEMS[id].name).join("、"))} · 已放入战役仓库（上限 6 件）</p>` : ""}
+          ${(outcome.itemsGained?.length ?? 0) > 0 ? `<p class="result-detail"><strong>战利品：</strong>${esc((outcome.itemsGained ?? []).map((id) => ITEMS[id].name).join("、"))} · 优先保留历史战利品（仓库上限 ${WAREHOUSE_CAP} 件）</p>` : ""}
           ${(outcome.itemsDiscarded?.length ?? 0) > 0 ? `<p class="result-detail result-detail--warning"><strong>仓库已满：</strong>${esc((outcome.itemsDiscarded ?? []).map((id) => ITEMS[id].name).join("、"))} 未能保留</p>` : ""}
           ${outcome.attachmentsGained.length > 0 ? `<p class="result-detail"><strong>附件入库：</strong>${esc(outcome.attachmentsGained.map((id) => ATTACHMENTS[id].name).join("、"))}</p>` : ""}
           <p class="result-detail"><strong>抵达地标：</strong>${landmarks.length > 0 ? esc(landmarks.join("、")) : "本关未抵达已登记地标"}</p>

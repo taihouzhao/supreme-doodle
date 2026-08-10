@@ -15,7 +15,7 @@ import {
   resolveClassId,
   unlockedCategories,
 } from "../content/evolution";
-import { ITEM_IDS } from "../content/items";
+import { ITEM_IDS, ITEMS } from "../content/items";
 import type { MissionConfig } from "../content/missions/schema";
 import { BASE_STATS } from "../content/progress";
 import { LOGISTICS, levelFromExp } from "../content/units";
@@ -59,7 +59,16 @@ export interface MissionOutcome {
 export type ItemLoadout = Partial<Record<ItemId, number>>;
 
 export const UNIT_BACKPACK_CAP = 3;
-export const WAREHOUSE_CAP = 6;
+export const UNIT_BACKPACK_WEIGHT_CAP = 4;
+export const WAREHOUSE_CAP = 12;
+
+function itemWeight(item: ItemId): number {
+  return ITEMS[item]?.slotWeight ?? 1;
+}
+
+export function backpackWeight(items: ItemId[] = []): number {
+  return items.reduce((sum, item) => sum + itemWeight(item), 0);
+}
 
 function inventoryItems(inventory: Record<ItemId, number>): ItemId[] {
   const items: ItemId[] = [];
@@ -76,7 +85,14 @@ function inventoryFromItems(items: ItemId[]): Record<ItemId, number> {
 }
 
 function normalizeBackpack(items: ItemId[] | undefined): ItemId[] {
-  return (items ?? []).filter((item) => ITEM_IDS.includes(item)).slice(0, UNIT_BACKPACK_CAP);
+  const result: ItemId[] = [];
+  for (const item of items ?? []) {
+    if (!ITEM_IDS.includes(item)) continue;
+    if (result.length >= UNIT_BACKPACK_CAP) break;
+    if (backpackWeight(result) + itemWeight(item) > UNIT_BACKPACK_WEIGHT_CAP) continue;
+    result.push(item);
+  }
+  return result;
 }
 
 export interface CampaignState {
@@ -95,7 +111,7 @@ export interface CampaignState {
   status: "running" | "complete";
   /** 出击前勾选的伴随单位 id；空则自动按等级与主力标记选择 */
   pendingDeploy?: string[];
-  /** 出击前为各单位分配的携行物资（按 rosterId）；空则整库带入 */
+  /** 出击前为各单位分配的携行物资（按 rosterId）；空则按兵种优先级自动装填 */
   pendingLoadout?: Record<string, ItemLoadout>;
   /** 旧存档仍使用 inventory 字典；该字段用于明确显示仓库语义。 */
   warehouse?: ItemId[];
@@ -352,28 +368,6 @@ export function toggleDeployUnit(campaign: CampaignState, unitId: string): Campa
   return { ...campaign, pendingDeploy: next };
 }
 
-function clampLoadout(
-  inventory: Record<ItemId, number>,
-  loadout: Record<string, ItemLoadout>,
-): Record<string, ItemLoadout> {
-  const used = emptyInventory();
-  const result: Record<string, ItemLoadout> = {};
-  for (const [rosterId, bag] of Object.entries(loadout)) {
-    const nextBag: ItemLoadout = {};
-    for (const itemId of ITEM_IDS) {
-      const want = Math.max(0, Math.floor(bag[itemId] ?? 0));
-      if (want <= 0) continue;
-      const remain = (inventory[itemId] ?? 0) - used[itemId];
-      const take = Math.min(want, Math.max(0, remain));
-      if (take <= 0) continue;
-      nextBag[itemId] = take;
-      used[itemId] += take;
-    }
-    if (Object.keys(nextBag).length > 0) result[rosterId] = nextBag;
-  }
-  return result;
-}
-
 export function sumLoadout(loadout: Record<string, ItemLoadout>): Record<ItemId, number> {
   const total = emptyInventory();
   for (const bag of Object.values(loadout)) {
@@ -384,33 +378,17 @@ export function sumLoadout(loadout: Record<string, ItemLoadout>): Record<ItemId,
   return total;
 }
 
-/** 未手动配额时：整库带入（保持模拟门槛与旧存档行为） */
+/** 计算本关战斗库存；无手动配额时也会按背包上限自动分配。 */
 export function resolveMissionInventory(
   campaign: CampaignState,
   deployedIds: string[],
 ): { battle: Record<ItemId, number>; remaining: Record<ItemId, number>; loadout: Record<string, ItemLoadout> } {
-  const pending = campaign.pendingLoadout ?? {};
-  const hasManual = Object.values(pending).some((bag) =>
-    ITEM_IDS.some((id) => (bag[id] ?? 0) > 0),
-  );
-  if (!hasManual) {
-    return {
-      battle: { ...emptyInventory(), ...campaign.inventory },
-      remaining: emptyInventory(),
-      loadout: {},
-    };
-  }
-  const filtered: Record<string, ItemLoadout> = {};
-  for (const id of deployedIds) {
-    if (pending[id]) filtered[id] = pending[id]!;
-  }
-  const loadout = clampLoadout(campaign.inventory, filtered);
-  const battle = sumLoadout(loadout);
-  const remaining = emptyInventory();
-  for (const itemId of ITEM_IDS) {
-    remaining[itemId] = Math.max(0, (campaign.inventory[itemId] ?? 0) - battle[itemId]);
-  }
-  return { battle, remaining, loadout };
+  const prepared = prepareMissionInventory(campaign, deployedIds);
+  return {
+    battle: prepared.battle,
+    remaining: prepared.remaining,
+    loadout: prepared.loadout,
+  };
 }
 
 export function adjustLoadoutItem(
@@ -424,11 +402,19 @@ export function adjustLoadoutItem(
   const bag = { ...(loadout[rosterId] ?? {}) };
   const current = bag[itemId] ?? 0;
   const nextVal = Math.max(0, current + delta);
+  const currentWeight = Object.entries(bag).reduce(
+    (sum, [id, count]) => sum + (id === itemId ? 0 : (count ?? 0) * itemWeight(id as ItemId)),
+    0,
+  );
   const usedElsewhere = sumLoadout(
     Object.fromEntries(Object.entries(loadout).filter(([id]) => id !== rosterId)),
   )[itemId];
   const maxTake = Math.max(0, (campaign.inventory[itemId] ?? 0) - usedElsewhere);
-  bag[itemId] = Math.min(nextVal, maxTake);
+  bag[itemId] = Math.min(
+    nextVal,
+    maxTake,
+    Math.max(0, Math.floor((UNIT_BACKPACK_WEIGHT_CAP - currentWeight) / itemWeight(itemId))),
+  );
   if (bag[itemId] === 0) delete bag[itemId];
   if (Object.keys(bag).length === 0) delete loadout[rosterId];
   else loadout[rosterId] = bag;
@@ -736,12 +722,21 @@ function prepareMissionInventory(
     }
     const bag: ItemId[] = [];
     for (const item of requested) {
-      if (bag.length >= UNIT_BACKPACK_CAP || !take(item)) continue;
+      if (
+        bag.length >= UNIT_BACKPACK_CAP ||
+        backpackWeight(bag) + itemWeight(item) > UNIT_BACKPACK_WEIGHT_CAP ||
+        !take(item)
+      ) continue;
       bag.push(item);
     }
     if (!hasManual) {
-      for (const item of ITEM_IDS) {
-        while (bag.length < UNIT_BACKPACK_CAP && take(item)) bag.push(item);
+      const priority = autoLoadoutPriority(unit.type);
+      for (const item of priority) {
+        while (
+          bag.length < UNIT_BACKPACK_CAP &&
+          backpackWeight(bag) + itemWeight(item) <= UNIT_BACKPACK_WEIGHT_CAP &&
+          take(item)
+        ) bag.push(item);
         if (bag.length >= UNIT_BACKPACK_CAP) break;
       }
     }
@@ -757,6 +752,21 @@ function prepareMissionInventory(
     loadout,
     backpacks,
   };
+}
+
+function autoLoadoutPriority(type: RosterUnit["type"]): ItemId[] {
+  switch (type) {
+    case "logistics":
+      return ["ammo_crate", "medkit", "ration", "compressed_ration", "bandage", "water_purification"];
+    case "mg":
+    case "mortar":
+    case "artillery":
+      return ["ammo_crate", "smoke_grenade", "bandage", "ration", "grenade_bundle", "at_charge"];
+    case "tank":
+      return ["at_charge", "smoke_grenade", "ammo_crate", "bandage", "ration"];
+    default:
+      return ["bandage", "ration", "smoke_grenade", "grenade_bundle", "at_charge", "compressed_ration", "water_purification"];
+  }
 }
 
 export function startMission(campaign: CampaignState): MissionStart {
@@ -932,9 +942,11 @@ export function finishMission(
   autoEquip(roster, next.armory, next.attachments);
 
   next.roster = roster;
-  const warehouseItems = inventoryItems(next.inventory);
+  // 结算顺序：历史战利品优先保留，其次是玩家未消耗库存，再处理普通补给；
+  // 溢出仍会显式记录到 outcome.itemsDiscarded，禁止 UI 显示“已获得”但静默丢失。
+  const warehouseItems = [...(finalState.pendingLoot ?? [])];
+  warehouseItems.push(...inventoryItems(next.inventory));
   warehouseItems.push(...inventoryItems(finalState.inventory));
-  warehouseItems.push(...(finalState.pendingLoot ?? []));
   for (const [item, amount] of Object.entries(chapter.resupply)) {
     for (let i = 0; i < (amount ?? 0); i += 1) warehouseItems.push(item as ItemId);
   }

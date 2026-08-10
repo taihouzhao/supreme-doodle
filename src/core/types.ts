@@ -23,13 +23,18 @@ export type ItemId =
   | "medkit"
   | "bandage"
   | "ration"
+  | "compressed_ration"
+  | "water_purification"
+  | "grenade_bundle"
+  | "smoke_grenade"
+  | "ammo_crate"
+  | "signal_flare"
   | "at_charge"
   | "satchel"
   | "arty_support"
   | "field_manual"
   | "plasma_unit"
   | "surgeon_kit"
-  | "compressed_ration"
   | "bangalore"
   | "shaped_charge_elite"
   | "smoke_screen"
@@ -270,12 +275,20 @@ export interface ItemDef {
   splash: boolean;
   /** 使用后降低疲劳 */
   fatigueRelief?: number;
-  /** 使用后获得经验 */
+  /** 旧存档兼容字段；当前物品不会直接发放经验。 */
   expGain?: number;
+  /** 恢复弹药窗口的回合数；不直接增加伤害或兵力。 */
+  ammoRestoreTurns?: number;
+  /** 非伤害战术物品的轻量状态效果。 */
+  utility?: "smoke" | "signal";
   /** 物资在朝鲜战场中的历史背景；只用于叙事与教学，不参与结算。 */
   historicalContext?: string;
   /** 提醒玩家这件物资对应的战术选择。 */
   tacticalUse?: string;
+  /** 消耗品占用的背包负重；重型物资占两点。 */
+  slotWeight?: 1 | 2;
+  /** 资产来源分级；C级只应进入图鉴，不应作为战斗掉落。 */
+  evidenceTier?: "A" | "B" | "C";
 }
 
 export interface Unit {
@@ -301,12 +314,14 @@ export interface Unit {
   /** 地图与详情卡共用的稳定人物身份；旧存档缺省时由 UI 做兼容回退。 */
   portraitGroup?: UnitPortraitGroup;
   portraitIndex?: number;
+  /** 历史人物专用肖像 id；不与普通单位身份池混用。 */
+  portraitId?: string;
   level: number;
   /** 叙事中的固定职务/单位身份；与战斗等级分离。 */
   duty?: string;
   /** 1 级绝对底板（不含等级成长）；归队/降级时重算五维 */
   baseStats?: CommanderStats;
-  /** 已含成长、不含武器/物资被动的将领五维 */
+  /** 已含成长、不含武器加成的将领五维；消耗品不提供永久被动 */
   stats: CommanderStats;
   x: number;
   y: number;
@@ -379,7 +394,7 @@ export interface MissionStats {
   playerEvacuated: number;
   damageDealt: number;
   damageTaken: number;
-  /** 俘虏敌军后转入己方后勤/作战编制的人员数。 */
+  /** 已收容俘虏数量；只计情报与战功，不直接转入己方兵员。 */
   prisonersCaptured?: number;
   /** 已经由玩家部队抵达并解锁的战场地标数量。 */
   landmarksDiscovered?: number;
@@ -435,6 +450,9 @@ export interface GameState {
   evacOpensOnTurn?: number;
   /** 补给点：站上可恢复弹药窗口（与后勤补给共用 supplyRestoredUntil） */
   supplyPoints: Vec2[];
+  /** 战术烟幕/信号的短时标记，回合切换时自动清理。 */
+  smokeTiles?: Array<Vec2 & { until: number }>;
+  signalTiles?: Array<Vec2 & { until: number; faction?: Faction }>;
   inventory: Record<ItemId, number>;
   weather: Weather;
   pending: PendingReinforcement[];
@@ -488,6 +506,8 @@ export interface DamageBreakdown {
   highGround: number;
   /** 史实脚本修正（夜袭 / 弹药耗尽） */
   scripted: number;
+  /** 烟幕对远程火力的遮蔽修正。 */
+  smoke?: number;
   jitter: number;
   total: number;
 }
@@ -545,7 +565,7 @@ export type GameEvent =
     }
   | {
       type: "prisonersCaptured";
-      /** 负责接收俘虏的己方单位，通常为最近的后勤单位。 */
+      /** 负责记录收容的己方单位；兵员不会凭此事件凭空增加。 */
       unitId: string;
       sourceId: string;
       amount: number;

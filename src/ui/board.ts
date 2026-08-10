@@ -439,6 +439,7 @@ export class Board {
     }
 
     this.drawOverlay(state);
+    this.drawTacticalMarkers(state);
 
     if (this.overlay.inspected) {
       const { x, y } = this.overlay.inspected;
@@ -823,7 +824,7 @@ export class Board {
           : null;
       title = `武器范围 · ${weapon?.name ?? "当前武器"}`;
       lines.push(`射程  ${range.min}～${range.max} 格 · 当前 ${distance} 格`);
-      lines.push(`作用  ${effect}${preview && preview.affected.length > 0 ? ` · 波及 ${preview.affected.length} 格` : " · 单点"}`);
+      lines.push(`作用  ${effect}${preview && preview.impactTiles.length > 0 ? ` · 波及 ${preview.impactTiles.length} 格` : " · 单点"}`);
       if (preview && target) {
         lines.push(`目标生命  ${target.hp} → ${preview.defenderHpAfter.min}～${preview.defenderHpAfter.max}`);
         lines.push(
@@ -1044,6 +1045,59 @@ export class Board {
     ctx.fill();
     ctx.stroke();
     ctx.restore();
+  }
+
+  /** 烟幕与信号弹是临时战术状态，直接叠在地图上，避免效果只存在于数值拆解里。 */
+  private drawTacticalMarkers(state: GameState): void {
+    const { ctx, tile } = this;
+    for (const smoke of state.smokeTiles ?? []) {
+      if (smoke.until <= state.turn) continue;
+      const x = smoke.x * tile;
+      const y = smoke.y * tile;
+      ctx.save();
+      const gradient = ctx.createRadialGradient(
+        x + tile / 2,
+        y + tile / 2,
+        tile * 0.08,
+        x + tile / 2,
+        y + tile / 2,
+        tile * 0.7,
+      );
+      gradient.addColorStop(0, "rgba(230, 232, 220, 0.34)");
+      gradient.addColorStop(1, "rgba(156, 166, 156, 0.03)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x, y, tile, tile);
+      ctx.strokeStyle = "rgba(218, 226, 211, 0.7)";
+      ctx.lineWidth = Math.max(1.5, tile * 0.035);
+      ctx.setLineDash([tile * 0.1, tile * 0.08]);
+      ctx.strokeRect(x + tile * 0.12, y + tile * 0.12, tile * 0.76, tile * 0.76);
+      ctx.restore();
+    }
+    for (const signal of state.signalTiles ?? []) {
+      if (signal.until <= state.turn) continue;
+      const cx = signal.x * tile + tile / 2;
+      const cy = signal.y * tile + tile / 2;
+      const color = signal.faction === "enemy" ? "#d88972" : "#f0c85f";
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = Math.max(1.5, tile * 0.035);
+      ctx.setLineDash([tile * 0.08, tile * 0.06]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, tile * 0.31, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (const angle of [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6]) {
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * tile * 0.18, cy + Math.sin(angle) * tile * 0.18);
+        ctx.lineTo(cx + Math.cos(angle) * tile * 0.42, cy + Math.sin(angle) * tile * 0.42);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(cx, cy, tile * 0.07, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   /**

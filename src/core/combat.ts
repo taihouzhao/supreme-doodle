@@ -28,6 +28,10 @@ import type { DamageBreakdown, GameState, Unit } from "./types";
 export const JITTER = BALANCE.jitter;
 export const COUNTER_RATIO = BALANCE.counterRatio;
 
+function tileInSmoke(state: GameState, x: number, y: number): boolean {
+  return (state.smokeTiles ?? []).some((tile) => tile.x === x && tile.y === y && tile.until > state.turn);
+}
+
 /** @deprecated 使用带完整 unit 的 effectiveMaxHp */
 export function effectiveMaxHpLegacy(type: Unit["type"], exp: number): number {
   return UNIT_TYPES[type].maxHp + Math.round(levelish(exp) * 6);
@@ -142,6 +146,10 @@ export function damageComponents(
   const highGround = 1 + attackerTile.attackBonus;
   const scripted =
     nightAssaultBonus(state, attacker, distance) * supplyPenalty(state, attacker);
+  const smoke =
+    distance > 1 && (tileInSmoke(state, attacker.x, attacker.y) || tileInSmoke(state, defender.x, defender.y))
+      ? 0.72
+      : 1;
 
   const total = Math.max(
     BALANCE.minDamage,
@@ -163,6 +171,7 @@ export function damageComponents(
         setup *
         highGround *
         scripted *
+        smoke *
         jitter,
     ),
   );
@@ -186,6 +195,7 @@ export function damageComponents(
     setup,
     highGround,
     scripted,
+    smoke,
     jitter,
     total,
   };

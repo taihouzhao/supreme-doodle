@@ -49,6 +49,7 @@ export function breakdownFactors(breakdown: DamageBreakdown): Factor[] {
     ["架设", breakdown.setup],
     ["居高临下", breakdown.highGround],
     ["战史加成", breakdown.scripted],
+    ["烟幕遮蔽", breakdown.smoke ?? 1],
   ];
   return entries
     .filter(([, value]) => Math.abs(value - 1) > 0.001)
@@ -73,6 +74,7 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
     case "itemUsed": {
       const name = ITEMS[event.item].name;
       if (event.heal > 0) return `${unitLabel(state, event.unitId)} 使用${name}，回复 ${event.heal}`;
+      if (event.damage === 0) return `${unitLabel(state, event.unitId)} 使用${name}，战术效果生效`;
       return `${unitLabel(state, event.unitId)} 使用${name}，造成 ${event.damage} 伤害`;
     }
     case "resupplied": {
@@ -84,7 +86,7 @@ export function describeEvent(state: GameState, event: GameEvent): string | null
       return `${unitLabel(state, event.unitId)} 补充 ${unitLabel(state, event.targetId)}（${parts.join("，")}）`;
     }
     case "prisonersCaptured":
-      return `${unitLabel(state, event.unitId)} 收容 ${event.amount} 名俘虏，转入编制（来自 ${unitLabel(state, event.sourceId)}）`;
+      return `${unitLabel(state, event.unitId)} 收容 ${event.amount} 名俘虏，获得情报与战功（来自 ${unitLabel(state, event.sourceId)}）`;
     case "landmarkDiscovered": {
       const hint = event.tacticalHint ? `；${event.tacticalHint}` : "";
       return `抵达${event.placeName}：战地注记已解锁${hint}`;

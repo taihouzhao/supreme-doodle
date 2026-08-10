@@ -63,6 +63,8 @@ export interface StoryAllySpec {
   equipment?: string;
   /** 真实职务 / 部队身份 */
   duty?: string;
+  /** 历史人物肖像 id；缺省使用阵营身份池。 */
+  portrait?: string;
 }
 
 /** 受约束随机：只允许在预算内替换敌军编成 */

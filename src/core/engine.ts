@@ -186,13 +186,13 @@ export function legalActions(state: GameState): Action[] {
     if (unit.faction === "player") {
       for (const item of ITEM_IDS) {
         if ((state.inventory[item] ?? 0) <= 0) continue;
-        if (unit.backpack && !unit.backpack.includes(item)) continue;
+          if (unit.backpack && !unit.backpack.includes(item)) continue;
         const def = ITEMS[item];
         if (def.targeting === "self") {
           const canHeal = def.heal > 0 && unit.hp < unit.maxHp;
           const canFatigue = (def.fatigueRelief ?? 0) > 0 && unit.fatigue > 0;
-          const canExp = (def.expGain ?? 0) > 0;
-          if (canHeal || canFatigue || canExp) {
+          const canAmmo = (def.ammoRestoreTurns ?? 0) > 0 && (unit.supplyRestoredUntil ?? 0) < state.turn;
+          if (canHeal || canFatigue || canAmmo) {
             actions.push({ kind: "useItem", unitId: unit.id, item });
           }
         } else if (def.targeting === "target") {
@@ -200,6 +200,13 @@ export function legalActions(state: GameState): Action[] {
             if (manhattan(unit, enemy) > def.range) continue;
             if (def.antiArmorOnly && !isMotorized(enemy)) continue;
             actions.push({ kind: "useItem", unitId: unit.id, item, targetId: enemy.id });
+          }
+        } else if (def.utility) {
+          for (let y = 0; y < state.height; y += 1) {
+            for (let x = 0; x < state.width; x += 1) {
+              if (manhattan(unit, { x, y }) > def.range) continue;
+              actions.push({ kind: "useItem", unitId: unit.id, item, to: { x, y } });
+            }
           }
         } else {
           for (const enemy of livingUnits(state, "enemy")) {

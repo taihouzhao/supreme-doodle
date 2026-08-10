@@ -308,7 +308,7 @@ describe("指挥部仪表盘", () => {
 });
 
 describe("物资槽与目标定位", () => {
-  it("七种正库存物资全部生成槽位，不截断末项", () => {
+  it("全部正库存物资都生成槽位，不截断末项", () => {
     const items = ITEM_IDS.map((id) => ({ id, count: 1 }));
     const html = renderItemSlots(items, null, false);
 

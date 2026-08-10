@@ -1,7 +1,7 @@
 import { BALANCE } from "../content/balance";
 import { adaptFromPower, computePlayerPower } from "../content/enemyAdapt";
 import { DEFAULT_CLASS_FOR_TYPE, resolveClassId } from "../content/evolution";
-import { ITEM_IDS } from "../content/items";
+import { ITEM_IDS, ITEMS } from "../content/items";
 import { TERRAIN_CHARS } from "../content/terrain";
 import { addStats, allocatePoints, GROWTH_WEIGHTS, scaleEnemyExp } from "../content/progress";
 import { UNIT_TYPES } from "../content/units";
@@ -59,6 +59,7 @@ export interface RosterUnit {
   keyUnit: boolean;
   commanderKind: Extract<CommanderKind, "companion">;
   commanderName: string;
+  portraitId?: string;
   backpack?: ItemId[];
   level: number;
   duty?: string;
@@ -104,6 +105,20 @@ function parseMap(rows: string[]): { tiles: TerrainId[]; width: number; height: 
   return { tiles, width, height };
 }
 
+function normalizeUnitBackpack(items: ItemId[] | undefined): ItemId[] | undefined {
+  if (items === undefined) return undefined;
+  const result: ItemId[] = [];
+  let weight = 0;
+  for (const item of items) {
+    if (!ITEM_IDS.includes(item) || result.length >= 3) continue;
+    const nextWeight = weight + (ITEMS[item].slotWeight ?? 1);
+    if (nextWeight > 4) continue;
+    result.push(item);
+    weight = nextWeight;
+  }
+  return result;
+}
+
 function makeUnit(params: {
   id: string;
   rosterId: string | null;
@@ -118,6 +133,7 @@ function makeUnit(params: {
   backpack?: ItemId[];
   portraitGroup?: UnitPortraitGroup;
   portraitIndex?: number;
+  portraitId?: string;
   level: number;
   duty?: string;
   baseStats?: CommanderStats;
@@ -149,9 +165,10 @@ function makeUnit(params: {
     commanderKind: params.commanderKind,
     commanderName: params.commanderName,
     eliteTier: params.eliteTier ?? null,
-    backpack: params.backpack !== undefined ? [...params.backpack].slice(0, 3) : undefined,
+    backpack: normalizeUnitBackpack(params.backpack),
     portraitGroup: params.portraitGroup,
     portraitIndex: params.portraitIndex,
+    portraitId: params.portraitId,
     level: params.level,
     duty: params.duty,
     baseStats: params.baseStats,
@@ -245,6 +262,7 @@ export function createMissionState(setup: MissionSetup): GameState {
         commanderName: rosterUnit.commanderName,
         portraitGroup: "pva",
         portraitIndex: nextPortrait("pva"),
+        portraitId: rosterUnit.portraitId,
         level: rosterUnit.level,
         duty: rosterUnit.duty,
         baseStats: rosterUnit.baseStats,
@@ -341,6 +359,7 @@ export function createMissionState(setup: MissionSetup): GameState {
       commanderName: linked?.name ?? profile.commanderName,
       portraitGroup,
       portraitIndex: nextPortrait(portraitGroup),
+      portraitId: linked?.portrait,
       duty,
       x: spec.x,
       y: spec.y,
@@ -426,6 +445,8 @@ export function createMissionState(setup: MissionSetup): GameState {
     evacZone: mission.evacZone.map((v) => ({ ...v })),
     evacOpensOnTurn: mission.victory.evacOpensOnTurn ?? 0,
     supplyPoints: (mission.supplyPoints ?? []).map((v) => ({ ...v })),
+    smokeTiles: [],
+    signalTiles: [],
     inventory: { ...emptyInventory(), ...inventory },
     weather: mission.weather
       ? weatherRng.pick(mission.weather.options)
@@ -481,6 +502,8 @@ export function movementBudget(
 
 export function beginPhase(state: GameState, faction: Unit["faction"]): void {
   state.phase = faction;
+  state.smokeTiles = (state.smokeTiles ?? []).filter((tile) => tile.until > state.turn);
+  state.signalTiles = (state.signalTiles ?? []).filter((tile) => tile.until > state.turn);
   for (const unit of state.units) {
     if (unit.faction !== faction || !unit.alive || unit.evacuated) continue;
     unit.mpLeft = movementBudget(unit, state.weather, inventoryForUnit(unit, state.inventory));

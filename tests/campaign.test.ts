@@ -5,9 +5,12 @@ import { LOGISTICS, levelFromExp } from "../src/content/units";
 import {
   createCampaign,
   finishMission,
+  UNIT_BACKPACK_CAP,
+  UNIT_BACKPACK_WEIGHT_CAP,
   personnelTransferBounds,
   startMission,
   transferPersonnel,
+  WAREHOUSE_CAP,
 } from "../src/core/campaign";
 import { evaluateVictory } from "../src/core/mission";
 import { playCampaign } from "../src/sim/runner";
@@ -156,5 +159,34 @@ describe("战役继承", () => {
     expect(campaign.roster.every((u) => !/\d/.test(u.name))).toBe(true);
     const commanders = campaign.roster.map((u) => u.name.replace(/(步兵|机枪|迫击炮|炮兵|坦克|后勤)$/, ""));
     expect(new Set(commanders).size).toBe(commanders.length);
+  });
+
+  it("出击背包同时受件数和重量约束", () => {
+    const campaign = createCampaign("chapter-one", 5);
+    const first = campaign.roster[0]!;
+    campaign.inventory.ammo_crate = 4;
+    campaign.pendingLoadout = {
+      [first.id]: { ammo_crate: 4, medkit: 1 },
+    };
+    const started = startMission(campaign);
+    const deployed = started.campaign.roster.find((unit) => unit.id === first.id)!;
+    const weight = deployed.backpack?.reduce(
+      (sum, item) => sum + (item === "ammo_crate" ? 2 : 1),
+      0,
+    ) ?? 0;
+    expect(deployed.backpack?.length ?? 0).toBeLessThanOrEqual(UNIT_BACKPACK_CAP);
+    expect(weight).toBeLessThanOrEqual(UNIT_BACKPACK_WEIGHT_CAP);
+    expect(started.state.inventory.ammo_crate).toBeLessThanOrEqual(2);
+  });
+
+  it("仓库溢出会显式记录而非静默增加", () => {
+    const campaign = createCampaign("chapter-one", 6);
+    const started = startMission(campaign);
+    started.state.status = "won";
+    started.state.pendingLoot = Array.from({ length: WAREHOUSE_CAP + 3 }, () => "bandage");
+    const { campaign: next, outcome } = finishMission(started.campaign, started.state);
+    const retained = Object.values(next.inventory).reduce((sum, count) => sum + count, 0);
+    expect(retained).toBeLessThanOrEqual(WAREHOUSE_CAP);
+    expect(outcome.itemsDiscarded?.length).toBeGreaterThan(0);
   });
 });

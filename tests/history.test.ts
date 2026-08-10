@@ -9,7 +9,9 @@ import { WEAPONS, WEAPON_HISTORY, weaponFits, weaponForEquipment } from "../src/
 import { createCampaign, startMission } from "../src/core/campaign";
 import {
   BRIDGE_ICON,
+  ATTACHMENT_ICON,
   COMMANDER_PORTRAIT,
+  ITEM_ICON,
   RANK_INSIGNIA,
   TERRAIN_ICON,
   TERRAIN_ICON_SNOW,
@@ -122,6 +124,15 @@ describe("历史战役内容", () => {
       expect(WEAPON_HISTORY[id as keyof typeof WEAPON_HISTORY].origin).toBeTruthy();
       expect(WEAPON_HISTORY[id as keyof typeof WEAPON_HISTORY].caliber).toBeTruthy();
       expect(publicAssetExists(WEAPON_ICON[id as keyof typeof WEAPON_ICON])).toBe(true);
+    }
+  });
+
+  it("新增战术物资与附件都有可加载的图标", () => {
+    for (const icon of Object.values(ITEM_ICON)) {
+      expect(publicAssetExists(icon)).toBe(true);
+    }
+    for (const icon of Object.values(ATTACHMENT_ICON)) {
+      expect(publicAssetExists(icon)).toBe(true);
     }
   });
 

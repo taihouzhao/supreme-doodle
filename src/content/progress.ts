@@ -7,24 +7,21 @@ export type StatKey = keyof CommanderStats;
 /** 数值成长曲线：只使用 EXP 与 Lv.，不维护额外的经验称谓。 */
 
 export const PROGRESS = {
-  maxLevel: 20,
+  /** 十二关战役的可读上限；后续章节可在新进度表中扩展，不复用旧的虚高20级。 */
+  maxLevel: 10,
   /** 每级属性总点数（按兵种成长权重分配） */
   pointsPerLevel: 3,
   /** 等级对伤害的额外温和加成，避免完全吃掉属性曲线 */
   attackPerLevel: 0.018,
   defensePerLevel: 0.012,
-  /** 经验：造成伤害与击溃；歼灭奖励明显高于单次擦伤。 */
-  expPerDamage: 0.4,
-  expPerRout: 40,
+  /** 经验：所有有效伤害统一口径，歼灭奖励明显高于单次擦伤。 */
+  expPerDamage: 0.1,
+  expPerRout: 6,
   /** 升级曲线：升到 level+1 所需累计经验 */
   expForLevel(level: number): number {
     if (level <= 1) return 0;
-    // 平滑递增：L2≈45，L5≈280，L10≈1100，L15≈2600，L20≈4800
-    let total = 0;
-    for (let l = 2; l <= level; l += 1) {
-      total += Math.round(36 + (l - 1) * 22 + (l - 1) * (l - 1) * 1.1);
-    }
-    return total;
+    const thresholds = [0, 0, 60, 150, 270, 420, 600, 810, 1050, 1320, 1620];
+    return thresholds[Math.min(PROGRESS.maxLevel, Math.max(1, Math.floor(level)))] ?? thresholds.at(-1)!;
   },
 };
 
@@ -70,7 +67,7 @@ export function expProgress(exp: number): { level: number; into: number; need: n
 export function allocatePoints(
   weights: Record<StatKey, number>,
   points: number,
-  salt = 0,
+  _salt = 0,
 ): CommanderStats {
   const keys = Object.keys(weights) as StatKey[];
   const totalW = keys.reduce((s, k) => s + weights[k], 0);
@@ -86,7 +83,8 @@ export function allocatePoints(
   let left = points - keys.reduce((s, k) => s + base[k], 0);
   const order = keys
     .map((k, i) => ({ k, frac: raw[i]! - Math.floor(raw[i]!), i }))
-    .sort((a, b) => b.frac - a.frac || ((a.i + salt) % keys.length) - ((b.i + salt) % keys.length));
+    // 余数相同按固定字段顺序分配，避免“分几次升级”改变最终属性。
+    .sort((a, b) => b.frac - a.frac || a.i - b.i);
   for (let n = 0; n < left; n += 1) {
     const pick = order[n % order.length]!.k;
     base[pick] += 1;
@@ -109,12 +107,12 @@ export function statsAtLevel(
   base: CommanderStats,
   type: UnitTypeId,
   level: number,
-  salt = 0,
+  _salt = 0,
 ): CommanderStats {
   let stats = { ...base };
   const gains = Math.max(0, level - 1) * PROGRESS.pointsPerLevel;
   if (gains > 0) {
-    stats = addStats(stats, allocatePoints(GROWTH_WEIGHTS[type], gains, salt));
+    stats = addStats(stats, allocatePoints(GROWTH_WEIGHTS[type], gains));
   }
   return stats;
 }

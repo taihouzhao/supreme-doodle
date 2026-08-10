@@ -105,6 +105,28 @@ describe("属性系统修复", () => {
     expect(sum(unit.stats)).toBeLessThan(sum(at4));
   });
 
+  it("同一最终经验不受跳级或逐级升级路径影响", () => {
+    const base = { ...BASE_STATS };
+    const jump = bareUnit({
+      id: "jump",
+      type: "rifle",
+      commanderName: "路径测试将",
+      level: 1,
+      exp: 0,
+      baseStats: base,
+    });
+    const staged = structuredClone(jump);
+    jump.exp = PROGRESS.expForLevel(3);
+    syncLevelFromExp(jump);
+    staged.exp = PROGRESS.expForLevel(2);
+    syncLevelFromExp(staged);
+    staged.exp = PROGRESS.expForLevel(3);
+    syncLevelFromExp(staged);
+    expect(jump.level).toBe(3);
+    expect(staged.level).toBe(3);
+    expect(jump.stats).toEqual(staged.stats);
+  });
+
   it("开局敌军已应用关卡经验缩放并带有底板", () => {
     const roster = [testRosterUnit("r0", "高大全步兵", "rifle", { keyUnit: true, level: 2 })];
     const mission = CHAPTER_ONE.missions[9]!; // m10

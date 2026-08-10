@@ -7,13 +7,14 @@ import { COUNTER_RATIO, canCounter, computeDamage, itemDamage, refreshMaxHp } fr
 import {
   canAttack,
   findPath,
+  inBounds,
   livingUnits,
   manhattan,
   orthogonalNeighbours,
   pathCost,
   resupplyOutcome,
   resupplyTargets,
-  secondaryAttackTiles,
+  attackImpactPlan,
   unitAt,
 } from "./grid";
 import { isEvacTile } from "./mission";
@@ -182,8 +183,8 @@ export function performMove(state: GameState, unit: Unit, to: Vec2, events: Game
 }
 
 /**
- * 敌军溃散后不再自动推进。若条件允许，按确定性随机收容少量俘虏，
- * 优先进入最近的后勤队，其次才进入发动攻击的作战单位。
+ * 敌军溃散后不再自动推进。收容俘虏只形成情报与战功记录，不直接改写己方兵力；
+ * 人员补充必须通过后勤部队转移或归队结算，避免出现“俘虏瞬间变成己方编制”的历史和守恒错误。
  */
 function capturePrisoners(
   state: GameState,
@@ -197,24 +198,11 @@ function capturePrisoners(
   state.rng = chance.state;
   if (chance.value > BALANCE.prisoners.chance) return;
 
-  const recipients = livingUnits(state, "player")
-    .filter((unit) => unit.type === "logistics" || unit.id === attacker.id)
-    .sort((a, b) => {
-      const aRoom = a.maxHp - a.hp;
-      const bRoom = b.maxHp - b.hp;
-      return bRoom - aRoom || manhattan(a, defender) - manhattan(b, defender) || a.id.localeCompare(b.id);
-    });
-  const recipient = recipients.find((unit) => unit.hp < unit.maxHp);
-  if (!recipient) return;
-
   const draw = nextInt(state.rng, BALANCE.prisoners.min, BALANCE.prisoners.max);
   state.rng = draw.state;
-  const amount = Math.min(draw.value, recipient.maxHp - recipient.hp);
-  if (amount <= 0) return;
-
-  recipient.hp += amount;
+  const amount = draw.value;
   state.stats.prisonersCaptured = (state.stats.prisonersCaptured ?? 0) + amount;
-  events.push({ type: "prisonersCaptured", unitId: recipient.id, sourceId: defender.id, amount });
+  events.push({ type: "prisonersCaptured", unitId: attacker.id, sourceId: defender.id, amount });
 }
 
 export function performAttack(
@@ -260,22 +248,25 @@ export function performAttack(
   const defenderRouted = defender.hp <= 0;
   const attackerRouted = attacker.hp <= 0;
 
-  for (const tile of secondaryAttackTiles(state, attacker, defender)) {
-    const victim = unitAt(state, tile.x, tile.y);
+  for (const impact of attackImpactPlan(state, attacker, defender)) {
+    const victim = unitAt(state, impact.at.x, impact.at.y);
     if (!victim || !victim.alive || victim.id === defender.id) continue;
-    const { pattern } = weaponPattern(attacker.weapon, attacker.type);
-    const multiplier = pattern.kind === "single" ? 0 : pattern.multiplier;
     const friendlyMultiplier = secondaryDamageMultiplier(attacker.faction, victim.faction);
-    const secondaryDamage = Math.max(
-      1,
-      Math.round(main.damage * multiplier * friendlyMultiplier),
+    const components = impact.components.filter(
+      (component) => victim.faction !== attacker.faction || component.friendlyFire,
+    );
+    if (components.length === 0) continue;
+    const secondaryDamage = components.reduce(
+      (sum, multiplier) =>
+        sum + Math.max(1, Math.round(main.damage * multiplier.multiplier * friendlyMultiplier)),
+      0,
     );
     const hpFrom = victim.hp;
     victim.hp = Math.max(0, victim.hp - secondaryDamage);
     const routed = victim.hp <= 0;
     secondaryImpacts.push({
       unitId: victim.id,
-      at: { ...tile },
+      at: { ...impact.at },
       damage: secondaryDamage,
       hpFrom,
       hpTo: victim.hp,
@@ -284,6 +275,12 @@ export function performAttack(
     });
     if (victim.faction === "player") state.stats.damageTaken += secondaryDamage;
     else if (attacker.faction === "player") state.stats.damageDealt += secondaryDamage;
+    const promote = grantExpSilent(
+      attacker,
+      secondaryDamage * PROGRESS.expPerDamage,
+      state,
+    );
+    if (promote) pendingPromotes.push(promote);
     if (routed) secondaryRouted.push(victim);
   }
 
@@ -315,24 +312,6 @@ export function performAttack(
     capturePrisoners(state, attacker, defender, events);
   }
 
-  const splashRatio = WEAPONS[attacker.weapon]?.splashRatio ?? 0;
-  if (splashRatio > 0) {
-    for (const pos of orthogonalNeighbours(defenderFrom)) {
-      const splashTarget = unitAt(state, pos.x, pos.y);
-      if (!splashTarget || splashTarget.faction === attacker.faction || !splashTarget.alive) continue;
-      const splashDamage = Math.max(1, Math.round(main.damage * splashRatio));
-      splashTarget.hp -= splashDamage;
-      if (attacker.faction === "player") state.stats.damageDealt += splashDamage;
-      else state.stats.damageTaken += splashDamage;
-      const promote = grantExpSilent(attacker, splashDamage * PROGRESS.expPerDamage, state);
-      if (promote) events.push(promote);
-      if (splashTarget.hp <= 0) {
-        routUnit(state, splashTarget, events);
-        grantExp(attacker, PROGRESS.expPerRout, state, events);
-        capturePrisoners(state, attacker, splashTarget, events);
-      }
-    }
-  }
   if (attackerRouted) {
     routUnit(state, attacker, events);
     grantExp(defender, PROGRESS.expPerRout, state, events);
@@ -441,8 +420,8 @@ export function performItem(
   if (def.targeting === "self") {
     const canHeal = def.heal > 0 && unit.hp < unit.maxHp;
     const canFatigue = (def.fatigueRelief ?? 0) > 0 && unit.fatigue > 0;
-    const canExp = (def.expGain ?? 0) > 0;
-    if (!canHeal && !canFatigue && !canExp) return false;
+    const canAmmo = (def.ammoRestoreTurns ?? 0) > 0 && (unit.supplyRestoredUntil ?? 0) < state.turn;
+    if (!canHeal && !canFatigue && !canAmmo) return false;
     if (canHeal) {
       heal = Math.min(def.heal, unit.maxHp - unit.hp);
       unit.hp += heal;
@@ -450,8 +429,8 @@ export function performItem(
     if (canFatigue) {
       addFatigue(unit, -(def.fatigueRelief ?? 0));
     }
-    if (canExp) {
-      grantExp(unit, def.expGain ?? 0, state, events);
+    if (canAmmo) {
+      unit.supplyRestoredUntil = state.turn + (def.ammoRestoreTurns ?? 0);
     }
     targetIds.push(unit.id);
   } else if (def.targeting === "target") {
@@ -463,6 +442,8 @@ export function performItem(
     target.hp -= dealt;
     damage += dealt;
     targetIds.push(target.id);
+    const promote = grantExpSilent(unit, dealt * PROGRESS.expPerDamage, state);
+    if (promote) events.push(promote);
     if (target.hp <= 0) {
       routUnit(state, target, events);
       grantExp(unit, PROGRESS.expPerRout, state, events);
@@ -471,8 +452,19 @@ export function performItem(
   } else {
     const center = usage.to;
     if (!center) return false;
+    if (!inBounds(state, center.x, center.y)) return false;
     if (manhattan(unit, center) > def.range) return false;
     const tiles = def.splash ? [center, ...orthogonalNeighbours(center)] : [center];
+    if (def.utility) {
+      if (def.utility === "smoke") {
+        state.smokeTiles = (state.smokeTiles ?? []).filter((tile) => tile.x !== center.x || tile.y !== center.y);
+        state.smokeTiles.push({ ...center, until: state.turn + 1 });
+      } else {
+        state.signalTiles = (state.signalTiles ?? []).filter((tile) => tile.x !== center.x || tile.y !== center.y);
+        state.signalTiles.push({ ...center, until: state.turn + 1, faction: unit.faction });
+      }
+      targetIds.push(`${center.x},${center.y}`);
+    }
     const intellectScale =
       1 + Math.max(0, effectiveStats(unit, inventoryForUnit(unit, state.inventory)).intellect - 40) * 0.005;
     for (const tile of tiles) {
@@ -482,6 +474,8 @@ export function performItem(
       victim.hp -= dealt;
       damage += dealt;
       targetIds.push(victim.id);
+      const promote = grantExpSilent(unit, dealt * PROGRESS.expPerDamage, state);
+      if (promote) events.push(promote);
       if (victim.hp <= 0) {
         routUnit(state, victim, events);
         grantExp(unit, PROGRESS.expPerRout, state, events);

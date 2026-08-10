@@ -125,3 +125,14 @@ Create one square, top-down orthographic terrain tile for a serious Korean War o
 ```text
 Create one square, top-down orthographic WINTER terrain tile for a serious Korean War operational tactics game, winter Korea circa 1950. A narrow partly icy blue-gray river flows clearly from the LEFT edge to the RIGHT edge, with visible current lanes, broken thin ice and rocky snow-lined banks that connect seamlessly at both horizontal edges. A single-lane weathered timber-and-packed-snow military road bridge crosses from the TOP edge to the BOTTOM edge, with the snowy dirt road connecting seamlessly at both vertical edges. The bridge deck must visibly sit above and perpendicular to the water, with simple timber rails, abutments, wheel-worn snow and restrained frost. Hand-painted realistic game texture, muted cold gray-blue, off-white, umber and charcoal palette, crisp tactical readability at small size, even overhead lighting, no cast perspective, no units, no vehicles, no people, no text, no symbols, no border, no grid lines, no UI, no transparent background. The tile must read correctly when cropped square and downscaled to 128x128.
 ```
+# 资产视觉复核（2026-08-10）
+
+本轮复核结论：旧版历史将领头像整体偏棕褐、接近“老照片复原”，在移动端缩小后脸部层次和阵营区分不足。新资产采用冷暖受控的战场地图 gouache + ink 风格，保留 1950—1953 年制服与器材约束，但明确标注为“风格化重建（非原照）”。
+
+已加入 v3 派生资产：
+
+- 指挥官：洪学智、崔建功、杨根思、黄继光；四张图均为 768×768，固定方形裁切。
+- 物品：压缩干粮、净水片、手榴弹束、烟幕弹、弹药箱、信号弹；六张图均为 512×512。
+- 附件复用：野战电话与防寒被服使用独立图标，其他附件只复用语义接近的器材图，不重复制造无意义的相似图。
+
+生成母版保留在本地工作目录，不进入线上静态产物；游戏只引用切分后的派生文件。任何新人物仍须同时具备历史登记、战时职务、肖像 id 和关卡绑定，不能用首字 fallback 伪装为完整资产。

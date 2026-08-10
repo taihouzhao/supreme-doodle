@@ -378,7 +378,8 @@ describe("击溃后的站位", () => {
       if (captured) {
         expect(trialAttacker.exp).toBeGreaterThan(expBefore);
         expect(state.stats.prisonersCaptured).toBeGreaterThan(0);
-        expect(state.units.find((unit) => unit.id === logistics.id)!.hp).toBeGreaterThan(1);
+        // 俘虏只转为情报与战功记录；己方兵员仍必须通过后勤转移补充。
+        expect(state.units.find((unit) => unit.id === logistics.id)!.hp).toBe(1);
       }
     }
     expect(captured).toBe(true);

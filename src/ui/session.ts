@@ -749,6 +749,14 @@ export class Session {
     if (!battle || !unit || !item || unit.hasActed || this.state.fxBusy) return tiles;
     const def = ITEMS[item];
     if (def.targeting === "self") return tiles;
+    if (def.utility) {
+      for (let y = 0; y < battle.height; y += 1) {
+        for (let x = 0; x < battle.width; x += 1) {
+          if (manhattan(unit, { x, y }) <= def.range) tiles.add(y * battle.width + x);
+        }
+      }
+      return tiles;
+    }
     for (const enemy of livingUnits(battle, "enemy")) {
       if (manhattan(unit, enemy) > def.range) continue;
       if (def.antiArmorOnly && !isMotorized(enemy)) continue;
@@ -1061,7 +1069,7 @@ function combatNotice(state: GameState, events: GameEvent[]): string | null {
   const prisoners = events
     .filter((e): e is Extract<GameEvent, { type: "prisonersCaptured" }> => e.type === "prisonersCaptured")
     .reduce((sum, event) => sum + event.amount, 0);
-  if (prisoners > 0) parts.push(`收容俘虏 ${prisoners} 人，已补入编制`);
+  if (prisoners > 0) parts.push(`收容俘虏 ${prisoners} 人，已转为情报与战功；兵员仍需后勤补充`);
   const loot = events.filter((e): e is Extract<GameEvent, { type: "lootSecured" }> => e.type === "lootSecured");
   if (loot.length > 0) parts.push(`战利品 ${loot.length} 件，战后统一结算`);
 

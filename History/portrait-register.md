@@ -27,6 +27,10 @@
 | `wayne-smith` | 韦恩·史密斯 | 美第7步兵师师长 | 少将 | `commanders/wayne-smith.png` | 风格化重建（非原照） |
 | `arthur-trudeau` | 阿瑟·特鲁多 | 美第7步兵师师长 | 少将 | `commanders/arthur-trudeau.png` | 风格化重建（非原照） |
 | `maxwell-taylor` | 马克斯韦尔·泰勒 | 美第8集团军司令 | 中将 | `commanders/maxwell-taylor.png` | 风格化重建（非原照） |
+| `hong-xuezhi` | 洪学智 | 志愿军副司令员兼后方勤务司令 | 职务制（无军衔） | `commanders/hong-xuezhi-v3.png` | V3 风格化重建（非原照） |
+| `cui-jianggong` | 崔建功 | 志愿军第15军第45师师长 | 职务制（无军衔） | `commanders/cui-jianggong-v3.png` | V3 风格化重建（非原照） |
+| `yang-gensi` | 杨根思 | 志愿军第20军第58师第172团第3连连长 | 职务制（无军衔） | `commanders/yang-gensi-v3.png` | V3 风格化重建（非原照） |
+| `huang-jiguang` | 黄继光 | 志愿军第15军第45师第135团第2营通讯员 | 职务制（无军衔） | `commanders/huang-jiguang-v3.png` | V3 风格化重建（非原照） |
 
 ## 虚构主角
 

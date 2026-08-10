@@ -330,6 +330,52 @@ export function secondaryAttackTiles(state: GameState, attacker: Unit, defender:
   return tiles;
 }
 
+/**
+ * 攻击主目标以外的实际命中计划。
+ *
+ * pattern 和 splashRatio 都会产生独立的一段伤害；当两者落在同一格时保留
+ * 两段倍率，结算与预览都按同一组倍率逐段取整，避免出现“预览一格、实战两次”
+ * 的反馈偏差（BM-13 等武器尤其容易触发）。
+ */
+export interface AttackImpactPlan {
+  at: Vec2;
+  components: Array<{ multiplier: number; friendlyFire: boolean }>;
+}
+
+export function attackImpactPlan(
+  state: GameState,
+  attacker: Unit,
+  defender: Unit,
+): AttackImpactPlan[] {
+  const pattern = weaponPattern(attacker.weapon, attacker.type).pattern;
+  const byTile = new Map<string, AttackImpactPlan>();
+  const add = (at: Vec2, multiplier: number, friendlyFire = true) => {
+    if (!inBounds(state, at.x, at.y)) return;
+    if (at.x === defender.x && at.y === defender.y) return;
+    if (multiplier <= 0) return;
+    const key = `${at.x},${at.y}`;
+    const existing = byTile.get(key);
+    if (existing) existing.components.push({ multiplier, friendlyFire });
+    else byTile.set(key, { at: { ...at }, components: [{ multiplier, friendlyFire }] });
+  };
+
+  if (pattern.kind !== "single") {
+    for (const at of secondaryAttackTiles(state, attacker, defender)) {
+      add(at, pattern.multiplier, true);
+    }
+  }
+
+  const splashRatio = WEAPONS[attacker.weapon]?.splashRatio ?? 0;
+  if (splashRatio > 0) {
+    for (const at of orthogonalNeighbours({ x: defender.x, y: defender.y })) {
+      // BM-13 等火箭/炮击的正交溅射只对敌军生效；pattern 本身仍按武器类型
+      // 处理友伤，二者叠加时预览与结算保持逐段一致。
+      add(at, splashRatio, false);
+    }
+  }
+  return [...byTile.values()];
+}
+
 /** 后勤正交相邻的存活友军（含已满员，供 UI 提示） */
 export function adjacentFriendlyUnits(state: GameState, unit: Unit): Unit[] {
   if (!unit.alive || unit.evacuated) return [];
@@ -418,7 +464,7 @@ export function coordinationAllies(state: GameState, attacker: Unit, defender: U
 
 /** 协同来源明细：普通友军 4 格，电话静止中继 5 格，SCR-300 移动中继 7 格。 */
 export function coordinationSources(state: GameState, attacker: Unit, defender: Unit): string[] {
-  return livingUnits(state, attacker.faction)
+  const sources = livingUnits(state, attacker.faction)
     .filter((ally) => {
       if (ally.id === attacker.id || ally.type === "logistics" && !coordinationRelay(ally)) return false;
       const relay = coordinationRelay(ally);
@@ -436,6 +482,15 @@ export function coordinationSources(state: GameState, attacker: Unit, defender: 
       const relay = coordinationRelay(ally);
       return relay ? `${ally.name}·${relay.label}` : `${ally.name}·普通火力呼应`;
     });
+  const signal = (state.signalTiles ?? []).find(
+    (tile) =>
+      tile.until > state.turn &&
+      (!tile.faction || tile.faction === attacker.faction) &&
+      manhattan(tile, defender) <= 2 &&
+      (manhattan(tile, attacker) <= 5 || manhattan(tile, defender) <= 1),
+  );
+  if (signal) sources.push("信号弹·临时校射");
+  return sources;
 }
 
 /**

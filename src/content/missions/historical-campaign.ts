@@ -286,6 +286,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     historicalNote: "Fox连始终守住死鹰岭通路；本关只抽象志愿军第59师方向在主补给路附近设置的临时路障，结束点是接到脱离命令，不宣称最终控制Toktong Pass。",
     commanders: [
       pva("song-shilun", "宋时轮", "第9兵团司令员", "中国人民志愿军第9兵团", "song-shilun"),
+      pva("yang-gensi", "杨根思", "第20军第58师第172团第3连连长", "中国人民志愿军第20军第58师", "yang-gensi"),
       un("oliver-smith", "奥利弗·史密斯", "师长", "美国海军陆战队第1师", "oliver-smith", "少将", "us-major-general"),
       un("edward-almond", "爱德华·阿尔蒙德", "第10军军长", "美国陆军第10军", undefined, "少将（1950年11月）", "us-major-general"),
     ],
@@ -313,7 +314,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     playerSpawns: [{ x: 5, y: 6 }, { x: 6, y: 6 }, { x: 7, y: 6 }, { x: 11, y: 7 }, { x: 12, y: 7 }, { x: 6, y: 7 }, { x: 7, y: 7 }, { x: 12, y: 8 }],
     storyAllies: [
-      { commander: "杨根思", type: "rifle", level: 2, weapon: "zhongzheng", duty: "第20军58师172团3连连长" },
+      { commander: "杨根思", type: "rifle", level: 2, weapon: "zhongzheng", portrait: "yang-gensi", duty: "第20军58师172团3连连长" },
       { commander: "李玉安", type: "mg", level: 2, weapon: "zb26", duty: "冰雕连火力骨干" },
       { commander: "陈德忠", type: "logistics", level: 2, weapon: "supply_cart", duty: "第9兵团极寒辎重配属" },
     ],
@@ -370,6 +371,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     historicalNote: "关卡表现第三次战役西线的一段渡河与山口突破。",
     commanders: [
       pva("peng-dehuai", "彭德怀", "司令员兼政治委员", "中国人民志愿军", "peng-dehuai"),
+      pva("hong-xuezhi", "洪学智", "副司令员兼后方勤务司令", "中国人民志愿军后方勤务司令部", "hong-xuezhi"),
       un("matthew-ridgway", "马修·李奇微", "第8集团军司令", "美国陆军第8集团军", "matthew-ridgway", "中将", "us-lieutenant-general"),
     ],
     brief: "从北岸夜渡临津江，先夺取渡河带，再沿狭窄走廊向南突破议政府北侧山口。守军正向纵深收缩，必须在其完成部署前连续占领两个节点。",
@@ -727,6 +729,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     historicalNote: "棋盘把两个主要高地、坑道口和补给线压缩在同一战术视图。",
     commanders: [
       pva("qin-jiwei", "秦基伟", "第15军军长", "中国人民志愿军第15军", "qin-jiwei"),
+      pva("cui-jianggong", "崔建功", "第45师师长", "中国人民志愿军第15军第45师", "cui-jianggong"),
+      pva("huang-jiguang", "黄继光", "第45师第135团第2营通讯员", "中国人民志愿军第15军第45师", "huang-jiguang"),
       un("wayne-smith", "韦恩·史密斯", "师长", "美国陆军第7步兵师", undefined, "少将", "us-major-general"),
     ],
     brief: "开局地表阵地已经失守。依托两个坑道后口组织反击，先夺回597.9和537.7北山，再顶住由金化方向分波次压上的敌军；不能只躲在坑道里等待。",
@@ -753,8 +757,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     playerSpawns: [{ x: 8, y: 5 }, { x: 11, y: 5 }, { x: 6, y: 4 }, { x: 13, y: 4 }, { x: 7, y: 5 }, { x: 12, y: 5 }, { x: 9, y: 6 }, { x: 10, y: 6 }],
     storyAllies: [
-      { commander: "黄继光", type: "rifle", level: 4, weapon: "ppsh50", duty: "15军45师135团2营通讯员" },
-      { commander: "邱少云", type: "mg", level: 4, weapon: "dp28", duty: "15军87团9连战士" },
+      { commander: "黄继光", type: "rifle", level: 4, weapon: "ppsh50", portrait: "huang-jiguang", duty: "15军45师135团2营通讯员" },
+      { commander: "胡修道", type: "mg", level: 4, weapon: "dp28", duty: "12军31师91团机枪班长" },
       { commander: "孙生禄", type: "logistics", level: 3, weapon: "supply_cart", duty: "坑道补给配属" },
     ],
     equipmentEra: "late" as const,

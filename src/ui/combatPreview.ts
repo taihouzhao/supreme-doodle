@@ -4,9 +4,9 @@ import {
   canCounter,
   damageComponents,
 } from "../core/combat";
-import { secondaryAttackTiles } from "../core/grid";
+import { attackImpactPlan } from "../core/grid";
 import { secondaryDamageMultiplier, weaponPattern } from "../content/weapons";
-import type { DamageBreakdown, GameState, Unit } from "../core/types";
+import type { DamageBreakdown, GameState, Unit, Vec2 } from "../core/types";
 
 export interface DamageRange {
   min: number;
@@ -24,6 +24,8 @@ export interface AttackPreview {
   counterConditional: boolean;
   rout: "none" | "possible" | "certain";
   breakdown: DamageBreakdown;
+  /** 主目标之外由武器形状覆盖的全部格子，包含当前为空的落点。 */
+  impactTiles: Vec2[];
   affected: {
     unitId: string;
     damage: DamageRange;
@@ -56,6 +58,33 @@ function rangeFor(
   };
 }
 
+function impactRangeFor(
+  state: GameState,
+  attacker: Unit,
+  defender: Unit,
+  components: Array<{ multiplier: number; friendlyFire: boolean }>,
+  victim: Unit,
+): DamageRange | null {
+  const applicable = components.filter(
+    (component) => victim.faction !== attacker.faction || component.friendlyFire,
+  );
+  if (applicable.length === 0) return null;
+  const friendlyScale = secondaryDamageMultiplier(attacker.faction, victim.faction);
+  const damageAt = (jitter: number): number => {
+    const main = damageComponents(state, attacker, defender, jitter).total;
+    return applicable.reduce(
+      (sum, component) =>
+        sum + Math.max(1, Math.round(main * component.multiplier * friendlyScale)),
+      0,
+    );
+  };
+  return {
+    min: damageAt(JITTER.min),
+    expected: damageAt(1),
+    max: damageAt(JITTER.max),
+  };
+}
+
 /** 与真实结算共用 damageComponents，不消耗随机流。 */
 export function buildAttackPreview(
   state: GameState,
@@ -71,13 +100,15 @@ export function buildAttackPreview(
       ? rangeFor(state, defender, attacker, COUNTER_RATIO).range
       : null;
   const pattern = weaponPattern(attacker.weapon, attacker.type);
-  const affected = secondaryAttackTiles(state, attacker, defender)
-    .map((tile) => state.units.find((unit) => unit.alive && unit.x === tile.x && unit.y === tile.y))
-    .filter((unit): unit is Unit => Boolean(unit))
-    .map((unit) => {
-      const multiplier = pattern.pattern.kind === "single" ? 0 : pattern.pattern.multiplier;
-      const friendlyScale = secondaryDamageMultiplier(attacker.faction, unit.faction);
-      const range = rangeFor(state, attacker, defender, multiplier * friendlyScale).range;
+  const impactPlan = attackImpactPlan(state, attacker, defender);
+  const affected = impactPlan
+    .map((impact) => {
+      const unit = state.units.find(
+        (candidate) => candidate.alive && candidate.x === impact.at.x && candidate.y === impact.at.y,
+      );
+      if (!unit) return null;
+      const range = impactRangeFor(state, attacker, defender, impact.components, unit);
+      if (!range) return null;
       return {
         unitId: unit.id,
         damage: range,
@@ -88,7 +119,8 @@ export function buildAttackPreview(
         },
         friendly: unit.faction === attacker.faction,
       };
-    });
+    })
+    .filter((impact): impact is NonNullable<typeof impact> => Boolean(impact));
 
   return {
     attackerId: attacker.id,
@@ -103,6 +135,7 @@ export function buildAttackPreview(
     counterConditional: Boolean(counter && possibleRout),
     rout: certainRout ? "certain" : possibleRout ? "possible" : "none",
     breakdown: main.breakdown,
+    impactTiles: impactPlan.map((impact) => ({ ...impact.at })),
     affected,
     effectProfile: pattern.profile,
   };

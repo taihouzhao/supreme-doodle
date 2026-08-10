@@ -1,10 +1,8 @@
-import { ITEM_IDS, ITEM_PASSIVES } from "../content/items";
+import { ITEM_IDS } from "../content/items";
 import {
   BASE_STATS,
-  GROWTH_WEIGHTS,
   PROGRESS,
   addStats,
-  allocatePoints,
   enemyProfileFromExp,
   levelFromExp,
   statsAtLevel,
@@ -20,25 +18,14 @@ import type {
   WeaponId,
 } from "./types";
 
-/** 生效属性 = 将领成长属性 + 武器 + 库存被动。 */
+/** 生效属性 = 将领成长属性 + 武器；消耗品不再提供永久被动。 */
 export function effectiveStats(unit: Unit, inventory?: Record<ItemId, number>): CommanderStats {
   const weapon = WEAPONS[unit.weapon];
-  let stats = addStats(unit.stats, weapon?.stats ?? {});
-  if (inventory && unit.faction === "player") {
-    for (const [itemId, passive] of Object.entries(ITEM_PASSIVES)) {
-      const count = Math.min(inventory[itemId as ItemId] ?? 0, passive!.cap);
-      if (count <= 0) continue;
-      stats = addStats(stats, {
-        leadership: (passive!.leadership ?? 0) * count,
-        intellect: (passive!.intellect ?? 0) * count,
-        stamina: (passive!.stamina ?? 0) * count,
-      });
-    }
-  }
-  return stats;
+  void inventory;
+  return addStats(unit.stats, weapon?.stats ?? {});
 }
 
-/** 已有背包时只读取该单位携带的被动；旧状态无背包则回退共享库存。 */
+/** 已有背包时只读取该单位携带的物资；旧状态无背包则回退共享库存。 */
 export function inventoryForUnit(unit: Unit, shared?: Record<ItemId, number>): Record<ItemId, number> {
   if (!unit.backpack) return shared ?? ({} as Record<ItemId, number>);
   const result = {} as Record<ItemId, number>;
@@ -71,32 +58,26 @@ export function recomputeStatsAtLevel(
   baseStats: CommanderStats,
   type: UnitTypeId,
   level: number,
-  commanderName: string,
+  _commanderName: string,
 ): CommanderStats {
-  return statsAtLevel(baseStats, type, level, commanderName.length);
+  return statsAtLevel(baseStats, type, level);
 }
 
 /**
  * 同步等级与属性。
- * - 升级：沿用增量加点（盐 = name.length + 原等级），保持既有成长手感与平衡。
+ * - 任意经验变化都按统一等级阈值和一级底板重算，跳级与逐级升级结果一致。
  * - 降级：若有 baseStats，按开局公式重算，避免经验回撤后属性虚高。
  */
 export function syncLevelFromExp(unit: Unit): { from: number; to: number } | null {
   const nextLevel = levelFromExp(unit.exp);
   if (nextLevel === unit.level) return null;
   const from = unit.level;
-  if (nextLevel < from) {
-    if (unit.baseStats) {
-      unit.stats = recomputeStatsAtLevel(unit.baseStats, unit.type, nextLevel, unit.commanderName);
-    }
-    unit.level = nextLevel;
-    return null;
-  }
-  const gained = (nextLevel - unit.level) * PROGRESS.pointsPerLevel;
-  const salt = unit.commanderName.length + unit.level;
-  unit.stats = addStats(unit.stats, allocatePoints(GROWTH_WEIGHTS[unit.type], gained, salt));
+  // 任何经验变化都从一级底板重算，保证跳级、逐级升级、读档迁移结果一致。
+  const base = unit.baseStats ?? { ...BASE_STATS };
+  unit.baseStats = base;
+  unit.stats = recomputeStatsAtLevel(base, unit.type, nextLevel, unit.commanderName);
   unit.level = nextLevel;
-  return { from, to: nextLevel };
+  return nextLevel > from ? { from, to: nextLevel } : null;
 }
 
 export function makeEnemyCommander(
@@ -149,12 +130,7 @@ export function makeStoryCommander(
   };
 }
 
-export function inventoryPassiveSummary(state: GameState): string {
-  const parts: string[] = [];
-  for (const [itemId, passive] of Object.entries(ITEM_PASSIVES)) {
-    const count = Math.min(state.inventory[itemId as ItemId] ?? 0, passive!.cap);
-    if (count <= 0) continue;
-    parts.push(`${itemId}×${count}`);
-  }
-  return parts.join("、");
+/** 旧 UI 兼容入口：物品不再提供永久被动，因此始终返回空摘要。 */
+export function inventoryPassiveSummary(_state: GameState): string {
+  return "";
 }
