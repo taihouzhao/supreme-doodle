@@ -148,9 +148,11 @@ export const CHAPTER_ONE: ChapterConfig = {
   startingAttachments: ["engineer_tools", "pack_train"],
   minRoster: 5,
   maxReplacementsPerMission: 2,
-  permanentLossChance: { won: 0.18, lost: 0.35 },
+  // 新版集火与包围会把前沿减员传导到后续关卡；提高战后永久损失并略收紧休整恢复，
+  // 让连续战役保持偏难但可恢复，避免基础策略长期稳定通吃。
+  permanentLossChance: { won: 0.25, lost: 0.45 },
   returningUnit: { hp: 40, expPenalty: 0.25 },
-  restRecovery: { hp: 0.55, fatigue: 0.65 },
+  restRecovery: { hp: 0.45, fatigue: 0.55 },
   resupply: { medkit: 1, bandage: 1, ration: 1, at_charge: 1, arty_support: 1 },
 };
 
