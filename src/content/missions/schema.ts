@@ -123,6 +123,8 @@ export interface VictoryRule {
   requireKeyUnit?: boolean;
   /** 撤离前至少击溃的敌军单位；用于“接触施压后脱离”而非开局直奔出口 */
   minEnemiesRouted?: number;
+  /** 撤离通道开放回合（含）；此前踩撤离格不撤离，避免增援到来前秒撤 */
+  evacOpensOnTurn?: number;
 }
 
 /** 地图上的地名标注，只做展示，让战场读起来像那段战史 */

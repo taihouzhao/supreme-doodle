@@ -23,6 +23,7 @@ export const UNIT_GLYPH: Record<UnitTypeId, string> = {
   mortar: "迫击炮",
   artillery: "炮兵",
   tank: "坦克",
+  armored_car: "装甲车",
   logistics: "后勤",
 };
 

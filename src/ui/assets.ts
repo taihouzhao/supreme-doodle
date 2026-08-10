@@ -1,3 +1,4 @@
+import { WEAPON_IDS } from "../content/weapons";
 import type {
   Faction,
   ItemId,
@@ -68,6 +69,10 @@ export const UNIT_ICON: Record<UnitTypeId, Record<Faction, string>> = {
     player: `/assets/units/tank-player-v3.png${V}`,
     enemy: `/assets/units/tank-enemy-v3.png${V}`,
   },
+  armored_car: {
+    player: `/assets/units/tank-player-v3.png${V}`,
+    enemy: `/assets/units/tank-enemy-v3.png${V}`,
+  },
   logistics: {
     player: `/assets/units/rifle-player-v3.png${V}`,
     enemy: `/assets/units/rifle-enemy-v3.png${V}`,
@@ -81,47 +86,17 @@ export const UNIT_ROLE_ICON: Record<UnitTypeId, string> = {
   mortar: `/assets/roles/mortar.svg${V}`,
   artillery: `/assets/roles/artillery.svg${V}`,
   tank: `/assets/roles/tank.svg${V}`,
+  armored_car: `/assets/roles/armored_car.svg${V}`,
   logistics: `/assets/roles/logistics.svg${V}`,
 };
 
-export const WEAPON_ICON: Record<WeaponId, string> = {
-  type38: `/assets/weapons/type38.svg${V}`,
-  zhongzheng: `/assets/weapons/zhongzheng.svg${V}`,
-  mosin: `/assets/weapons/mosin.svg${V}`,
-  ppsh50: `/assets/weapons/ppsh50.svg${V}`,
-  zb26: `/assets/weapons/zb26.svg${V}`,
-  dp28: `/assets/weapons/dp28.svg${V}`,
-  mortar60: `/assets/weapons/mortar60.svg${V}`,
-  mortar82: `/assets/weapons/mortar82.svg${V}`,
-  type75: `/assets/weapons/mortar82.svg${V}`,
-  m2a1_howitzer: `/assets/weapons/m1_mortar.svg${V}`,
-  bazooka: `/assets/weapons/bazooka.svg${V}`,
-  t34_85: `/assets/weapons/t34_85.svg${V}`,
-  m1_garand: `/assets/weapons/m1_garand.svg${V}`,
-  m1_carbine: `/assets/weapons/m1_carbine.svg${V}`,
-  m1919: `/assets/weapons/m1919.svg${V}`,
-  m2_mortar: `/assets/weapons/mortar60.svg${V}`,
-  m1_mortar: `/assets/weapons/m1_mortar.svg${V}`,
-  sherman: `/assets/weapons/sherman.svg${V}`,
-  // 复用现有同类剪影；机械型号与历史名称已经独立，不再套用错误数值。
-  lee_enfield: `/assets/weapons/mosin.svg${V}`,
-  bren: `/assets/weapons/zb26.svg${V}`,
-  mac24: `/assets/weapons/zb26.svg${V}`,
-  centurion: `/assets/weapons/sherman.svg${V}`,
-  mosin_m44_marksman: `/assets/weapons/mosin.svg${V}`,
-  m1d_sniper: `/assets/weapons/m1_garand.svg${V}`,
-  bar_m1918a2: `/assets/weapons/zb26.svg${V}`,
-  m2hb: `/assets/weapons/m1919.svg${V}`,
-  type92_infantry_gun: `/assets/weapons/mortar82.svg${V}`,
-  mortar120: `/assets/weapons/m1_mortar.svg${V}`,
-  m2_4_2_mortar: `/assets/weapons/m1_mortar.svg${V}`,
-  qf25: `/assets/weapons/m1_mortar.svg${V}`,
-  zis3: `/assets/weapons/m1_mortar.svg${V}`,
-  m30_122: `/assets/weapons/m1_mortar.svg${V}`,
-  bm13: `/assets/weapons/m1_mortar.svg${V}`,
-  m1_155: `/assets/weapons/m1_mortar.svg${V}`,
-  supply_cart: `/assets/weapons/type38.svg${V}`,
-};
+export const WEAPON_ICON: Record<WeaponId, string> = Object.fromEntries(
+  WEAPON_IDS.map((id) => [id, `/assets/weapons/${id}.svg${V}`]),
+) as Record<WeaponId, string>;
+
+export function weaponIcon(id: WeaponId): string {
+  return WEAPON_ICON[id] ?? `/assets/weapons/${id}.svg${V}`;
+}
 
 export const RANK_INSIGNIA: Record<string, string> = {
   "rok-brigadier-general": `/assets/ranks/rok-brigadier-general.svg${V}`,
@@ -137,7 +112,7 @@ export function rankInsignia(id: string): string {
   return RANK_INSIGNIA[id] ?? "";
 }
 
-export const ITEM_ICON: Record<ItemId, string> = {
+const ITEM_ICON_FILES: Partial<Record<ItemId, string>> = {
   medkit: `/assets/items/medkit.png${V}`,
   bandage: `/assets/items/bandage-v2.png${V}`,
   ration: `/assets/items/ration-v2.png${V}`,
@@ -146,6 +121,43 @@ export const ITEM_ICON: Record<ItemId, string> = {
   arty_support: `/assets/items/arty-support.png${V}`,
   field_manual: `/assets/items/field-manual-v2.png${V}`,
 };
+
+const ITEM_ICON_FALLBACK: Record<ItemId, string> = {
+  medkit: "medkit",
+  bandage: "bandage",
+  ration: "ration",
+  at_charge: "at_charge",
+  satchel: "satchel",
+  arty_support: "arty_support",
+  field_manual: "field_manual",
+  plasma_unit: "medkit",
+  surgeon_kit: "medkit",
+  compressed_ration: "ration",
+  bangalore: "satchel",
+  shaped_charge_elite: "at_charge",
+  smoke_screen: "arty_support",
+  corps_arty: "arty_support",
+  night_attack_notes: "field_manual",
+  hero_citation: "field_manual",
+  flare: "arty_support",
+};
+
+export const ITEM_ICON: Record<ItemId, string> = new Proxy({} as Record<ItemId, string>, {
+  get(_target, prop: string) {
+    const id = prop as ItemId;
+    if (ITEM_ICON_FILES[id]) return ITEM_ICON_FILES[id]!;
+    const fb = ITEM_ICON_FALLBACK[id] ?? "medkit";
+    return ITEM_ICON_FILES[fb as ItemId] ?? `/assets/items/${id}.svg${V}`;
+  },
+});
+
+export function itemIcon(id: ItemId): string {
+  return ITEM_ICON[id];
+}
+
+export function classDecorationIcon(decoration: string): string {
+  return `/assets/ui/class/${decoration}.svg${V}`;
+}
 
 export const UI_ICON = {
   weatherClear: `/assets/ui/weather-clear.png${V}`,
@@ -248,9 +260,7 @@ export function allAssetUrls(): string[] {
     ...Object.values(BRIDGE_ICON),
     ...Object.values(UNIT_ICON).flatMap((pair) => Object.values(pair)),
     ...Object.values(UNIT_ROLE_ICON),
-    ...Object.values(WEAPON_ICON),
     ...Object.values(RANK_INSIGNIA),
-    ...Object.values(ITEM_ICON),
     ...Object.values(UI_ICON),
     ...Object.values(COMMANDER_PORTRAIT),
     ...Object.values(UNIT_IDENTITY_PORTRAIT).flat(),

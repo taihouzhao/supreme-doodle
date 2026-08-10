@@ -2,10 +2,13 @@ import type {
   AttackPattern,
   CommanderStats,
   Faction,
+  GearRarity,
   UnitTypeId,
+  WeaponCategoryId,
   WeaponEffectProfile,
   WeaponId,
 } from "../core/types";
+import { inferWeaponCategory } from "./evolution";
 
 export type { WeaponId };
 
@@ -58,6 +61,9 @@ export interface WeaponDef {
   directFire?: boolean;
   /** BAR 等武器的架设收益覆写。 */
   setupBonusOverride?: number;
+  /** 装备大类；缺省时由 inferWeaponCategory 推断。 */
+  category?: WeaponCategoryId;
+  rarity?: GearRarity;
 }
 
 export const WEAPONS: Record<WeaponId, WeaponDef> = {
@@ -524,6 +530,325 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     supplyPenaltyMultiplier: 1.25,
     requiresSetup: true,
   },
+
+  arsks: {
+    id: "arsks",
+    name: "苏制 SKS 半自动步枪",
+    forTypes: ["rifle"],
+    stats: { might: 14, agility: 2 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 24,
+    era: "late",
+    category: "infantry_rifle",
+    rarity: "standard",
+  },
+  type53_carbine: {
+    id: "type53_carbine",
+    name: "53式骑枪",
+    forTypes: ["rifle"],
+    stats: { might: 12, agility: 2, stamina: 1 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 21,
+    era: "late",
+    category: "infantry_rifle",
+    rarity: "standard",
+  },
+  pps43: {
+    id: "pps43",
+    name: "PPS-43冲锋枪",
+    forTypes: ["rifle"],
+    stats: { might: 12, agility: 4 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 24,
+    era: "late",
+    category: "infantry_smg",
+    rarity: "standard",
+  },
+  thompson: {
+    id: "thompson",
+    name: "缴获汤姆逊冲锋枪",
+    forTypes: ["rifle"],
+    stats: { might: 14, agility: 2 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 25,
+    era: "enemy",
+    category: "infantry_smg",
+    rarity: "standard",
+  },
+  ppsh_drum_elite: {
+    id: "ppsh_drum_elite",
+    name: "英雄弹鼓·50式",
+    forTypes: ["rifle"],
+    stats: { might: 16, agility: 4, leadership: 2 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 34,
+    era: "late",
+    category: "infantry_smg",
+    rarity: "elite",
+    damageMultiplier: 1.08,
+  },
+  mosin_scoped_hero: {
+    id: "mosin_scoped_hero",
+    name: "光学莫辛·特等",
+    forTypes: ["rifle"],
+    stats: { might: 19, intellect: 4 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 40,
+    era: "late",
+    category: "infantry_marksman",
+    rarity: "elite",
+    stationaryMinRange: 1,
+    stationaryMaxRange: 2,
+    fixedRange: { min: 1, max: 2 },
+    mobileRange: { min: 1, max: 1 },
+    damageMultiplier: 0.95,
+  },
+  rpg43: {
+    id: "rpg43",
+    name: "RPG-43反坦克榴弹",
+    forTypes: ["rifle"],
+    stats: { might: 10, intellect: 1 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 18,
+    era: "late",
+    category: "infantry_at",
+    rarity: "standard",
+    matchupModifiers: { tank: 1.35, armored_car: 1.25 },
+  },
+  panzerfaust: {
+    id: "panzerfaust",
+    name: "缴获铁拳",
+    forTypes: ["rifle"],
+    stats: { might: 14, intellect: 2 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 28,
+    era: "enemy",
+    category: "infantry_at",
+    rarity: "elite",
+    damageMultiplier: 1.2,
+    matchupModifiers: { tank: 1.5, armored_car: 1.4 },
+  },
+  sg43: {
+    id: "sg43",
+    name: "SG-43重机枪",
+    forTypes: ["mg"],
+    stats: { might: 18, leadership: 3, stamina: 1 },
+    attackBonus: 0,
+    defenseBonus: 0.01,
+    rangeBonus: 1,
+    minRangeBonus: 0,
+    score: 33,
+    era: "late",
+    category: "mg_mmg",
+    rarity: "standard",
+    moveModifier: -1,
+    requiresSetup: true,
+  },
+  type24_maxim: {
+    id: "type24_maxim",
+    name: "24式马克沁重机枪",
+    forTypes: ["mg"],
+    stats: { might: 14, leadership: 2, stamina: 2 },
+    attackBonus: 0,
+    defenseBonus: 0.01,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 22,
+    era: "early",
+    category: "mg_mmg",
+    rarity: "standard",
+    moveModifier: -1,
+    requiresSetup: true,
+  },
+  m2hb_quad: {
+    id: "m2hb_quad",
+    name: "M2HB四联阵地机枪",
+    forTypes: ["mg"],
+    stats: { might: 26, leadership: 3 },
+    attackBonus: 0,
+    defenseBonus: 0.02,
+    rangeBonus: 1,
+    minRangeBonus: 0,
+    score: 46,
+    era: "enemy",
+    category: "mg_hmg",
+    rarity: "elite",
+    moveModifier: -3,
+    matchupModifiers: { tank: 0.85, armored_car: 1.1 },
+    requiresSetup: true,
+    damageMultiplier: 1.12,
+  },
+  mortar70_type: {
+    id: "mortar70_type",
+    name: "日制70毫米残存迫击炮",
+    forTypes: ["mortar"],
+    stats: { intellect: 6, might: 1 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 12,
+    era: "early",
+    category: "mortar_light",
+    rarity: "standard",
+    damageMultiplier: 0.9,
+  },
+  mortar120_guard: {
+    id: "mortar120_guard",
+    name: "近卫120mm重迫",
+    forTypes: ["mortar"],
+    stats: { intellect: 26, might: 5, leadership: 2 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 2,
+    minRangeBonus: 1,
+    score: 44,
+    era: "late",
+    category: "mortar_heavy",
+    rarity: "elite",
+    damageMultiplier: 1.22,
+    moveModifier: -1,
+    requiresSetup: true,
+  },
+  type41_75: {
+    id: "type41_75",
+    name: "四一式山炮",
+    forTypes: ["artillery"],
+    stats: { intellect: 12, leadership: 1 },
+    attackBonus: 0,
+    defenseBonus: 0,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 20,
+    era: "early",
+    category: "arty_gun",
+    rarity: "standard",
+  },
+  bm13_guards: {
+    id: "bm13_guards",
+    name: "近卫BM-13喀秋莎",
+    forTypes: ["artillery"],
+    stats: { intellect: 28, might: 7, leadership: 3 },
+    attackBonus: 0,
+    defenseBonus: 0.02,
+    rangeBonus: 2,
+    minRangeBonus: 1,
+    score: 58,
+    era: "late",
+    category: "arty_rocket",
+    rarity: "elite",
+    splashRatio: 0.45,
+    cooldownTurns: 1,
+    motorized: true,
+    vehicle: true,
+    directFire: false,
+  },
+  ba64: {
+    id: "ba64",
+    name: "BA-64装甲车",
+    forTypes: ["armored_car"],
+    stats: { might: 12, agility: 4, stamina: 2 },
+    attackBonus: 0,
+    defenseBonus: 0.02,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 22,
+    era: "late",
+    category: "ac_cannon",
+    rarity: "standard",
+    motorized: true,
+    vehicle: true,
+  },
+  m8_greyhound: {
+    id: "m8_greyhound",
+    name: "缴获M8灰狗装甲车",
+    forTypes: ["armored_car"],
+    stats: { might: 16, agility: 3, stamina: 3 },
+    attackBonus: 0,
+    defenseBonus: 0.03,
+    rangeBonus: 0,
+    minRangeBonus: 0,
+    score: 30,
+    era: "enemy",
+    category: "ac_cannon",
+    rarity: "standard",
+    motorized: true,
+    vehicle: true,
+  },
+  su76: {
+    id: "su76",
+    name: "SU-76自行火炮",
+    forTypes: ["armored_car"],
+    stats: { might: 18, intellect: 2, stamina: 3 },
+    attackBonus: 0,
+    defenseBonus: 0.025,
+    rangeBonus: 1,
+    minRangeBonus: 0,
+    score: 34,
+    era: "late",
+    category: "ac_cannon",
+    rarity: "standard",
+    motorized: true,
+    vehicle: true,
+    fortDamageMultiplier: 1.15,
+  },
+  m24_chaffee: {
+    id: "m24_chaffee",
+    name: "缴获M24霞飞",
+    forTypes: ["armored_car"],
+    stats: { might: 20, agility: 4, stamina: 4 },
+    attackBonus: 0,
+    defenseBonus: 0.035,
+    rangeBonus: 1,
+    minRangeBonus: 0,
+    score: 42,
+    era: "enemy",
+    category: "ac_cannon",
+    rarity: "elite",
+    motorized: true,
+    vehicle: true,
+    damageMultiplier: 1.1,
+  },
+  t34_85_215: {
+    id: "t34_85_215",
+    name: "215号T-34-85",
+    forTypes: ["tank"],
+    stats: { might: 26, stamina: 7, leadership: 3 },
+    attackBonus: 0,
+    defenseBonus: 0.05,
+    rangeBonus: 1,
+    minRangeBonus: 0,
+    score: 50,
+    era: "late",
+    category: "tank_gun",
+    rarity: "elite",
+    damageMultiplier: 1.12,
+  },
+
 };
 
 export interface WeaponHistory {
@@ -569,6 +894,27 @@ export const WEAPON_HISTORY: Record<WeaponId, WeaponHistory> = {
   m30_122: { origin: "苏联／志愿军", caliber: "122毫米", note: "M-30 122毫米榴弹炮，体现1951年后苏式火炮换装。" },
   bm13: { origin: "苏联／志愿军", caliber: "132毫米火箭弹", note: "BM-13喀秋莎火箭炮，车辆自走且齐射后需要冷却。" },
   m1_155: { origin: "美国（缴获）", caliber: "155毫米", note: "缴获M1重榴弹炮，威力大、机动和补给代价都高。" },
+  arsks: { origin: "苏联", caliber: "7.62×39毫米", note: "SKS半自动步枪，1950年代苏援轻武器之一。" },
+  type53_carbine: { origin: "中国／苏联", caliber: "7.62×54毫米R", note: "53式骑枪，莫辛体系短枪管改型。" },
+  pps43: { origin: "苏联", caliber: "7.62×25毫米", note: "PPS-43冲锋枪，结构简单、适合大规模列装。" },
+  thompson: { origin: "美国（缴获）", caliber: ".45 ACP", note: "汤姆逊冲锋枪，作为缴获自动火力进入编制。" },
+  ppsh_drum_elite: { origin: "中国／苏联", caliber: "7.62×25毫米", note: "英雄单位保留的大弹鼓改装50式，稀有精英装备。" },
+  mosin_scoped_hero: { origin: "苏联／志愿军", caliber: "7.62×54毫米R", note: "带光学瞄具的特等射手莫辛，冷枪战代表装备。" },
+  rpg43: { origin: "苏联", caliber: "反坦克榴弹", note: "RPG-43反坦克手榴弹，近距反装甲手段。" },
+  panzerfaust: { origin: "德国／缴获流转", caliber: "Panzerfaust", note: "铁拳式单兵反装甲武器的战场缴获抽象。" },
+  sg43: { origin: "苏联", caliber: "7.62×54毫米R", note: "SG-43重机枪，提供持续压制火力。" },
+  type24_maxim: { origin: "中国", caliber: "7.92×57毫米", note: "24式马克沁重机枪，内战库存与朝鲜早期火力。" },
+  m2hb_quad: { origin: "美国", caliber: ".50 BMG", note: "四联M2阵地火力的游戏化精英型号，机动极差。" },
+  mortar70_type: { origin: "日本残存", caliber: "70毫米级", note: "日制轻型曲射残存装备，威力有限。" },
+  mortar120_guard: { origin: "苏联／志愿军", caliber: "120毫米", note: "近卫重迫编制，精英曲射火力。" },
+  type41_75: { origin: "日本", caliber: "75毫米", note: "四一式山炮，山地轻炮兵早期来源。" },
+  bm13_guards: { origin: "苏联／志愿军", caliber: "132毫米火箭弹", note: "近卫喀秋莎，齐射节奏略快于普通BM-13。" },
+  ba64: { origin: "苏联", caliber: "7.62毫米机枪塔", note: "BA-64轻型装甲车，公路侦察与火力支援。" },
+  m8_greyhound: { origin: "美国（缴获）", caliber: "37毫米", note: "M8灰狗装甲车，作为缴获轮式火力。" },
+  su76: { origin: "苏联", caliber: "76.2毫米", note: "SU-76轻型自行火炮，在本游戏中归入装甲车编制阶。" },
+  m24_chaffee: { origin: "美国（缴获）", caliber: "75毫米", note: "M24霞飞轻型坦克，作装甲车顶级精英缴获，不直接升格为坦克兵种。" },
+  t34_85_215: { origin: "中国／苏联", caliber: "85毫米主炮", note: "石岘洞北山215号T-34-85的叙事精英型号。" },
+
 };
 
 export const WEAPON_IDS = Object.keys(WEAPONS) as WeaponId[];
@@ -580,7 +926,13 @@ export function weaponPattern(weapon: WeaponId, type: UnitTypeId): {
 } {
   const def = WEAPONS[weapon];
   if (def.pattern && def.effectProfile) return { profile: def.effectProfile, pattern: def.pattern };
-  if (weapon === "ppsh50" || weapon === "m1_carbine") {
+  if (
+    weapon === "ppsh50" ||
+    weapon === "m1_carbine" ||
+    weapon === "pps43" ||
+    weapon === "thompson" ||
+    weapon === "ppsh_drum_elite"
+  ) {
     return { profile: "smg", pattern: { kind: "single" } };
   }
   if (type === "mg") {
@@ -592,10 +944,10 @@ export function weaponPattern(weapon: WeaponId, type: UnitTypeId): {
   if (type === "artillery") {
     return { profile: "artillery", pattern: { kind: "radius", radius: 1, multiplier: 0.2 } };
   }
-  if (weapon === "bazooka") {
+  if (weapon === "bazooka" || weapon === "rpg43" || weapon === "panzerfaust") {
     return { profile: "rocket", pattern: { kind: "cross", radius: 1, multiplier: 0.15 } };
   }
-  if (type === "tank") {
+  if (type === "tank" || type === "armored_car") {
     return { profile: "tank", pattern: { kind: "cross", radius: 1, multiplier: 0.15 } };
   }
   if (type === "logistics") {
@@ -623,6 +975,7 @@ export function defaultWeaponFor(type: UnitTypeId, era: "early" | "late" | "enem
     if (type === "mortar") return era === "enemy" ? "m1_mortar" : "mortar60";
     if (type === "artillery") return era === "enemy" ? "m2a1_howitzer" : "type75";
     if (type === "logistics") return "supply_cart";
+    if (type === "armored_car") return era === "enemy" ? "m8_greyhound" : "ba64";
     return era === "enemy" ? "sherman" : "t34_85";
   }
   return pool.sort((a, b) => WEAPONS[a].score - WEAPONS[b].score)[0]!;
@@ -689,4 +1042,14 @@ export function bestWeapon(type: UnitTypeId, armory: WeaponId[], current: Weapon
     }
   }
   return best;
+}
+
+
+export function weaponCategory(weapon: WeaponId): WeaponCategoryId {
+  const def = WEAPONS[weapon];
+  return def.category ?? inferWeaponCategory(weapon, def.forTypes);
+}
+
+export function weaponRarity(weapon: WeaponId): GearRarity {
+  return WEAPONS[weapon]?.rarity ?? "standard";
 }

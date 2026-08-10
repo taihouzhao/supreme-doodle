@@ -1,3 +1,4 @@
+import { traitScoreBonus } from "../content/enemyAdapt";
 import { UNIT_TYPES } from "../content/units";
 import { COUNTER_RATIO, estimateDamageFrom } from "./combat";
 import {
@@ -149,6 +150,23 @@ function bestAttackPlan(
       score += formationSupport;
       score -= incomingThreat;
 
+      const traits = traitScoreBonus(
+        state.missionId,
+        state.missionKind,
+        state.turn,
+        state.adaptFactor ?? 1,
+      );
+      score += (surround.multiplier - 1) * traits.flank * 0.35;
+      if (target.type === "artillery" || target.type === "mortar") score += traits.artyPriority;
+      if (
+        state.objectives.some(
+          (objective) => objective.x === target.x && objective.y === target.y && objective.owner === "player",
+        )
+      ) {
+        score += traits.holdObjective * 0.4;
+      }
+      score += traits.chase * 0.15;
+
       // 敌炮：偏好阵地（高地/工事）、架设射击，避免贴脸；移动会丢掉 setupBonus
       if (artillery) {
         if (!moved) score += 18;
@@ -156,6 +174,7 @@ function bestAttackPlan(
         if (distance <= 2) score -= 25;
         // 脆弱窗口：刚移动的炮更怕被近战摸到，优先远距离目标
         if (moved && distance <= 3) score -= 12;
+        score += traits.artyPriority * 0.5;
       }
 
       if (
@@ -174,6 +193,7 @@ function bestAttackPlan(
 
 function lostObjective(state: GameState, unit: Unit): Vec2 | null {
   if (!UNIT_TYPES[unit.type].canCapture) return null;
+  if (unit.type === "mg") return null;
   const lost = state.objectives.filter((o) => o.kind === "capture" && o.owner === "player");
   if (lost.length === 0) return null;
   const target = lost.reduce((closest, candidate) =>
@@ -443,6 +463,7 @@ export function runEnemyPhase(state: GameState, events: GameEvent[]): void {
         mortar: 1,
         mg: 2,
         tank: 3,
+        armored_car: 3,
         rifle: 4,
         logistics: 5,
       };

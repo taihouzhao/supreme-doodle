@@ -1,7 +1,9 @@
 import { BALANCE } from "../content/balance";
+import { adaptFromPower, computePlayerPower } from "../content/enemyAdapt";
+import { DEFAULT_CLASS_FOR_TYPE, resolveClassId } from "../content/evolution";
 import { ITEM_IDS } from "../content/items";
 import { TERRAIN_CHARS } from "../content/terrain";
-import { scaleEnemyExp } from "../content/progress";
+import { addStats, allocatePoints, GROWTH_WEIGHTS, scaleEnemyExp } from "../content/progress";
 import { UNIT_TYPES } from "../content/units";
 import { WEAPONS, defaultWeaponFor, weaponForEquipment } from "../content/weapons";
 import type { MissionConfig } from "../content/missions/schema";
@@ -38,6 +40,7 @@ import type {
   Objective,
   TerrainId,
   Unit,
+  UnitClassId,
   UnitPortraitGroup,
   Vec2,
   WeaponId,
@@ -68,6 +71,8 @@ export interface RosterUnit {
   attachment?: AttachmentId;
   /** 玩家在军械库里手动指定过武器；自动换装不再覆盖 */
   manualWeapon?: boolean;
+  classId?: UnitClassId;
+  evolveCount?: number;
 }
 
 export interface MissionSetup {
@@ -75,6 +80,11 @@ export interface MissionSetup {
   seed: number;
   roster: RosterUnit[];
   inventory: Record<ItemId, number>;
+  /** 战役内自适应上下文；单关模拟省略 */
+  adaptContext?: {
+    missionIndex: number;
+    priorWins: number;
+  };
 }
 
 function parseMap(rows: string[]): { tiles: TerrainId[]; width: number; height: number } {
@@ -119,6 +129,8 @@ function makeUnit(params: {
   fatigue?: number;
   keyUnit?: boolean;
   attachment?: AttachmentId;
+  classId?: UnitClassId;
+  evolveCount?: number;
   dropOptions?: ItemId[];
   dropWeapons?: WeaponId[];
   dropAttachments?: AttachmentId[];
@@ -132,6 +144,8 @@ function makeUnit(params: {
     equipment: params.equipment ?? WEAPONS[params.weapon]?.name ?? UNIT_TYPES[params.type].name,
     weapon: params.weapon,
     attachment: params.attachment,
+    classId: params.classId ?? DEFAULT_CLASS_FOR_TYPE[params.type],
+    evolveCount: params.evolveCount ?? 0,
     commanderKind: params.commanderKind,
     commanderName: params.commanderName,
     eliteTier: params.eliteTier ?? null,
@@ -225,6 +239,8 @@ export function createMissionState(setup: MissionSetup): GameState {
         equipment: WEAPONS[rosterUnit.weapon].name,
         weapon: rosterUnit.weapon,
         attachment: rosterUnit.attachment,
+        classId: resolveClassId(rosterUnit.classId, rosterUnit.type),
+        evolveCount: rosterUnit.evolveCount ?? 0,
         commanderKind: rosterUnit.commanderKind,
         commanderName: rosterUnit.commanderName,
         portraitGroup: "pva",
@@ -273,32 +289,48 @@ export function createMissionState(setup: MissionSetup): GameState {
 
   const commandersById = new Map((mission.commanders ?? []).map((c) => [c.id, c]));
 
+  const adapt = adaptFromPower(computePlayerPower(roster), setup.adaptContext);
+  let eliteSlotsGranted = 0;
+
   const buildEnemyUnit = (
     spec: (typeof enemySpecs)[number],
     id: string,
     defaultDuty: string,
   ): Unit => {
     const linked = spec.commanderId ? commandersById.get(spec.commanderId) : undefined;
-    const elite = Boolean(
+    let elite = Boolean(
       spec.commanderId ||
         spec.title ||
         (spec.dropOptions?.length ?? 0) > 0 ||
         (spec.dropWeapons?.length ?? 0) > 0 ||
         (spec.dropAttachments?.length ?? 0) > 0,
     );
+    // 高战力时额外拔擢 0–1 个普通编制为精英（确定性：按 id 排序取第一个非精英）
+    if (!elite && eliteSlotsGranted < adapt.eliteBonusSlots && !linked) {
+      elite = true;
+      eliteSlotsGranted += 1;
+    }
     const name = linked
       ? `${linked.name}指挥部`
       : (spec.name ?? UNIT_TYPES[spec.type].name);
     const weapon = spec.weapon ?? weaponForEquipment(spec.type, spec.equipment, "enemy");
     const baseExp = scaleEnemyExp(mission.id, spec.exp ?? 0);
-    // 精英只做轻度强化，避免制造全策略死种子
-    const exp = elite ? baseExp + 22 : baseExp;
+    const expBoost = Math.round((elite ? 22 : 0) * adapt.adaptFactor);
+    const exp = baseExp + expBoost;
     const profile = makeEnemyCommander(spec.type, exp, weapon, name);
+    const boss = Boolean(linked);
+    const bonusPoints = boss ? 6 : elite ? 3 : 0;
+    if (bonusPoints > 0) {
+      profile.stats = addStats(
+        profile.stats,
+        allocatePoints(GROWTH_WEIGHTS[spec.type], bonusPoints, name.length + (boss ? 7 : 3)),
+      );
+    }
     const portraitGroup = enemyPortraitGroup(
       linked ? `${linked.formation} ${linked.name}` : name,
     );
     const duty = spec.title ?? (linked ? "敌军主将" : defaultDuty);
-    return makeUnit({
+    const unit = makeUnit({
       id,
       rosterId: null,
       faction: "enemy",
@@ -314,10 +346,15 @@ export function createMissionState(setup: MissionSetup): GameState {
       y: spec.y,
       hp: spec.hp,
       dropOptions: spec.dropOptions,
-      eliteTier: linked ? "boss" : elite ? "elite" : null,
+      eliteTier: boss ? "boss" : elite ? "elite" : null,
       dropWeapons: spec.dropWeapons,
       dropAttachments: spec.dropAttachments,
     });
+    if (boss) {
+      unit.maxHp = Math.round(unit.maxHp * 1.06);
+      unit.hp = Math.min(unit.maxHp, Math.round((spec.hp ?? unit.hp) * 1.06));
+    }
+    return unit;
   };
 
   enemySpecs.forEach((spec, index) => {
@@ -325,7 +362,9 @@ export function createMissionState(setup: MissionSetup): GameState {
   });
 
   const pending = mission.waves.map((wave, waveIndex) => {
-    const turn = waveRng.int(wave.window[0], wave.window[1]);
+    const lo = wave.window[0];
+    const hi = wave.window[1];
+    const turn = Math.max(lo, waveRng.int(lo, hi) - adapt.reinforceEarlyBias);
     const waveUnits = wave.units.map((spec, unitIndex) =>
       buildEnemyUnit(spec, `w${waveIndex}_${unitIndex}`, "敌军增援分队"),
     );
@@ -370,7 +409,8 @@ export function createMissionState(setup: MissionSetup): GameState {
     rng: deriveSeed(seed, "combat"),
     turn: 1,
     maxTurns: mission.maxTurns,
-    enemyDamageMultiplier: mission.enemyDamageMultiplier,
+    enemyDamageMultiplier: (mission.enemyDamageMultiplier ?? 1) * adapt.adaptFactor,
+    adaptFactor: adapt.adaptFactor,
     phase: "player",
     width,
     height,
@@ -384,6 +424,7 @@ export function createMissionState(setup: MissionSetup): GameState {
     pendingLoot: [],
     pendingAttachments: [],
     evacZone: mission.evacZone.map((v) => ({ ...v })),
+    evacOpensOnTurn: mission.victory.evacOpensOnTurn ?? 0,
     supplyPoints: (mission.supplyPoints ?? []).map((v) => ({ ...v })),
     inventory: { ...emptyInventory(), ...inventory },
     weather: mission.weather
@@ -635,7 +676,23 @@ export function updateCaptureStreak(state: GameState, rule: MissionConfig["victo
 }
 
 export function isEvacTile(state: GameState, x: number, y: number): boolean {
+  const opens = state.evacOpensOnTurn ?? 0;
+  if (opens > 0 && state.turn < opens) return false;
   return state.evacZone.some((tile) => tile.x === x && tile.y === y);
+}
+
+/** 撤离通道已开放且单位站在撤离格上时立即撤离（用于开放当回合已就位的单位）。 */
+export function tryEvacuateStandingUnits(state: GameState): void {
+  const opens = state.evacOpensOnTurn ?? 0;
+  if (opens > 0 && state.turn < opens) return;
+  for (const unit of state.units) {
+    if (unit.faction !== "player" || !unit.alive || unit.evacuated) continue;
+    if (!state.evacZone.some((tile) => tile.x === unit.x && tile.y === unit.y)) continue;
+    unit.evacuated = true;
+    unit.hasActed = true;
+    unit.mpLeft = 0;
+    state.stats.playerEvacuated += 1;
+  }
 }
 
 export interface VictoryVerdict {

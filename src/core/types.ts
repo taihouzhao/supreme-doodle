@@ -1,6 +1,13 @@
 export type Faction = "player" | "enemy";
 
-export type UnitTypeId = "rifle" | "mg" | "mortar" | "artillery" | "tank" | "logistics";
+export type UnitTypeId =
+  | "rifle"
+  | "mg"
+  | "mortar"
+  | "artillery"
+  | "tank"
+  | "armored_car"
+  | "logistics";
 
 export type TerrainId =
   | "road"
@@ -19,7 +26,17 @@ export type ItemId =
   | "at_charge"
   | "satchel"
   | "arty_support"
-  | "field_manual";
+  | "field_manual"
+  | "plasma_unit"
+  | "surgeon_kit"
+  | "compressed_ration"
+  | "bangalore"
+  | "shaped_charge_elite"
+  | "smoke_screen"
+  | "corps_arty"
+  | "night_attack_notes"
+  | "hero_citation"
+  | "flare";
 
 export type WeaponId =
   | "type38"
@@ -56,7 +73,27 @@ export type WeaponId =
   | "m30_122"
   | "bm13"
   | "m1_155"
-  | "supply_cart";
+  | "supply_cart"
+  | "arsks"
+  | "type53_carbine"
+  | "pps43"
+  | "thompson"
+  | "ppsh_drum_elite"
+  | "mosin_scoped_hero"
+  | "rpg43"
+  | "panzerfaust"
+  | "sg43"
+  | "type24_maxim"
+  | "m2hb_quad"
+  | "mortar70_type"
+  | "mortar120_guard"
+  | "type41_75"
+  | "bm13_guards"
+  | "ba64"
+  | "m8_greyhound"
+  | "su76"
+  | "m24_chaffee"
+  | "t34_85_215";
 
 export type AttachmentId =
   | "engineer_tools"
@@ -83,6 +120,70 @@ export type CommanderKind = "companion" | "story" | "enemy";
 
 /** 地图头像身份层级；boss 使用金色外环，普通精锐使用金色角标。 */
 export type EliteTier = "boss" | "elite" | null;
+
+export type GearRarity = "standard" | "elite";
+
+export type WeaponCategoryId =
+  | "infantry_rifle"
+  | "infantry_smg"
+  | "infantry_marksman"
+  | "infantry_at"
+  | "mg_lmg"
+  | "mg_mmg"
+  | "mg_hmg"
+  | "mortar_light"
+  | "mortar_medium"
+  | "mortar_heavy"
+  | "arty_gun"
+  | "arty_heavy"
+  | "arty_rocket"
+  | "ac_cannon"
+  | "tank_gun"
+  | "logi_train";
+
+export type ItemCategoryId =
+  | "med_field"
+  | "ration_stamina"
+  | "demo_at"
+  | "fire_support_call"
+  | "doctrine"
+  | "signal";
+
+export type AttachmentCategoryId =
+  | "attach_engineer"
+  | "attach_pack"
+  | "attach_motor"
+  | "attach_comms"
+  | "attach_ammo"
+  | "attach_conceal"
+  | "attach_medic"
+  | "attach_optics"
+  | "attach_armor";
+
+export type UnitClassId =
+  | "rifle_line"
+  | "rifle_assault"
+  | "rifle_marksman"
+  | "rifle_vanguard"
+  | "mg_gunner"
+  | "mg_section"
+  | "mg_heavy"
+  | "mg_fortress"
+  | "mortar_crew"
+  | "mortar_heavy"
+  | "arty_field"
+  | "arty_rocket"
+  | "logi_porter"
+  | "logi_pack"
+  | "logi_motor"
+  | "logi_column"
+  | "logi_depot"
+  | "ac_scout"
+  | "ac_gun"
+  | "tank_crew"
+  | "tank_ace";
+
+export type GearCategoryId = WeaponCategoryId | ItemCategoryId | AttachmentCategoryId;
 
 export type WeaponEffectProfile =
   | "rifle"
@@ -188,6 +289,10 @@ export interface Unit {
   weapon: WeaponId;
   /** 0–1 件占用附件槽的装备；消耗品仍在 inventory。 */
   attachment?: AttachmentId;
+  /** 编制进化 id；旧存档缺省时由 type 推断。 */
+  classId?: UnitClassId;
+  /** 已消耗的进化次数。 */
+  evolveCount?: number;
   commanderKind: CommanderKind;
   commanderName: string;
   eliteTier?: EliteTier;
@@ -308,6 +413,8 @@ export interface GameState {
   turn: number;
   maxTurns: number;
   enemyDamageMultiplier?: number;
+  /** 开局按玩家战力结算的自适应系数；缺省视为 1。 */
+  adaptFactor?: number;
   phase: Faction;
   width: number;
   height: number;
@@ -324,6 +431,8 @@ export interface GameState {
   pendingLoot?: ItemId[];
   pendingAttachments?: AttachmentId[];
   evacZone: Vec2[];
+  /** 撤离通道开放回合；缺省 0 表示立即开放 */
+  evacOpensOnTurn?: number;
   /** 补给点：站上可恢复弹药窗口（与后勤补给共用 supplyRestoredUntil） */
   supplyPoints: Vec2[];
   inventory: Record<ItemId, number>;

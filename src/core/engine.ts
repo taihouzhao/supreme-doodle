@@ -16,6 +16,7 @@ import {
   evaluateVictory,
   runScripted,
   runUpkeep,
+  tryEvacuateStandingUnits,
   updateCaptureStreak,
 } from "./mission";
 import {
@@ -78,6 +79,7 @@ function advanceTurn(state: GameState, events: GameEvent[]): void {
   state.turn += 1;
   arriveWaves(state, events);
   runScripted(state, events);
+  tryEvacuateStandingUnits(state);
   if (settleStatus(state, events, true)) return;
   beginPhase(state, "player");
   events.push({ type: "phaseChanged", phase: "player", turn: state.turn });

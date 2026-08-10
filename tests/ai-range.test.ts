@@ -81,6 +81,8 @@ describe("AI 撤离路线", () => {
     const unit = state.units.find((candidate) => candidate.rosterId === "r0")!;
     unit.x = 12;
     unit.y = 2;
+    // 本关撤离通道有开放回合；测路线时先推进到可撤离
+    state.turn = Math.max(state.turn, state.evacOpensOnTurn ?? 0);
 
     // 雪地高地抬高直路代价，AI 应改选侧向撤离格
     const direct = routeCost(state, unit, unit, { x: 12, y: 0 });

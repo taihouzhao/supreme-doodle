@@ -1,4 +1,5 @@
 import { BALANCE } from "../content/balance";
+import { UNIT_CLASSES } from "../content/evolution";
 import { ITEMS } from "../content/items";
 import { WEATHER_EFFECT } from "../content/terrain";
 import { MATCHUP, PROGRESS, UNIT_TYPES } from "../content/units";
@@ -133,7 +134,11 @@ export function damageComponents(
   const keyGuard = defender.keyUnit ? BALANCE.keyUnitDamageTaken : 1;
   const weather = distance > 1 ? 1 + WEATHER_EFFECT[state.weather].rangedDamage : 1;
   const setupBonus = WEAPONS[attacker.weapon]?.setupBonusOverride ?? attackerDef.setupBonus;
-  const setup = !attacker.movedThisTurn ? 1 + setupBonus : 1;
+  const classExtra =
+    attacker.classId && !attacker.movedThisTurn
+      ? (UNIT_CLASSES[attacker.classId]?.setupBonusExtra ?? 0)
+      : 0;
+  const setup = !attacker.movedThisTurn ? 1 + setupBonus + classExtra : 1;
   const highGround = 1 + attackerTile.attackBonus;
   const scripted =
     nightAssaultBonus(state, attacker, distance) * supplyPenalty(state, attacker);

@@ -6,15 +6,32 @@ import {
   type ChapterConfig,
 } from "../content/chapter";
 import { attachmentFits } from "../content/attachments";
+import {
+  EVOLUTION_OPTIONS,
+  UNIT_CLASSES,
+  applyClassStatMods,
+  canEvolveTo,
+  evolveTokensAvailable,
+  resolveClassId,
+  unlockedCategories,
+} from "../content/evolution";
 import { ITEM_IDS } from "../content/items";
 import type { MissionConfig } from "../content/missions/schema";
 import { BASE_STATS } from "../content/progress";
 import { LOGISTICS, levelFromExp } from "../content/units";
-import { WEAPONS, defaultWeaponFor, weaponFits } from "../content/weapons";
+import { WEAPONS, defaultWeaponFor, weaponCategory, weaponFits } from "../content/weapons";
 import { effectiveMaxHp, recomputeStatsAtLevel } from "./commander";
 import { createMissionState, emptyInventory, type RosterUnit } from "./mission";
 import { deriveSeed, nextRandom } from "./rng";
-import type { AttachmentId, GameState, ItemId, MissionStatus, WeaponId } from "./types";
+import type {
+  AttachmentId,
+  GameState,
+  ItemId,
+  MissionStatus,
+  UnitClassId,
+  WeaponId,
+} from "./types";
+
 
 export interface MissionOutcome {
   missionId: string;
@@ -175,6 +192,8 @@ function rosterFromSpec(
   const stats = buildCompanionStats(full);
   const weapon = spec.weapon ?? defaultWeaponFor(spec.type, "early");
   const exp = companionSeedExp(spec.level);
+  const classId = resolveClassId(undefined, spec.type);
+  const classStats = applyClassStatMods(stats, classId);
   const draft: RosterUnit = {
     id,
     name: rosterUnitName(full),
@@ -191,11 +210,29 @@ function rosterFromSpec(
     duty: spec.duty ?? "直属作战分队指挥员",
     bio: spec.bio,
     baseStats,
-    stats,
+    stats: classStats,
     weapon,
     backpack: [],
     attachment: spec.attachment,
+    classId,
+    evolveCount: UNIT_CLASSES[classId].stage,
   };
+  // 炮兵伴随以 arty_field 为起点，已计 2 阶编制
+  if (spec.type === "artillery") {
+    draft.evolveCount = 2;
+    draft.classId = "arty_field";
+    draft.stats = applyClassStatMods(stats, "arty_field");
+  }
+  if (spec.type === "tank") {
+    draft.evolveCount = 2;
+    draft.classId = "tank_crew";
+    draft.stats = applyClassStatMods(stats, "tank_crew");
+  }
+  if (spec.type === "armored_car") {
+    draft.evolveCount = 0;
+    draft.classId = "ac_scout";
+    draft.stats = applyClassStatMods(stats, "ac_scout");
+  }
   draft.maxHp = effectiveMaxHp(draft);
   draft.hp = draft.maxHp;
   return draft;
@@ -443,12 +480,22 @@ export function freeAttachmentCount(campaign: CampaignState, attachment: Attachm
   return Math.max(0, ownedAttachmentCount(campaign, attachment) - equippedAttachmentCount(campaign, attachment, exceptUnitId));
 }
 
+function unitUnlockedCats(unit: RosterUnit): Set<string> {
+  return unlockedCategories(resolveClassId(unit.classId, unit.type));
+}
+
+export function unitCanUseWeapon(unit: RosterUnit, weapon: WeaponId): boolean {
+  if (!weaponFits(weapon, unit.type)) return false;
+  return unitUnlockedCats(unit).has(weaponCategory(weapon));
+}
+
 export function equippableWeapons(campaign: CampaignState, unitId: string): WeaponId[] {
   const unit = campaign.roster.find((u) => u.id === unitId);
   if (!unit) return [];
   const pool = new Set<WeaponId>([unit.weapon, ...campaign.armory]);
   return [...pool].filter(
-    (id) => weaponFits(id, unit.type) && (id === unit.weapon || freeWeaponCount(campaign, id, unitId) > 0),
+    (id) =>
+      unitCanUseWeapon(unit, id) && (id === unit.weapon || freeWeaponCount(campaign, id, unitId) > 0),
   );
 }
 
@@ -460,7 +507,7 @@ export function equipWeapon(
   const index = campaign.roster.findIndex((u) => u.id === unitId);
   const unit = campaign.roster[index];
   if (!unit) return campaign;
-  if (!weaponFits(weapon, unit.type)) return campaign;
+  if (!unitCanUseWeapon(unit, weapon)) return campaign;
   if (weapon !== unit.weapon && freeWeaponCount(campaign, weapon, unitId) <= 0) return campaign;
 
   const roster = [...campaign.roster];
@@ -502,6 +549,86 @@ export function equipAttachment(
   updated.hp = Math.min(updated.hp, updated.maxHp);
   roster[index] = updated;
   return { ...campaign, roster };
+}
+
+
+export function evolutionChoices(campaign: CampaignState, unitId: string): UnitClassId[] {
+  const unit = campaign.roster.find((u) => u.id === unitId);
+  if (!unit) return [];
+  const current = resolveClassId(unit.classId, unit.type);
+  const evolveCount = unit.evolveCount ?? UNIT_CLASSES[current].stage;
+  return EVOLUTION_OPTIONS[current].filter((next) =>
+    canEvolveTo(current, next, unit.level, evolveCount),
+  );
+}
+
+export function evolveUnit(
+  campaign: CampaignState,
+  unitId: string,
+  nextClassId: UnitClassId,
+): CampaignState {
+  const index = campaign.roster.findIndex((u) => u.id === unitId);
+  const unit = campaign.roster[index];
+  if (!unit) return campaign;
+  const current = resolveClassId(unit.classId, unit.type);
+  const evolveCount = unit.evolveCount ?? UNIT_CLASSES[current].stage;
+  if (!canEvolveTo(current, nextClassId, unit.level, evolveCount)) return campaign;
+
+  const nextDef = UNIT_CLASSES[nextClassId];
+  const baseStats = unit.baseStats ?? BASE_STATS;
+  let stats = recomputeStatsAtLevel(baseStats, nextDef.type, unit.level, unit.commanderName);
+  stats = applyClassStatMods(stats, nextClassId);
+
+  let weapon = unit.weapon;
+  let attachment = unit.attachment;
+  const attachments = [...(campaign.attachments ?? [])];
+  if (nextDef.grantAttachment) {
+    const owned = attachments.filter((id) => id === nextDef.grantAttachment).length;
+    if (owned === 0) attachments.push(nextDef.grantAttachment);
+    if (!attachment || attachment === "pack_train" || attachment === "motor_transport") {
+      attachment = nextDef.grantAttachment;
+    }
+  }
+  if (!weaponFits(weapon, nextDef.type) || !unlockedCategories(nextClassId).has(weaponCategory(weapon))) {
+    weapon = defaultWeaponFor(nextDef.type, nextDef.type === "artillery" || nextDef.type === "tank" ? "late" : "early");
+    if (!campaign.armory.includes(weapon) && !attachments) {
+      // ensure armory has a legal weapon
+    }
+  }
+  if (attachment && !attachmentFits(attachment, nextDef.type)) {
+    attachment = undefined;
+  }
+
+  const roster = [...campaign.roster];
+  const updated: RosterUnit = {
+    ...unit,
+    type: nextDef.type,
+    classId: nextClassId,
+    evolveCount: evolveCount + 1,
+    stats,
+    weapon,
+    attachment,
+    manualWeapon: false,
+    name: rosterUnitName({
+      commander: unit.commanderName,
+      type: nextDef.type,
+      level: unit.level,
+    }),
+  };
+  updated.maxHp = effectiveMaxHp(updated);
+  updated.hp = Math.min(updated.maxHp, Math.max(1, updated.hp));
+  roster[index] = updated;
+
+  const armory = [...campaign.armory];
+  if (!armory.includes(updated.weapon)) armory.push(updated.weapon);
+
+  return { ...campaign, roster, armory, attachments };
+}
+
+export function tokensForUnit(unit: RosterUnit): number {
+  const current = resolveClassId(unit.classId, unit.type);
+  const evolveCount = unit.evolveCount ?? UNIT_CLASSES[current].stage;
+  return evolveTokensAvailable(unit.level, evolveCount);
 }
 
 function replenish(campaign: CampaignState, chapter: ChapterConfig): string[] {
@@ -664,6 +791,10 @@ export function startMission(campaign: CampaignState): MissionStart {
       .map((id) => next.roster.find((unit) => unit.id === id)!)
       .filter(Boolean),
     inventory: prepared.battle,
+    adaptContext: {
+      missionIndex: next.missionIndex,
+      priorWins: next.history.filter((outcome) => outcome.status === "won").length,
+    },
   });
 
   return { campaign: next, state, mission, replacements };
@@ -705,6 +836,8 @@ export function finishMission(
         weapon: deployed.weapon,
         backpack: normalizeBackpack(deployed.backpack),
         attachment: deployed.attachment,
+        classId: deployed.classId ?? rosterUnit.classId,
+        evolveCount: deployed.evolveCount ?? rosterUnit.evolveCount,
         missionsSurvived: rosterUnit.missionsSurvived + 1,
       });
       continue;

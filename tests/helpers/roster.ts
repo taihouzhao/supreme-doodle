@@ -38,7 +38,7 @@ export function testRosterUnit(
 }
 
 export function fullInventory(extra: Partial<Record<ItemId, number>> = {}): Record<ItemId, number> {
-  return {
+  const base = {
     medkit: 0,
     bandage: 0,
     ration: 0,
@@ -46,6 +46,16 @@ export function fullInventory(extra: Partial<Record<ItemId, number>> = {}): Reco
     satchel: 0,
     arty_support: 0,
     field_manual: 0,
-    ...extra,
-  };
+    plasma_unit: 0,
+    surgeon_kit: 0,
+    compressed_ration: 0,
+    bangalore: 0,
+    shaped_charge_elite: 0,
+    smoke_screen: 0,
+    corps_arty: 0,
+    night_attack_notes: 0,
+    hero_citation: 0,
+    flare: 0,
+  } satisfies Record<ItemId, number>;
+  return { ...base, ...extra };
 }
