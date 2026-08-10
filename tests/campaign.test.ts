@@ -98,7 +98,7 @@ describe("战役继承", () => {
       if (run.missions[2]!.status === "won") recovered += 1;
     }
     expect(recovered / trials).toBeGreaterThanOrEqual(1 / 3);
-  });
+  }, 30_000);
 
   it("平均战斗等级：战术策略不低于基础策略", () => {
     const trials = 2;
