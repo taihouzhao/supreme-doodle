@@ -14,7 +14,7 @@ export const UNIT_TYPES: Record<UnitTypeId, UnitTypeDef> = {
     canCapture: true,
     indirect: false,
     setupBonus: 0,
-    role: "唯一能占领目标，耐打，是战线主体",
+    role: "能占领目标，耐打，是战线主体",
   },
   mg: {
     id: "mg",
@@ -25,10 +25,10 @@ export const UNIT_TYPES: Record<UnitTypeId, UnitTypeDef> = {
     attack: 24,
     maxHp: 90,
     vehicle: false,
-    canCapture: false,
+    canCapture: true,
     indirect: false,
     setupBonus: 0.35,
-    role: "本回合未移动则伤害大增，克步兵，对装甲几乎无效",
+    role: "本回合未移动则伤害大增，亦可踩点占领；克步兵，对装甲较弱",
   },
   mortar: {
     id: "mortar",
@@ -67,10 +67,24 @@ export const UNIT_TYPES: Record<UnitTypeId, UnitTypeDef> = {
     attack: 34,
     maxHp: 140,
     vehicle: true,
-    canCapture: false,
+    canCapture: true,
     indirect: false,
     setupBonus: 0,
-    role: "突破核心，机动与火力最强，但受地形限制且怕反坦克武器",
+    role: "突破与夺点核心，机动与火力最强，但受地形限制且怕反坦克武器",
+  },
+  armored_car: {
+    id: "armored_car",
+    name: "装甲车",
+    move: 7,
+    minRange: 1,
+    maxRange: 2,
+    attack: 28,
+    maxHp: 110,
+    vehicle: true,
+    canCapture: true,
+    indirect: false,
+    setupBonus: 0,
+    role: "公路侦察与火力支援，可占领；弱于坦克、强于步兵直射",
   },
   logistics: {
     id: "logistics",
@@ -79,7 +93,6 @@ export const UNIT_TYPES: Record<UnitTypeId, UnitTypeDef> = {
     minRange: 1,
     maxRange: 0,
     attack: 0,
-    // 后勤队本身就是可调拨的人力池，容量略高于普通步兵。
     maxHp: 115,
     vehicle: false,
     canCapture: false,
@@ -91,23 +104,77 @@ export const UNIT_TYPES: Record<UnitTypeId, UnitTypeDef> = {
 
 /** 后勤补充：人员守恒调拨 + 疲劳/弹药服务。 */
 export const LOGISTICS = {
-  /** 一次战场补充最多调拨的人数。 */
   personnelPerAction: 28,
-  /** 后勤队必须保留的最低机动编制，不能捐到空队。 */
   minimumPersonnel: 55,
   fatigueRelief: 18,
-  /** 邻接补给后，目标无视 supplyWindow 惩罚的持续回合数 */
   ammoRestoreTurns: 3,
 };
 
 /** 克制系数：MATCHUP[攻方][守方] */
 export const MATCHUP: Record<UnitTypeId, Record<UnitTypeId, number>> = {
-  rifle: { rifle: 1.0, mg: 1.1, mortar: 1.25, artillery: 1.3, tank: 0.45, logistics: 1.2 },
-  mg: { rifle: 1.3, mg: 1.0, mortar: 1.2, artillery: 1.25, tank: 0.3, logistics: 1.25 },
-  mortar: { rifle: 1.1, mg: 1.25, mortar: 1.0, artillery: 1.05, tank: 0.6, logistics: 1.15 },
-  artillery: { rifle: 1.2, mg: 1.25, mortar: 1.15, artillery: 1.0, tank: 0.55, logistics: 1.2 },
-  tank: { rifle: 1.4, mg: 1.45, mortar: 1.5, artillery: 1.55, tank: 1.0, logistics: 1.35 },
-  logistics: { rifle: 0, mg: 0, mortar: 0, artillery: 0, tank: 0, logistics: 0 },
+  rifle: {
+    rifle: 1.0,
+    mg: 1.1,
+    mortar: 1.25,
+    artillery: 1.3,
+    tank: 0.45,
+    armored_car: 0.65,
+    logistics: 1.2,
+  },
+  mg: {
+    rifle: 1.3,
+    mg: 1.0,
+    mortar: 1.2,
+    artillery: 1.25,
+    tank: 0.3,
+    armored_car: 0.45,
+    logistics: 1.25,
+  },
+  mortar: {
+    rifle: 1.1,
+    mg: 1.25,
+    mortar: 1.0,
+    artillery: 1.05,
+    tank: 0.6,
+    armored_car: 0.75,
+    logistics: 1.15,
+  },
+  artillery: {
+    rifle: 1.2,
+    mg: 1.25,
+    mortar: 1.15,
+    artillery: 1.0,
+    tank: 0.55,
+    armored_car: 0.7,
+    logistics: 1.2,
+  },
+  tank: {
+    rifle: 1.4,
+    mg: 1.45,
+    mortar: 1.5,
+    artillery: 1.55,
+    tank: 1.0,
+    armored_car: 1.25,
+    logistics: 1.35,
+  },
+  armored_car: {
+    rifle: 1.25,
+    mg: 1.3,
+    mortar: 1.35,
+    artillery: 1.4,
+    tank: 0.7,
+    armored_car: 1.0,
+    logistics: 1.3,
+  },
+  logistics: {
+    rifle: 0,
+    mg: 0,
+    mortar: 0,
+    artillery: 0,
+    tank: 0,
+    armored_car: 0,
+    logistics: 0,
+  },
 };
 
 export { levelFromExp, PROGRESS };

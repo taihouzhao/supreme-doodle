@@ -6,6 +6,8 @@ import {
   createCampaign,
   equipWeapon,
   equipAttachment,
+  evolveUnit,
+  evolutionChoices,
   finishMission,
   personnelTransferBounds,
   startMission,
@@ -16,6 +18,7 @@ import {
   currentMission,
   normalizeDeployIds,
   sumLoadout,
+  tokensForUnit,
   type CampaignState,
   type MissionOutcome,
 } from "../core/campaign";
@@ -342,6 +345,26 @@ export class Session {
     if (campaign === this.state.campaign) return;
     writeSave(campaign);
     this.update({ campaign });
+  }
+
+  evolutionChoices(unitId: string) {
+    return evolutionChoices(this.state.campaign, unitId);
+  }
+
+  tokensForUnit(unitId: string): number {
+    const unit = this.state.campaign.roster.find((entry) => entry.id === unitId);
+    return unit ? tokensForUnit(unit) : 0;
+  }
+
+  evolveUnit(unitId: string, nextClassId: import("../core/types").UnitClassId): void {
+    if (this.state.screen !== "brief") return;
+    const campaign = evolveUnit(this.state.campaign, unitId, nextClassId);
+    if (campaign === this.state.campaign) return;
+    writeSave(campaign);
+    this.update({
+      campaign,
+      notice: `编制进化完成：${campaign.roster.find((u) => u.id === unitId)?.name ?? ""}`,
+    });
   }
 
   toggleDeploy(unitId: string): void {

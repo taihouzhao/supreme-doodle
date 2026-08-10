@@ -1255,6 +1255,51 @@ export class Board {
     const eliteTier =
       unit.eliteTier ??
       (unit.faction === "enemy" && unit.duty === "敌军主将" ? "boss" : null);
+    if (unit.faction === "player" && unit.classId) {
+      // 玩家编制装饰：细色环，stage 越高越完整（对标精英麦穗但不混用史实军衔）
+      const stage =
+        (
+          {
+            rifle_line: 0,
+            rifle_assault: 1,
+            rifle_marksman: 2,
+            rifle_vanguard: 3,
+            mg_gunner: 0,
+            mg_section: 1,
+            mg_heavy: 2,
+            mg_fortress: 3,
+            mortar_crew: 0,
+            mortar_heavy: 1,
+            arty_field: 2,
+            arty_rocket: 3,
+            logi_porter: 0,
+            logi_pack: 1,
+            logi_motor: 1,
+            logi_column: 2,
+            logi_depot: 3,
+            ac_scout: 0,
+            ac_gun: 1,
+            tank_crew: 2,
+            tank_ace: 3,
+          } as Record<string, number>
+        )[unit.classId] ?? 0;
+      if (stage > 0) {
+        const colors: Record<string, string> = {
+          rifle: "rgba(90, 140, 70, 0.95)",
+          mg: "rgba(90, 90, 90, 0.95)",
+          mortar: "rgba(70, 110, 160, 0.95)",
+          artillery: "rgba(168, 68, 58, 0.95)",
+          logistics: "rgba(138, 106, 78, 0.95)",
+          armored_car: "rgba(70, 110, 110, 0.95)",
+          tank: "rgba(201, 162, 79, 0.95)",
+        };
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + tile * (0.06 + stage * 0.02), 0, Math.PI * (0.5 + stage * 0.5));
+        ctx.strokeStyle = colors[unit.type] ?? "rgba(200,180,120,0.9)";
+        ctx.lineWidth = Math.max(2, tile * 0.06);
+        ctx.stroke();
+      }
+    }
     if (eliteTier) {
       const wreathSize = radius * (eliteTier === "boss" ? 3.35 : 3.05);
       const wreathDrawn = this.drawImage(

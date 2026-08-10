@@ -161,6 +161,8 @@ export function routeCost(
 }
 
 export function evacGoal(state: GameState, unit: Unit): Vec2 | null {
+  const opens = state.evacOpensOnTurn ?? 0;
+  if (opens > 0 && state.turn < opens) return null;
   let best: { goal: Vec2; cost: number } | null = null;
   for (const goal of state.evacZone) {
     const cost = routeCost(state, unit, unit, goal);

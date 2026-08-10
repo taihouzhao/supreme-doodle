@@ -143,6 +143,16 @@ export const CHAPTER_ONE: ChapterConfig = {
     satchel: 0,
     arty_support: 0,
     field_manual: 1,
+    plasma_unit: 0,
+    surgeon_kit: 0,
+    compressed_ration: 0,
+    bangalore: 0,
+    shaped_charge_elite: 0,
+    smoke_screen: 0,
+    corps_arty: 0,
+    night_attack_notes: 0,
+    hero_citation: 0,
+    flare: 0,
   },
   startingArmory: ["type38", "zhongzheng", "zb26", "mortar60", "supply_cart", "type75"],
   startingAttachments: ["engineer_tools", "pack_train"],
@@ -162,7 +172,7 @@ export function rosterUnitName(spec: StartingUnitSpec): string {
 
 /** 从番号反推主将名（番号 = 主将 + 兵种名） */
 export function commanderFromUnitName(name: string): string {
-  for (const label of ["迫击炮", "机枪", "步兵", "坦克", "炮兵", "后勤"]) {
+  for (const label of ["迫击炮", "机枪", "步兵", "装甲车", "坦克", "炮兵", "后勤"]) {
     if (name.endsWith(label)) return name.slice(0, -label.length);
   }
   return name;

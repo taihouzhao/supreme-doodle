@@ -1,10 +1,29 @@
-import type { ItemDef, ItemId } from "../core/types";
+import type { ItemCategoryId, ItemDef, ItemId } from "../core/types";
 
 /**
  * 消耗品：使用后从库存扣除。
- * 部分道具额外提供「战役被动」式的小加成（见 ITEM_PASSIVES），
- * 在库存中持有时即可生效，体现「物资也能加点」。
+ * 部分道具额外提供「战役被动」式的小加成（见 ITEM_PASSIVES）。
  */
+export const ITEM_CATEGORY_OF: Record<ItemId, ItemCategoryId> = {
+  medkit: "med_field",
+  bandage: "med_field",
+  plasma_unit: "med_field",
+  surgeon_kit: "med_field",
+  ration: "ration_stamina",
+  compressed_ration: "ration_stamina",
+  at_charge: "demo_at",
+  satchel: "demo_at",
+  bangalore: "demo_at",
+  shaped_charge_elite: "demo_at",
+  arty_support: "fire_support_call",
+  smoke_screen: "fire_support_call",
+  corps_arty: "fire_support_call",
+  field_manual: "doctrine",
+  night_attack_notes: "doctrine",
+  hero_citation: "doctrine",
+  flare: "signal",
+};
+
 export const ITEMS: Record<ItemId, ItemDef> = {
   medkit: {
     id: "medkit",
@@ -32,6 +51,33 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     historicalContext: "单兵急救只能止住眼前伤势，不能替代后勤分队的人员补充与后送。",
     tacticalUse: "用于小幅稳住战线，把后勤调拨留给严重缺编单位。",
   },
+  plasma_unit: {
+    id: "plasma_unit",
+    name: "血浆",
+    targeting: "self",
+    description: "回复 55 点生命",
+    heal: 55,
+    damage: 0,
+    antiArmorOnly: false,
+    range: 0,
+    splash: false,
+    historicalContext: "野战输血受冷藏与后送限制，血浆是重伤抢救的关键物资。",
+    tacticalUse: "留给即将溃散的关键编制。",
+  },
+  surgeon_kit: {
+    id: "surgeon_kit",
+    name: "手术组",
+    targeting: "self",
+    description: "稀有：回复 80 生命并降低 20 疲劳",
+    heal: 80,
+    damage: 0,
+    antiArmorOnly: false,
+    range: 0,
+    splash: false,
+    fatigueRelief: 20,
+    historicalContext: "师团级卫生力量的游戏化抽象，代表一次完整的战地手术窗口。",
+    tacticalUse: "战役级救命物资，勿轻易消耗。",
+  },
   ration: {
     id: "ration",
     name: "炒面袋",
@@ -45,6 +91,20 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     fatigueRelief: 35,
     historicalContext: "补给受阻时，炒面成为志愿军可直接携行、无需生火的基础口粮。",
     tacticalUse: "让急行军后的部队恢复持续作战能力，但不能补回缺失兵员。",
+  },
+  compressed_ration: {
+    id: "compressed_ration",
+    name: "压缩干粮",
+    targeting: "self",
+    description: "降低 45 疲劳",
+    heal: 0,
+    damage: 0,
+    antiArmorOnly: false,
+    range: 0,
+    splash: false,
+    fatigueRelief: 45,
+    historicalContext: "后期补给改善后的压缩口粮，续航优于炒面。",
+    tacticalUse: "长途穿插或连续作战前使用。",
   },
   at_charge: {
     id: "at_charge",
@@ -72,6 +132,32 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     historicalContext: "爆破器材用于处理工事、路障与近距离火力点，效果依赖隐蔽接近。",
     tacticalUse: "优先清除高防御据点，给后续步兵打开通路。",
   },
+  bangalore: {
+    id: "bangalore",
+    name: "工兵爆破筒",
+    targeting: "tile",
+    description: "对指定格造成 48 伤害，擅长破铁丝网与工事",
+    heal: 0,
+    damage: 48,
+    antiArmorOnly: false,
+    range: 2,
+    splash: false,
+    historicalContext: "班加洛尔爆破筒用于开辟通路，是工兵突击的典型器材。",
+    tacticalUse: "突破铁丝网、地堡前使用。",
+  },
+  shaped_charge_elite: {
+    id: "shaped_charge_elite",
+    name: "聚能破甲药包",
+    targeting: "target",
+    description: "稀有：对相邻装甲造成 75 固定伤害",
+    heal: 0,
+    damage: 75,
+    antiArmorOnly: true,
+    range: 1,
+    splash: false,
+    historicalContext: "聚能装药破甲是近距反坦克的高效手段，战场上极为珍惜。",
+    tacticalUse: "留给威胁最大的坦克。",
+  },
   arty_support: {
     id: "arty_support",
     name: "炮火支援",
@@ -84,6 +170,32 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     splash: true,
     historicalContext: "炮火支援的价值不只在杀伤，更在于打乱阵地协同并为突破制造窗口。",
     tacticalUse: "等待两个以上敌军形成密集阵形，再打击中心格。",
+  },
+  smoke_screen: {
+    id: "smoke_screen",
+    name: "烟幕弹",
+    targeting: "tile",
+    description: "对指定格造成 8 伤害；主要用于扰乱（低伤溅射）",
+    heal: 0,
+    damage: 8,
+    antiArmorOnly: false,
+    range: 5,
+    splash: true,
+    historicalContext: "烟幕用于遮蔽接近与转移，杀伤不是主要目的。",
+    tacticalUse: "掩护突击路线或切断敌直瞄。",
+  },
+  corps_arty: {
+    id: "corps_arty",
+    name: "军级炮火",
+    targeting: "tile",
+    description: "稀有：对指定格及邻格造成 48 伤害",
+    heal: 0,
+    damage: 48,
+    antiArmorOnly: false,
+    range: 7,
+    splash: true,
+    historicalContext: "军级火力集中代表着短暂而昂贵的炮火窗口。",
+    tacticalUse: "关键突破回合使用。",
   },
   field_manual: {
     id: "field_manual",
@@ -99,6 +211,47 @@ export const ITEMS: Record<ItemId, ItemDef> = {
     historicalContext: "战斗经验来自对地形、火力与部队协同的复盘，而非职务或军衔变化。",
     tacticalUse: "用于即将升级、且需要承担关键战术角色的伴随将领。",
   },
+  night_attack_notes: {
+    id: "night_attack_notes",
+    name: "夜袭摘要",
+    targeting: "self",
+    description: "使用后获得 25 经验",
+    heal: 0,
+    damage: 0,
+    antiArmorOnly: false,
+    range: 0,
+    splash: false,
+    expGain: 25,
+    historicalContext: "夜战经验依赖对道路、火力死角与联络信号的复盘。",
+    tacticalUse: "给即将承担夜袭突击的分队。",
+  },
+  hero_citation: {
+    id: "hero_citation",
+    name: "嘉奖令",
+    targeting: "self",
+    description: "稀有：使用后获得 70 经验",
+    heal: 0,
+    damage: 0,
+    antiArmorOnly: false,
+    range: 0,
+    splash: false,
+    expGain: 70,
+    historicalContext: "战功嘉奖是编制荣誉，不等于职务军衔晋升。",
+    tacticalUse: "留给核心伴随将领冲击编制进化门槛。",
+  },
+  flare: {
+    id: "flare",
+    name: "信号弹",
+    targeting: "tile",
+    description: "对指定格造成 12 伤害（无溅射），标示协同",
+    heal: 0,
+    damage: 12,
+    antiArmorOnly: false,
+    range: 4,
+    splash: false,
+    historicalContext: "信号弹用于夜间联络与指示冲击方向。",
+    tacticalUse: "配合突击节奏使用。",
+  },
 };
 
 /** 库存中每持有 1 件时，对出战将领提供的被动属性（上限见下）。 */
@@ -106,16 +259,25 @@ export const ITEM_PASSIVES: Partial<
   Record<ItemId, { leadership?: number; intellect?: number; stamina?: number; cap: number }>
 > = {
   medkit: { stamina: 1, cap: 3 },
+  plasma_unit: { stamina: 1, cap: 2 },
   field_manual: { leadership: 1, intellect: 1, cap: 2 },
+  night_attack_notes: { intellect: 1, cap: 2 },
   ration: { stamina: 1, cap: 2 },
+  compressed_ration: { stamina: 1, cap: 2 },
+  hero_citation: { leadership: 2, cap: 1 },
 };
 
-export const ITEM_IDS: ItemId[] = [
-  "medkit",
-  "bandage",
-  "ration",
-  "at_charge",
-  "satchel",
-  "arty_support",
-  "field_manual",
-];
+export const ITEM_IDS: ItemId[] = Object.keys(ITEMS) as ItemId[];
+
+export function itemCategory(item: ItemId): ItemCategoryId {
+  return ITEM_CATEGORY_OF[item];
+}
+
+export function itemIsElite(item: ItemId): boolean {
+  return (
+    item === "surgeon_kit" ||
+    item === "shaped_charge_elite" ||
+    item === "corps_arty" ||
+    item === "hero_citation"
+  );
+}

@@ -51,7 +51,7 @@ export const ATTACHMENTS: Record<AttachmentId, AttachmentDef> = {
   field_telephone: {
     id: "field_telephone",
     name: "野战电话组",
-    forTypes: ["rifle", "logistics", "artillery"],
+    forTypes: ["rifle", "mg", "logistics", "artillery"],
     description: "静止时建立 5 格协同中继。",
     history: "美军与志愿军阵地间的有线野战电话",
     coordinationRelayRadius: 5,

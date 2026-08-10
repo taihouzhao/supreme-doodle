@@ -6,18 +6,21 @@ import { TERRAIN } from "../content/terrain";
 import { PROGRESS, levelFromExp } from "../content/progress";
 import { LOGISTICS, UNIT_TYPES } from "../content/units";
 import { WEAPONS, WEAPON_HISTORY } from "../content/weapons";
+import { UNIT_CLASSES, WEAPON_CATEGORY_LABELS, resolveClassId, unlockedCategories } from "../content/evolution";
+import { weaponCategory, weaponRarity } from "../content/weapons";
 import { equippableAttachments, equippableWeapons, freeAttachmentCount, freeWeaponCount, ownedAttachmentCount, ownedWeaponCount } from "../core/campaign";
 import { effectiveStats, inventoryForUnit } from "../core/commander";
 import { effectiveIndirect } from "../core/equipment";
 import { attackRange, livingUnits, unitAt } from "../core/grid";
 import { isEvacTile, movementBudget, type RosterUnit } from "../core/mission";
-import type { AttachmentId, GameState, ItemId, Unit, WeaponId, Weather } from "../core/types";
+import type { AttachmentId, GameState, ItemId, Unit, UnitClassId, WeaponId, Weather } from "../core/types";
 import {
   COMMANDER_PORTRAIT,
   ITEM_ICON,
   TERRAIN_ICON,
   UI_ICON,
   WEAPON_ICON,
+  classDecorationIcon,
   unitIdentityPortrait,
   unitPortrait,
 } from "./assets";
@@ -305,6 +308,11 @@ export class View {
         case "confirm-personnel":
           this.session.confirmPersonnelTransfer();
           break;
+        case "evolve-unit": {
+          const next = target.dataset.next as UnitClassId | undefined;
+          if (value && next) this.session.evolveUnit(value, next);
+          break;
+        }
         case "loadout-adj": {
           const rosterId = target.dataset.roster;
           const item = target.dataset.item as ItemId | undefined;
@@ -870,7 +878,7 @@ export class View {
       ${ico(WEAPON_ICON[unit.weapon], "armory__weapon")}
       <div class="armory__who">
         <strong>${esc(unit.commanderName)}${unit.keyUnit ? " · 主角" : ""}</strong>
-        <small>${esc(unit.duty ?? "直属作战分队")} · ${esc(UNIT_TYPES[unit.type].name)}</small>
+        <small>${esc(unit.duty ?? "直属作战分队")} · ${esc(UNIT_CLASSES[resolveClassId(unit.classId, unit.type)].name)} · 已解锁 ${[...unlockedCategories(resolveClassId(unit.classId, unit.type))].filter((c) => c in WEAPON_CATEGORY_LABELS).map((c) => WEAPON_CATEGORY_LABELS[c as keyof typeof WEAPON_CATEGORY_LABELS]).join("、") || "基础大类"}</small>
       </div>
       <div class="armory__pick">
         <select data-action="equip-weapon" data-value="${esc(unit.id)}" aria-label="${esc(unitDisplayName(unit))}的武器">
@@ -881,7 +889,9 @@ export class View {
               const mark = id === unit.weapon ? "✓ " : "";
               const owned = ownedWeaponCount(state.campaign, id);
               const free = freeWeaponCount(state.campaign, id, unit.id);
-              return `<option value="${id}"${id === unit.weapon ? " selected" : ""}>${mark}${esc(w.name)} · ${owned}/${free}件 · ${esc(h.caliber)}</option>`;
+              const rare = weaponRarity(id) === "elite" ? "〔精英〕" : "";
+              const cat = WEAPON_CATEGORY_LABELS[weaponCategory(id)];
+              return `<option value="${id}"${id === unit.weapon ? " selected" : ""}>${mark}${rare}${esc(w.name)} · ${esc(cat)} · ${owned}/${free}件 · ${esc(h.caliber)}</option>`;
             })
             .join("")}
         </select>
@@ -1013,9 +1023,26 @@ export class View {
     const selected = deployed.has(unit.id);
     const target = selectedTarget === unit.id;
     const hpPct = Math.max(0, Math.min(100, Math.round((unit.hp / unit.maxHp) * 100)));
-    const type = UNIT_TYPES[unit.type];
-    const status = unit.type === "logistics" ? "后勤保障" : type.name;
+    const classId = resolveClassId(unit.classId, unit.type);
+    const classDef = UNIT_CLASSES[classId];
+    const status = unit.type === "logistics" ? "后勤保障" : classDef.name;
     const role = unit.duty ?? "直属作战分队";
+    const tokens = this.session.tokensForUnit(unit.id);
+    const choices = this.session.evolutionChoices(unit.id);
+    const evolveControls =
+      choices.length > 0
+        ? `<div class="org-evolve" aria-label="编制进化">
+            <small>战斗资历装饰 · 可进化 ${tokens} 次</small>
+            ${choices
+              .map((next) => {
+                const def = UNIT_CLASSES[next];
+                return `<button type="button" class="btn btn--tiny" data-action="evolve-unit" data-value="${esc(unit.id)}" data-next="${next}" title="${esc(def.decorationLabel)}">${esc(def.name)}</button>`;
+              })
+              .join("")}
+          </div>`
+        : tokens > 0
+          ? `<small class="org-evolve__wait">已有 ${tokens} 次进化次数，当前编制已满阶或需更高战力等级</small>`
+          : `<small class="org-evolve__wait">${esc(classDef.decorationLabel)} · Lv.${unit.level}</small>`;
     return `<article class="org-unit-row${target ? " is-target" : ""}${unit.type === "logistics" ? " is-logistics" : ""}">
       <label class="org-card__deploy org-unit-row__deploy">
         <input type="checkbox" data-action="toggle-deploy" data-value="${esc(unit.id)}" aria-label="${esc(unit.commanderName)}出战" ${selected ? "checked" : ""} ${unit.keyUnit ? "disabled" : ""} />
@@ -1023,6 +1050,7 @@ export class View {
       </label>
       <button type="button" class="org-unit-row__select" data-action="select-personnel-target" data-value="${esc(unit.id)}" ${unit.type === "logistics" ? "disabled" : ""} aria-pressed="${target}">
         <span class="org-unit-row__identity">
+          <img class="org-unit-row__deco" src="${classDecorationIcon(classDef.decoration)}" alt="" width="36" height="14" />
           <strong>${esc(unitDisplayName(unit))}${unit.keyUnit ? " ★" : ""}</strong>
           <small>${esc(role)} · ${esc(status)}</small>
         </span>
@@ -1030,6 +1058,7 @@ export class View {
         <span class="org-unit-row__signals"><em>士气 ${Math.round(unit.stats.leadership)}</em><em>疲劳 ${Math.round(unit.fatigue)}</em><em>${unit.type === "logistics" ? "储备" : "弹药"} ${unit.type === "logistics" ? unit.hp : (hpPct >= 70 ? "充足" : hpPct >= 40 ? "有限" : "紧张")}</em></span>
         <span class="org-unit-row__chevron" aria-hidden="true">›</span>
       </button>
+      ${evolveControls}
       <small class="org-unit-row__cap">编制 ${deployed.size}/${cap}</small>
     </article>`;
   }

@@ -75,7 +75,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     weather: { options: ["clear", "overcast"], label: "深秋寒夜", detail: "低温、天黑后能见度下降；长射程火力略受影响。" },
     playerEquipment: PVA_EARLY,
     // 新版包围与脱离规则提高了玩家火力效率；提高敌方伤害，避免基础策略秒通。
-    enemyDamageMultiplier: 0.7,
+    enemyDamageMultiplier: 0.8,
     maxTurns: 17,
     map: [
       "^^^FF^^^F..F^^^FF^^^",
@@ -146,7 +146,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；云山城位于河谷中央，城南公路越过支流后继续向清川江方向；目标统一使用功能名“城南公路桥”。",
     weather: { options: ["clear", "overcast"], label: "寒冷夜战", detail: "入夜后气温下降，山谷间有薄雾。" },
     playerEquipment: PVA_EARLY,
-    enemyDamageMultiplier: 0.68,
+    enemyDamageMultiplier: 0.76,
     // 取消“溃散后自动推进”后，夺取第二个据点需要显式行军；保留两回合机动窗口。
     maxTurns: 24,
     map: [
@@ -222,7 +222,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；关卡聚焦军隅里以南的敌后道路网。三所里与龙源里位于横向撤退道路上，南北山路是第38军急行穿插轴；清川江只作为北缘战役背景。",
     weather: { options: ["snow", "overcast"], label: "初雪与冻土", detail: "寒潮到来，山路结冰，部队移动与远射均受影响。" },
     playerEquipment: PVA_EARLY,
-    enemyDamageMultiplier: 0.70,
+    enemyDamageMultiplier: 0.86,
     maxTurns: 16,
     map: [
       "~~~~~~~~~..~~~~~~~~~",
@@ -292,9 +292,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "在极寒中依托主补给路北、南两段临时路障，反复迟滞由柳潭里向下碣隅里收缩的陆战队纵队。敌军会从公路两端夹击清障；坚持到脱离命令下达并保存高大全。",
     mapNote: "北在上；道路由西北柳潭里方向斜向东南下碣隅里，长津湖占据东侧。两处目标是主补给路沿线临时路障；Fox连控制的死鹰岭高地仍属美军通路防御体系。",
     weather: { options: ["snow"], label: "极寒暴雪", detail: "约零下二三十摄氏度的严寒；积雪降低移动力与远程火力。" },
-    enemyDamageMultiplier: 1.33,
+    enemyDamageMultiplier: 1.22,
     playerEquipment: PVA_EARLY,
-    maxTurns: 20,
+    maxTurns: 22,
     map: [
       "FFFF^^....~~~~~~~~~~",
       "FFFF^^=...~~~~~~~~~~",
@@ -351,8 +351,14 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     scripted: [
       { kind: "coldAttrition", fromTurn: 4, damage: 1, note: "极寒冻伤：双方持续减员" },
     ],
-    // 须击溃 2 个外围单位再撤离，避免只摸掉搜索班后秒撤
-    victory: { minEvacuated: 2, evacuateRatio: 0.25, requireKeyUnit: true, minEnemiesRouted: 2 },
+    // 须击溃 2 个外围单位再撤离；撤离通道第 8 回合开放，挡住增援前秒撤
+    victory: {
+      minEvacuated: 2,
+      evacuateRatio: 0.25,
+      requireKeyUnit: true,
+      minEnemiesRouted: 2,
+      evacOpensOnTurn: 7,
+    },
   },
   {
     id: "m5-third-offensive",
@@ -369,7 +375,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "从北岸夜渡临津江，先夺取渡河带，再沿狭窄走廊向南突破议政府北侧山口。守军正向纵深收缩，必须在其完成部署前连续占领两个节点。",
     mapNote: "北在上；玩家由北向南推进。临津江横贯北部，中央公路依次通过渡河带和议政府北侧山口，目标呈前后梯次。",
     weather: { options: ["snow", "clear"], label: "隆冬冻江", detail: "河面部分冻结，夜间严寒，部队体力消耗明显。" },
-    enemyDamageMultiplier: 0.76,
+    enemyDamageMultiplier: 0.8,
     playerEquipment: PVA_EARLY,
     maxTurns: 18,
     map: [
@@ -440,7 +446,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；中央南北公路穿过韩军突出部，南侧道路通向横城—原州撤退轴。玩家从北侧及两翼山路进入，目标沿撤退方向前后排列。",
     weather: { options: ["snow", "fog"], label: "雪夜低云", detail: "积雪与低云降低双方机动和远程观察。" },
     playerEquipment: PVA_EARLY,
-    enemyDamageMultiplier: 0.95,
+    enemyDamageMultiplier: 1.18,
     maxTurns: 18,
     map: [
       "^^^^^F........F^^^^^",
@@ -488,7 +494,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     scripted: [
       { kind: "nightAssault", turns: [1, 3], attackBonus: 0.14, note: "横城夜袭" },
     ],
-    victory: { requiredCaptures: 2, holdTurns: 2, minSurvivors: 2 },
+    victory: { requiredCaptures: 2, holdTurns: 3, minSurvivors: 2 },
   },
   {
     id: "m7-chipyongni",
@@ -507,8 +513,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "村镇与连续堡垒环代表砥平里防御圈；北侧整行是脱离地域，南侧道路是克伦贝装甲特遣队解围方向。",
     weather: { options: ["snow", "overcast"], label: "残雪与低云", detail: "夜间寒冷，天亮后能见度逐步改善。" },
     playerEquipment: PVA_EARLY,
-    // 最新敌方集火与脱离接触成本会叠加放大撤离压力；保留夜间火力优势但避免形成死种子。
-    enemyDamageMultiplier: 1.0,
+    // 自适应难度抬升后，砥平里撤离关需要更低底伤以免死种子。
+    enemyDamageMultiplier: 0.92,
     maxTurns: 18,
     map: [
       "FF................FF",
@@ -552,10 +558,16 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { id: "chipyongni-withdrawal", x: 10, y: 1, name: "北撤通道", historicalContext: "志愿军在攻击受挫、补给压力增加后脱离接触；关卡把保存部队写进胜利条件。", tacticalHint: "达到最低交战要求后分批北撤，利用控制区拖慢追兵。" },
     ],
     scripted: [
-      { kind: "barrage", turns: [4, 7], damage: 5, note: "联合国军炮兵与空中支援压制" },
+      { kind: "barrage", turns: [4, 7], damage: 4, note: "联合国军炮兵与空中支援压制" },
       { kind: "supplyWindow", untilTurn: 7, penalty: 0.14, note: "外线弹药耗尽" },
     ],
-    victory: { minEvacuated: 4, evacuateRatio: 0.5, requireKeyUnit: true, minEnemiesRouted: 1 },
+    victory: {
+      minEvacuated: 4,
+      evacuateRatio: 0.5,
+      requireKeyUnit: true,
+      minEnemiesRouted: 1,
+      evacOpensOnTurn: 6,
+    },
   },
   {
     id: "m8-imjin",
@@ -572,7 +584,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "从北岸夜渡临津江，夺取南岸桥头后沿雪马里谷地分割英军，最后攻上235高地。三个地段是连续纵深，不要在渡口与高地同时分兵硬冲。",
     mapNote: "北在上；玩家由北向南推进。临津江横在北部，雪马里位于中央谷地，235高地是南端终局据点。",
     weather: { options: ["clear", "fog"], label: "春夜薄雾", detail: "夜间河谷能见度有限，白天气象适合联合国军空中支援。" },
-    enemyDamageMultiplier: 1.2,
+    enemyDamageMultiplier: 0.93,
     playerEquipment: PVA_LATE,
     maxTurns: 17,
     map: [
@@ -643,6 +655,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；铁原纵深在北，联合国军从南缘沿中央公路向北追击。前沿公路口在南，第二阻击线高地在北，纠正旧图反向。",
     weather: { options: ["rain", "overcast"], label: "初夏阵雨", detail: "道路泥泞，低云抑制远程观察，但装甲仍可沿公路推进。" },
     playerEquipment: PVA_LATE,
+    enemyDamageMultiplier: 1.0,
     maxTurns: 19,
     map: [
       "^^^^^FF......FF^^^^^",
@@ -695,8 +708,14 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     scripted: [
       { kind: "barrage", turns: [5, 8], damage: 2, note: "联合国军炮火准备" },
     ],
-    // 须南下接触击溃 2 个单位后再北撤；扩大撤离区降低死档同时保留配额压力
-    victory: { minEvacuated: 4, evacuateRatio: 0.45, requireKeyUnit: true, minEnemiesRouted: 2 },
+    // 须南下接触击溃 2 个单位后再北撤；撤离通道第 7 回合开放，避免接敌前北撤
+    victory: {
+      minEvacuated: 3,
+      evacuateRatio: 0.35,
+      requireKeyUnit: true,
+      minEnemiesRouted: 2,
+      evacOpensOnTurn: 5,
+    },
   },
   {
     id: "m10-triangle-hill",
@@ -714,7 +733,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；五圣山纵深在北，597.9与537.7北山紧凑相邻，堡垒格表示坑道后口；美7师与韩2师从南侧进攻。",
     weather: { options: ["overcast", "rain", "snow"], label: "深秋转初冬", detail: "战斗持续43天，经历阴雨、低云和初雪。" },
     playerEquipment: PVA_LATE,
-    enemyDamageMultiplier: 0.75,
+    enemyDamageMultiplier: 0.92,
     maxTurns: 17,
     map: [
       "FF^^^FFF....FFF^^^FF",
@@ -789,7 +808,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "借雨雾接近猪排山，夺取东、西两个前沿支撑点并顶住反击。壕沟和高地减伤明显，迫击炮与炮火支援是打开缺口的关键。",
     mapNote: "北在上；东西支撑点位于同一条连续猪排山前哨山脊，由壕沟与地堡相连。玩家从志愿军北侧阵地接近，美军由南侧主抵抗线增援。",
     weather: { options: ["rain", "fog"], label: "季风雨雾", detail: "持续降雨与山雾削弱远程火力，谷地泥泞。" },
-    enemyDamageMultiplier: 0.76,
+    enemyDamageMultiplier: 0.95,
     playerEquipment: PVA_LATE_ARMOR,
     maxTurns: 17,
     map: [
@@ -865,7 +884,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；本图仅表现中央集团轿岩山切片。西峰主峰与中、东峰构成连续山体，南侧金城川是战役纵深线；北汉江位于画外东翼。",
     weather: { options: ["rain"], label: "盛夏暴雨", detail: "季风暴雨造成河水上涨、道路泥泞，远程火力效果下降。" },
     // 金城反击的基础策略在新敌方集火规则下难以突破，保留纵深火力但给正面突击留出可玩窗口。
-    enemyDamageMultiplier: 0.40,
+    enemyDamageMultiplier: 0.74,
     playerEquipment: PVA_LATE,
     maxTurns: 23,
     map: [

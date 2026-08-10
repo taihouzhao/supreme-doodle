@@ -357,6 +357,8 @@ export function performAttack(
 
 export function performCapture(state: GameState, unit: Unit, events: GameEvent[]): boolean {
   if (!UNIT_TYPES[unit.type].canCapture) return false;
+  // 敌军机枪组以阵地火力为主，不主动夺点；玩家机枪仍可占领。
+  if (unit.faction === "enemy" && unit.type === "mg") return false;
   const objective = state.objectives.find(
     (o) => o.kind === "capture" && o.x === unit.x && o.y === unit.y,
   );
