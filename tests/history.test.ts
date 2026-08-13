@@ -224,7 +224,9 @@ describe("历史战役内容", () => {
     const m5 = histogram(MISSION_LIST[4]!.map);
     const m9 = histogram(MISSION_LIST[8]!.map);
     const m10 = histogram(MISSION_LIST[9]!.map);
-    expect((m1["#"] ?? 0) > (m1.F ?? 0)).toBe(true);
+    expect((m1.F ?? 0)).toBeGreaterThan(40);
+    expect((m1.F ?? 0)).toBeGreaterThan(m9.F ?? 0);
+    expect((m1["~"] ?? 0)).toBeGreaterThan(10);
     expect(MISSION_LIST[2]!.map[5]).toMatch(/V.*=.*V|V=/);
     expect((m3["="] ?? 0) > (m3["#"] ?? 0)).toBe(true);
     expect((m5["~"] ?? 0) > (m5["="] ?? 0)).toBe(true);

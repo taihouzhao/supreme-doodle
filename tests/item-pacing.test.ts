@@ -7,6 +7,7 @@ import {
   briefingGearHint,
   itemsKnownAtMission,
   resupplyAfterMission,
+  warehouseForMissionIndex,
 } from "../src/content/item-pacing";
 import { MISSION_LIST } from "../src/content/missions";
 import { createCampaign, finishMission, startMission } from "../src/core/campaign";
@@ -50,6 +51,16 @@ describe("战役物资循序解锁", () => {
     expect(itemsKnownAtMission(0).has("bandage")).toBe(true);
     expect(itemsKnownAtMission(0).has("medkit")).toBe(false);
     expect(itemsKnownAtMission(1).has("medkit")).toBe(true);
+  });
+
+  it("孤立开打后期关卡会带上已经解锁的补给", () => {
+    expect(warehouseForMissionIndex(0)).toEqual({ bandage: 2, ration: 1 });
+    expect(warehouseForMissionIndex(8).arty_support).toBe(1);
+    expect(warehouseForMissionIndex(7).medkit).toBeGreaterThan(0);
+    expect(warehouseForMissionIndex(7).signal_flare).toBe(1);
+    expect(warehouseForMissionIndex(7).arty_support).toBeUndefined();
+    expect(warehouseForMissionIndex(1).at_charge).toBeUndefined();
+    expect(warehouseForMissionIndex(2).at_charge).toBe(1);
   });
 
   it("地图掉落不会提前塞进尚未引入的重型工具", () => {

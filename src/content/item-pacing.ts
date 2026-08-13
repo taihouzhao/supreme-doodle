@@ -90,3 +90,15 @@ export function resupplyAfterMission(
 ): Partial<Record<ItemId, number>> {
   return PACED_RESUPPLY_AFTER[completedMissionIndex] ?? {};
 }
+
+/** 孤立开打第 N 关时，视为已经领过前 N 关补给。 */
+export function warehouseForMissionIndex(missionIndex: number): Partial<Record<ItemId, number>> {
+  const stock: Partial<Record<ItemId, number>> = { ...PACED_STARTING_INVENTORY };
+  for (let i = 0; i < missionIndex; i += 1) {
+    for (const [id, amount] of Object.entries(PACED_RESUPPLY_AFTER[i] ?? {})) {
+      const item = id as ItemId;
+      stock[item] = (stock[item] ?? 0) + (amount ?? 0);
+    }
+  }
+  return stock;
+}
