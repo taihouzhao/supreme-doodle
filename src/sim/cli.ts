@@ -66,6 +66,8 @@ function replacer(key: string, value: unknown): unknown {
   return key === "finalState" || key === "actions" ? undefined : value;
 }
 
+const failed = result.gates.filter((gate) => !gate.passed);
+
 if (!options.quiet) {
   for (const gate of result.gates) {
     console.log(`${gate.passed ? "PASS" : "FAIL"}  ${gate.title}\n      ${gate.detail}`);
@@ -73,7 +75,10 @@ if (!options.quiet) {
   console.log(
     `\n报告已写入 ${options.out}（${(result.elapsedMs / 1000).toFixed(1)}s，${result.workers} workers）`,
   );
+} else if (failed.length > 0) {
+  for (const gate of failed) {
+    console.log(`FAIL  ${gate.title}\n      ${gate.detail}`);
+  }
 }
 
-const failed = result.gates.filter((gate) => !gate.passed);
 process.exitCode = failed.length === 0 ? 0 : 1;

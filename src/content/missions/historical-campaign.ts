@@ -146,7 +146,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；云山城位于河谷中央，城南公路越过支流后继续向清川江方向；目标统一使用功能名“城南公路桥”。",
     weather: { options: ["clear", "overcast"], label: "寒冷夜战", detail: "入夜后气温下降，山谷间有薄雾。" },
     playerEquipment: PVA_EARLY,
-    enemyDamageMultiplier: 0.76,
+    enemyDamageMultiplier: 0.72,
     // 取消“溃散后自动推进”后，夺取第二个据点需要显式行军；保留两回合机动窗口。
     maxTurns: 24,
     map: [
@@ -293,7 +293,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "在极寒中依托主补给路北、南两段临时路障，反复迟滞由柳潭里向下碣隅里收缩的陆战队纵队。敌军会从公路两端夹击清障；坚持到脱离命令下达并保存高大全。",
     mapNote: "北在上；道路由西北柳潭里方向斜向东南下碣隅里，长津湖占据东侧。两处目标是主补给路沿线临时路障；Fox连控制的死鹰岭高地仍属美军通路防御体系。",
     weather: { options: ["snow"], label: "极寒暴雪", detail: "约零下二三十摄氏度的严寒；积雪降低移动力与远程火力。" },
-    enemyDamageMultiplier: 1.22,
+    enemyDamageMultiplier: 1.16,
     playerEquipment: PVA_EARLY,
     maxTurns: 22,
     map: [
@@ -448,7 +448,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；中央南北公路穿过韩军突出部，南侧道路通向横城—原州撤退轴。玩家从北侧及两翼山路进入，目标沿撤退方向前后排列。",
     weather: { options: ["snow", "fog"], label: "雪夜低云", detail: "积雪与低云降低双方机动和远程观察。" },
     playerEquipment: PVA_EARLY,
-    enemyDamageMultiplier: 1.18,
+    enemyDamageMultiplier: 1.1,
     maxTurns: 18,
     map: [
       "^^^^^F........F^^^^^",
@@ -888,7 +888,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；本图仅表现中央集团轿岩山切片。西峰主峰与中、东峰构成连续山体，南侧金城川是战役纵深线；北汉江位于画外东翼。",
     weather: { options: ["rain"], label: "盛夏暴雨", detail: "季风暴雨造成河水上涨、道路泥泞，远程火力效果下降。" },
     // 金城反击的基础策略在新敌方集火规则下难以突破，保留纵深火力但给正面突击留出可玩窗口。
-    enemyDamageMultiplier: 0.74,
+    enemyDamageMultiplier: 0.64,
     playerEquipment: PVA_LATE,
     maxTurns: 23,
     map: [
