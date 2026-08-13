@@ -887,8 +887,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "在炮火准备后由北向南突破轿岩山三峰阵地：先撕开中、东峰结合部，再夺主峰。暴雨掩护接近也会拖慢机动；最后一关仍以保存主力为硬约束。",
     mapNote: "北在上；轿岩山主峰与中东峰错落，南侧金城川横贯；北汉江在画外。三峰不是对称双墙，也没有贯穿南北的密林夹道。",
     weather: { options: ["rain"], label: "盛夏暴雨", detail: "季风暴雨造成河水上涨、道路泥泞，远程火力效果下降。" },
-    // 金城反击的基础策略在新敌方集火规则下难以突破，保留纵深火力但给正面突击留出可玩窗口。
-    enemyDamageMultiplier: 0.64,
+    // 孤立基础过不去，但战役编制到此会把 0.64 打成近乎白给；压到与临津江同级，并多守一回合。
+    enemyDamageMultiplier: 0.88,
     playerEquipment: PVA_LATE,
     maxTurns: 23,
     map: [
@@ -939,6 +939,6 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { kind: "barrage", turns: [7, 11], damage: 2, note: "联合国军拦阻炮火" },
       { kind: "supplyWindow", untilTurn: 9, penalty: 0.1, note: "金城反击弹药窗口" },
     ],
-    victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 2 },
+    victory: { requiredCaptures: 2, holdTurns: 2, minSurvivors: 2 },
   },
 ];
