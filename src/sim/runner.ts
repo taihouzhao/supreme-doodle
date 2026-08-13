@@ -1,5 +1,6 @@
 import type { Agent } from "../ai/types";
 import { CHAPTERS } from "../content/chapter";
+import { warehouseForMissionIndex } from "../content/item-pacing";
 import { getMission } from "../content/missions";
 import { levelFromExp } from "../content/units";
 import {
@@ -154,6 +155,11 @@ export function playStandaloneMission(
   if (!chapter) throw new Error(`未知章节: ${chapterId}`);
   const campaign = createCampaign(chapterId, seed);
   const mission = getMission(missionId);
+  const missionIndex = Math.max(0, chapter.missions.findIndex((entry) => entry.id === missionId));
+  const inventory = {
+    ...campaign.inventory,
+    ...warehouseForMissionIndex(missionIndex),
+  };
 
   const deployed = campaign.roster
     .slice()
@@ -164,7 +170,7 @@ export function playStandaloneMission(
     mission,
     seed: deriveSeed(seed, mission.id),
     roster: deployed,
-    inventory: campaign.inventory,
+    inventory,
   });
 
   const run = playMission(state, agent, seed, seed, options);

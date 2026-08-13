@@ -2021,6 +2021,16 @@ body {
   color: var(--ink-soft);
 }
 
+.gear-unlock {
+  margin: 0.35rem 0 0.75rem;
+  padding: 0.55rem 0.7rem;
+  border-left: 3px solid rgba(120, 90, 40, 0.55);
+  background: rgba(239, 228, 200, 0.55);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--ink);
+}
+
 /* ---------- 军械库配装 ---------- */
 
 .armory {

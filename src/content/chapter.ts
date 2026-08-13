@@ -1,4 +1,5 @@
 import type { AttachmentId, CommanderStats, ItemId, UnitTypeId, WeaponId } from "../core/types";
+import { PACED_RESUPPLY_AFTER, PACED_STARTING_INVENTORY } from "./item-pacing";
 import { designation } from "./naming";
 import { MISSION_LIST } from "./missions";
 import type { MissionConfig } from "./missions/schema";
@@ -40,7 +41,7 @@ export interface ChapterConfig {
   startingRoster: StartingUnitSpec[];
   /** 补充兵可用的主将名池（按顺序取尚未在花名册中的） */
   reserveCommanders: string[];
-  startingInventory: Record<ItemId, number>;
+  startingInventory: Partial<Record<ItemId, number>>;
   /** 开局军械库 */
   startingArmory: WeaponId[];
   /** 开局附件库存；与 startingRoster 的附件一一对应时仍只计一件实物。 */
@@ -55,8 +56,10 @@ export interface ChapterConfig {
   returningUnit: { hp: number; expPenalty: number };
   /** 关卡之间恢复的生命与疲劳比例 */
   restRecovery: { hp: number; fatigue: number };
-  /** 每关结束补给的道具 */
-  resupply: Partial<Record<ItemId, number>>;
+  /** 每关结束补给的道具（缺省时回退；优先用 resupplyAfter） */
+  resupply?: Partial<Record<ItemId, number>>;
+  /** 打完 missions[i] 后入库的物资 */
+  resupplyAfter?: Array<Partial<Record<ItemId, number>>>;
 }
 
 /**
@@ -135,30 +138,7 @@ export const CHAPTER_ONE: ChapterConfig = {
     "高玉宝",
     "倪恩德",
   ],
-  startingInventory: {
-    medkit: 1,
-    bandage: 2,
-    ration: 1,
-    compressed_ration: 1,
-    water_purification: 1,
-    grenade_bundle: 1,
-    smoke_grenade: 1,
-    ammo_crate: 1,
-    signal_flare: 1,
-    at_charge: 1,
-    satchel: 0,
-    arty_support: 0,
-    field_manual: 1,
-    plasma_unit: 0,
-    surgeon_kit: 0,
-    bangalore: 0,
-    shaped_charge_elite: 0,
-    smoke_screen: 0,
-    corps_arty: 0,
-    night_attack_notes: 0,
-    hero_citation: 0,
-    flare: 0,
-  },
+  startingInventory: PACED_STARTING_INVENTORY,
   startingArmory: ["type38", "zhongzheng", "zb26", "mortar60", "supply_cart", "type75"],
   startingAttachments: ["engineer_tools", "pack_train"],
   minRoster: 5,
@@ -168,16 +148,7 @@ export const CHAPTER_ONE: ChapterConfig = {
   permanentLossChance: { won: 0.25, lost: 0.45 },
   returningUnit: { hp: 40, expPenalty: 0.25 },
   restRecovery: { hp: 0.45, fatigue: 0.55 },
-  resupply: {
-    medkit: 1,
-    bandage: 1,
-    ration: 1,
-    compressed_ration: 1,
-    smoke_grenade: 1,
-    ammo_crate: 1,
-    at_charge: 1,
-    arty_support: 1,
-  },
+  resupplyAfter: PACED_RESUPPLY_AFTER,
 };
 
 export function rosterUnitName(spec: StartingUnitSpec): string {

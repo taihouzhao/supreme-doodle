@@ -4,6 +4,7 @@ import { applyAction, hashState, legalActions } from "../src/core/engine";
 import { Rng, deriveSeed, nextRandom } from "../src/core/rng";
 import { playStandaloneMission } from "../src/sim/runner";
 import { MISSION_LIST } from "../src/content/missions";
+import { warehouseForMissionIndex } from "../src/content/item-pacing";
 import { createCampaign } from "../src/core/campaign";
 import { createMissionState } from "../src/core/mission";
 import type { Action, GameState } from "../src/core/types";
@@ -11,6 +12,7 @@ import type { Action, GameState } from "../src/core/types";
 function freshState(missionId: string, seed: number): GameState {
   const mission = MISSION_LIST.find((m) => m.id === missionId)!;
   const campaign = createCampaign("chapter-one", seed);
+  const missionIndex = Math.max(0, MISSION_LIST.findIndex((entry) => entry.id === missionId));
   const roster = campaign.roster
     .slice()
     .sort((a, b) => b.exp - a.exp || a.id.localeCompare(b.id))
@@ -19,7 +21,10 @@ function freshState(missionId: string, seed: number): GameState {
     mission,
     seed: deriveSeed(seed, mission.id),
     roster,
-    inventory: campaign.inventory,
+    inventory: {
+      ...campaign.inventory,
+      ...warehouseForMissionIndex(missionIndex),
+    },
   });
 }
 

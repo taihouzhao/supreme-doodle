@@ -1,4 +1,5 @@
 import { ITEMS, ITEM_IDS } from "../content/items";
+import { briefingGearHint } from "../content/item-pacing";
 import { ATTACHMENTS } from "../content/attachments";
 import { BALANCE } from "../content/balance";
 import { CHAPTER_ONE } from "../content/chapter";
@@ -934,6 +935,7 @@ export class View {
     );
     return `
       <p class="hq-panel__lead">${esc(mission.brief)}</p>
+      <p class="gear-unlock">${esc(briefingGearHint(state.campaign.missionIndex))}</p>
       <h4>任务目标</h4>
       <ul class="sheet__goals">
         ${goals.map((goal) => `<li>${ico(UI_ICON.objPending, "ico ico--sm")}${esc(goal)}</li>`).join("")}
@@ -1000,6 +1002,7 @@ export class View {
       .join("、");
     const warehouseCount = ITEM_IDS.reduce((sum, id) => sum + (state.campaign.inventory[id] ?? 0), 0);
     return `
+      <p class="sheet__hint">战役仓库只显示已获得的物资；前期种类很少，后续关卡才会解锁烟幕、弹药箱和炮火支援。</p>
       <p class="sheet__hint">战役库存（战役仓库）：为各将领分配武器与本关携行；每名将领最多 3 格、${UNIT_BACKPACK_WEIGHT_CAP} 点负重，仓库最多保留 ${WAREHOUSE_CAP} 件。</p>
       <p class="sheet__hint">每支部队固定 1 件武器，可再装 0–1 件附件；换装只在库存有空闲实物时生效，不会自动按评分替换。</p>
       <p class="sheet__hint">附件库存：${Object.entries(state.campaign.attachments.reduce<Record<string, number>>((all, id) => ({ ...all, [id]: (all[id] ?? 0) + 1 }), {}))
@@ -1252,6 +1255,7 @@ export class View {
           ${outcome.replacementNames.length > 0 ? `<p class="result-detail"><strong>补充编入：</strong>${esc(outcome.replacementNames.join("、"))}</p>` : ""}
           ${outcome.weaponsGained.length > 0 ? `<p class="result-detail"><strong>缴获/奖励：</strong>${esc(outcome.weaponsGained.map((id) => WEAPONS[id].name).join("、"))}</p>` : ""}
           ${(outcome.itemsGained?.length ?? 0) > 0 ? `<p class="result-detail"><strong>战利品：</strong>${esc((outcome.itemsGained ?? []).map((id) => ITEMS[id].name).join("、"))} · 优先保留历史战利品（仓库上限 ${WAREHOUSE_CAP} 件）</p>` : ""}
+          ${outcome.itemsUnlockedHint ? `<p class="result-detail gear-unlock">${esc(outcome.itemsUnlockedHint)}</p>` : ""}
           ${(outcome.itemsDiscarded?.length ?? 0) > 0 ? `<p class="result-detail result-detail--warning"><strong>仓库已满：</strong>${esc((outcome.itemsDiscarded ?? []).map((id) => ITEMS[id].name).join("、"))} 未能保留</p>` : ""}
           ${outcome.attachmentsGained.length > 0 ? `<p class="result-detail"><strong>附件入库：</strong>${esc(outcome.attachmentsGained.map((id) => ATTACHMENTS[id].name).join("、"))}</p>` : ""}
           <p class="result-detail"><strong>抵达地标：</strong>${landmarks.length > 0 ? esc(landmarks.join("、")) : "本关未抵达已登记地标"}</p>
