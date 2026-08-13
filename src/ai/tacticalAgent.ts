@@ -321,6 +321,15 @@ function priority(state: GameState, unit: Unit): number {
   if (unit.type === "artillery") score += 15;
   if (unit.type === "logistics") score += 8;
   if (unit.type === "tank") score += 10;
+  // 温井路肩封锁点在机枪射界内：让非主力步兵先去踩点，避免高大全自己去公路对射。
+  if (
+    state.missionId === "m1-onjong" &&
+    UNIT_TYPES[unit.type].canCapture &&
+    !unit.keyUnit &&
+    state.objectives.some((objective) => objective.kind === "capture" && objective.owner !== "player")
+  ) {
+    score += 50;
+  }
   return score;
 }
 

@@ -70,12 +70,12 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       pva("wen-yucheng", "温玉成", "第40军军长", "中国人民志愿军第40军"),
       un("kim-jong-oh", "金钟五", "第6师师长", "韩国陆军第6步兵师", undefined, "准将", "rok-brigadier-general"),
     ],
-    brief: "隐蔽进入两水洞峡谷两侧高地，待韩军先头营进入谷底后拦头、截尾，再向南夺取温井。敌军会沿温井—北镇公路续进；高大全必须生还。",
-    mapNote: "北在上；中央纵路是温井—北镇公路，两侧密林与高地夹出两水洞伏击走廊，温井位于地图南端，九龙江沿南侧限制机动。",
+    brief: "隐蔽进入两水洞两侧林缘，先占领公路西侧封锁点切断温井—北镇公路，再向南夺取温井。敌军会沿公路续进；高大全必须生还。",
+    mapNote: "北在上；中央纵路是温井—北镇公路，两侧密林与高地夹出两水洞伏击走廊。西侧林缘是封锁点，温井在河南岸，九龙江限制迂回。",
     weather: { options: ["clear", "overcast"], label: "深秋寒夜", detail: "低温、天黑后能见度下降；长射程火力略受影响。" },
     playerEquipment: PVA_EARLY,
-    // 林缘伏击仍要可打；侧翼密林必须可走，避免主力被逼上公路秒死。
-    enemyDamageMultiplier: 0.8,
+    // 物资精简后林缘伏击仍要可打；侧翼密林必须可走，避免主力被逼上公路秒死。
+    enemyDamageMultiplier: 0.82,
     maxTurns: 17,
     map: [
       "^^^FF^^^F..F^^^FF^^^",
@@ -111,23 +111,23 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     variantSlots: [],
     waves: [
-      { window: [3, 4], units: [{ type: "rifle", x: 10, y: 2, name: "韩军后续纵队", equipment: "M1加兰德步枪", exp: 40 }] },
+      { window: [6, 7], units: [{ type: "rifle", x: 10, y: 2, name: "韩军后续纵队", equipment: "M1加兰德步枪", exp: 40 }] },
     ],
     objectives: [
-      { id: "ambush-line", name: "两水洞伏击封锁线", kind: "capture", x: 9, y: 6, owner: "enemy" },
+      { id: "ambush-line", name: "两水洞西侧封锁点", kind: "capture", x: 7, y: 6, owner: "enemy" },
       { id: "onjong", name: "温井", kind: "capture", x: 9, y: 12, owner: "enemy" },
     ],
     evacZone: [],
     itemDrops: [{ x: 6, y: 8, options: ["medkit", "bandage", "ration"] }, { x: 13, y: 8, options: ["medkit", "bandage", "ration"] }],
     places: [
       { id: "onjong", x: 9, y: 12, name: "温井", historicalContext: "温井是第一次战役初期的关键接触地域；本关把战斗收束到先头部队与公路节点。", tacticalHint: "伏击线得手后必须继续南下，不能把歼敌当成占领。" },
-      { id: "liangshuidong", x: 9, y: 6, name: "两水洞峡谷", historicalContext: "韩军第6师第2团先头第3营及炮兵中队沿公路进入峡谷地带。", tacticalHint: "利用两侧高地建立对向封锁，触发包围加成并截断纵队。" },
+      { id: "liangshuidong", x: 7, y: 6, name: "两水洞西侧封锁点", historicalContext: "韩军第6师第2团先头第3营及炮兵中队沿公路进入峡谷地带；封锁点设在公路西侧路肩，机枪仍留在谷底公路上。", tacticalHint: "先占领路肩切断公路，再用两侧火力覆盖谷底纵队，不要把主力堆上公路。" },
       { id: "bukjin-axis", x: 10, y: 2, name: "北镇方向", historicalContext: "北侧公路代表敌军先头与后续部队进入温井地区的轴线。", tacticalHint: "不要把全部兵力压在谷底；保留一支部队监视北向增援。" },
     ],
     scripted: [
       { kind: "nightAssault", turns: [1, 3], attackBonus: 0.18, note: "黄昏夜袭：志愿军近战火力占优" },
     ],
-    victory: { requiredCaptures: 2, holdTurns: 1, minSurvivors: 2 },
+    victory: { requiredCaptures: 2, holdTurns: 2, minSurvivors: 2 },
   },
   {
     id: "m2-unsan",
@@ -222,7 +222,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；清川江横在北缘，三所里与龙源里同在一条东西向南撤公路上；志愿军从南山脊穿插，没有贯穿南北的中央大道。",
     weather: { options: ["snow", "overcast"], label: "初雪与冻土", detail: "寒潮到来，山路结冰，部队移动与远射均受影响。" },
     playerEquipment: PVA_EARLY,
-    enemyDamageMultiplier: 0.7,
+    enemyDamageMultiplier: 0.64,
     maxTurns: 16,
     map: [
       "~~~~~~~~~~~~~~~~~~~~",
@@ -656,7 +656,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；铁原是开阔交通走廊，森林极少。联合国军沿中央公路由南向北追击；北缘是脱离带，两道阻击线是孤立堡垒而不是密林夹道。",
     weather: { options: ["rain", "overcast"], label: "初夏阵雨", detail: "道路泥泞，低云抑制远程观察，但装甲仍可沿公路推进。" },
     playerEquipment: PVA_LATE,
-    enemyDamageMultiplier: 1.08,
+    enemyDamageMultiplier: 1.16,
     maxTurns: 19,
     map: [
       "....................",
@@ -811,7 +811,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "借雨雾接近猪排山，夺取东、西两个前沿支撑点并顶住反击。壕沟和高地减伤明显，迫击炮与炮火支援是打开缺口的关键。",
     mapNote: "北在上；东西两个支撑点是同一条猪排山脊上的地堡，中间交通壕相连；南北都是接近地，没有贯穿全图的密林夹道。",
     weather: { options: ["rain", "fog"], label: "季风雨雾", detail: "持续降雨与山雾削弱远程火力，谷地泥泞。" },
-    enemyDamageMultiplier: 1.34,
+    enemyDamageMultiplier: 1.42,
     playerEquipment: PVA_LATE_ARMOR,
     maxTurns: 17,
     map: [
