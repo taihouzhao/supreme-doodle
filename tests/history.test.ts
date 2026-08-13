@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CHAPTER_ONE } from "../src/content/chapter";
 import { MISSION_LIST } from "../src/content/missions";
+import { TERRAIN, TERRAIN_CHARS } from "../src/content/terrain";
 import { WEAPONS, WEAPON_HISTORY, weaponFits, weaponForEquipment } from "../src/content/weapons";
 import { createCampaign, startMission } from "../src/core/campaign";
 import {
@@ -168,11 +169,12 @@ describe("历史战役内容", () => {
     expect(joined.includes("F")).toBe(true);
   });
 
-  it("地图、出生点、目标和撤离区全部在边界内", () => {
+  it("地图、出生点、目标和撤离区全部在边界内且可通行", () => {
     for (const mission of MISSION_LIST) {
       const height = mission.map.length;
       const width = mission.map[0]?.length ?? 0;
-      expect(width).toBeGreaterThan(0);
+      expect(width).toBe(20);
+      expect(height).toBe(14);
       expect(mission.map.every((row) => row.length === width)).toBe(true);
       const points = [
         ...mission.playerSpawns,
@@ -180,14 +182,56 @@ describe("历史战役内容", () => {
         ...mission.objectives,
         ...mission.evacZone,
         ...mission.itemDrops,
+        ...(mission.supplyPoints ?? []),
+        ...(mission.places ?? []),
+        ...mission.waves.flatMap((wave) => wave.units),
       ];
       for (const point of points) {
         expect(point.x).toBeGreaterThanOrEqual(0);
         expect(point.y).toBeGreaterThanOrEqual(0);
         expect(point.x).toBeLessThan(width);
         expect(point.y).toBeLessThan(height);
+        const glyph = mission.map[point.y]![point.x]!;
+        const terrainId = TERRAIN_CHARS[glyph];
+        expect(terrainId, `${mission.id} 未知地形 ${glyph} @${point.x},${point.y}`).toBeTruthy();
+        expect(TERRAIN[terrainId!].passable, `${mission.id} 不可通行 ${glyph} @${point.x},${point.y}`).toBe(true);
       }
     }
+  });
+
+  it("十二关地形轮廓互不雷同，能读出不同战法", () => {
+    const histogram = (map: string[]) => {
+      const counts: Record<string, number> = {};
+      for (const row of map) {
+        for (const glyph of row) counts[glyph] = (counts[glyph] ?? 0) + 1;
+      }
+      return counts;
+    };
+    const signatures = MISSION_LIST.map((mission) => {
+      const counts = histogram(mission.map);
+      const ranked = Object.entries(counts)
+        .filter(([glyph]) => glyph !== ".")
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .slice(0, 3)
+        .map(([glyph, count]) => `${glyph}:${count}`)
+        .join(",");
+      return `${mission.id}|${ranked}`;
+    });
+    expect(new Set(signatures).size).toBe(12);
+
+    const m1 = histogram(MISSION_LIST[0]!.map);
+    const m3 = histogram(MISSION_LIST[2]!.map);
+    const m5 = histogram(MISSION_LIST[4]!.map);
+    const m9 = histogram(MISSION_LIST[8]!.map);
+    const m10 = histogram(MISSION_LIST[9]!.map);
+    expect((m1["#"] ?? 0) > (m1.F ?? 0)).toBe(true);
+    expect(MISSION_LIST[2]!.map[5]).toMatch(/V.*=.*V|V=/);
+    expect((m3["="] ?? 0) > (m3["#"] ?? 0)).toBe(true);
+    expect((m5["~"] ?? 0) > (m5["="] ?? 0)).toBe(true);
+    expect((m9["."] ?? 0) / 280).toBeGreaterThan(0.7);
+    expect((m10.B ?? 0) + (m10["^"] ?? 0)).toBeGreaterThan(80);
+    expect(MISSION_LIST[5]!.map.join("").includes("#")).toBe(true);
+    expect(MISSION_LIST[8]!.map[0]).toBe("....................");
   });
 
   it("高大全是唯一虚构主角，伴随将领为真实人物", () => {

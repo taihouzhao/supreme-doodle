@@ -16,6 +16,7 @@ import {
   unlockedCategories,
 } from "../content/evolution";
 import { ITEM_IDS, ITEMS } from "../content/items";
+import { resupplyAfterMission, resupplyUnlockHint } from "../content/item-pacing";
 import type { MissionConfig } from "../content/missions/schema";
 import { BASE_STATS } from "../content/progress";
 import { LOGISTICS, levelFromExp } from "../content/units";
@@ -50,6 +51,8 @@ export interface MissionOutcome {
   weaponsGained: WeaponId[];
   itemsGained?: ItemId[];
   itemsDiscarded?: ItemId[];
+  /** 本关结算后新解锁、写入仓库的常备物资说明 */
+  itemsUnlockedHint?: string;
   attachmentsGained: AttachmentId[];
   rosterAfter: number;
   averageLevelAfter: number;
@@ -947,7 +950,12 @@ export function finishMission(
   const warehouseItems = [...(finalState.pendingLoot ?? [])];
   warehouseItems.push(...inventoryItems(next.inventory));
   warehouseItems.push(...inventoryItems(finalState.inventory));
-  for (const [item, amount] of Object.entries(chapter.resupply)) {
+  const resupply =
+    chapter.resupplyAfter?.[campaign.missionIndex] ??
+    resupplyAfterMission(campaign.missionIndex) ??
+    chapter.resupply ??
+    {};
+  for (const [item, amount] of Object.entries(resupply)) {
     for (let i = 0; i < (amount ?? 0); i += 1) warehouseItems.push(item as ItemId);
   }
   const retainedWarehouse = warehouseItems.slice(0, WAREHOUSE_CAP);
@@ -976,6 +984,7 @@ export function finishMission(
     weaponsGained,
     itemsGained: finalState.pendingLoot ?? [],
     itemsDiscarded: discardedWarehouse,
+    itemsUnlockedHint: resupplyUnlockHint(campaign.missionIndex) ?? undefined,
     attachmentsGained,
     rosterAfter: roster.length,
     averageLevelAfter:
