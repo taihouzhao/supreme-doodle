@@ -222,8 +222,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；清川江横在北缘，三所里与龙源里同在一条东西向南撤公路上；志愿军从南山脊穿插，没有贯穿南北的中央大道。",
     weather: { options: ["snow", "overcast"], label: "初雪与冻土", detail: "寒潮到来，山路结冰，部队移动与远射均受影响。" },
     playerEquipment: PVA_EARLY,
-    enemyDamageMultiplier: 0.64,
-    maxTurns: 16,
+    enemyDamageMultiplier: 0.66,
+    maxTurns: 17,
     map: [
       "~~~~~~~~~~~~~~~~~~~~",
       "~~~~.....==.....~~~~",
@@ -377,9 +377,9 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "从北岸夜渡临津江，先夺取渡河带，再沿狭窄走廊向南突破议政府北侧山口。守军正向纵深收缩，必须在其完成部署前连续占领两个节点。",
     mapNote: "北在上；临津江以宽河面横贯北部，只有两处徒涉口；南面是议政府北侧山口，没有贯穿全图的中央公路。",
     weather: { options: ["snow", "clear"], label: "隆冬冻江", detail: "河面部分冻结，夜间严寒，部队体力消耗明显。" },
-    enemyDamageMultiplier: 0.8,
+    enemyDamageMultiplier: 0.79,
     playerEquipment: PVA_EARLY,
-    maxTurns: 18,
+    maxTurns: 19,
     map: [
       "....^^..........^^..",
       "....^^..........^^..",
@@ -585,7 +585,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "从北岸夜渡临津江，夺取南岸桥头后沿雪马里谷地分割英军，最后攻上235高地。三个地段是连续纵深，不要在渡口与高地同时分兵硬冲。",
     mapNote: "北在上；三段纵深分开：北岸与宽河、中央雪马里谷地、南端 235 高地山体。没有一条贯穿全图的中央公路。",
     weather: { options: ["clear", "fog"], label: "春夜薄雾", detail: "夜间河谷能见度有限，白天气象适合联合国军空中支援。" },
-    enemyDamageMultiplier: 0.93,
+    enemyDamageMultiplier: 0.88,
     playerEquipment: PVA_LATE,
     maxTurns: 17,
     map: [
@@ -691,13 +691,14 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     variantSlots: [],
     waves: [
-      { window: [5, 6], units: [{ type: "rifle", x: 9, y: 12, name: "追击步兵", equipment: "M1加兰德步枪", exp: 50 }, { type: "mg", x: 8, y: 12, name: "追击火力", equipment: "勃朗宁M1919机枪", exp: 45 }] },
-      { window: [9, 10], units: [{ type: "rifle", x: 10, y: 12, name: "第二梯队", equipment: "M1加兰德步枪", exp: 50 }] },
+      { window: [8, 9], units: [{ type: "rifle", x: 9, y: 12, name: "追击步兵", equipment: "M1加兰德步枪", exp: 50 }, { type: "mg", x: 8, y: 12, name: "追击火力", equipment: "勃朗宁M1919机枪", exp: 45 }] },
+      { window: [12, 13], units: [{ type: "rifle", x: 10, y: 12, name: "第二梯队", equipment: "M1加兰德步枪", exp: 50 }] },
     ],
     objectives: [],
     evacZone: [
       { x: 6, y: 0 }, { x: 7, y: 0 }, { x: 8, y: 0 }, { x: 9, y: 0 }, { x: 10, y: 0 }, { x: 11, y: 0 }, { x: 12, y: 0 }, { x: 13, y: 0 },
       { x: 7, y: 1 }, { x: 8, y: 1 }, { x: 9, y: 1 }, { x: 10, y: 1 }, { x: 11, y: 1 }, { x: 12, y: 1 },
+      { x: 9, y: 2 }, { x: 10, y: 2 },
     ],
     itemDrops: [{ x: 5, y: 7, options: ["ammo_crate", "grenade_bundle"] }, { x: 14, y: 7, options: ["arty_support"] }],
     places: [
@@ -711,8 +712,8 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     ],
     // 须南下接触击溃 2 个单位后再北撤；撤离通道第 7 回合开放，避免接敌前北撤
     victory: {
-      minEvacuated: 3,
-      evacuateRatio: 0.35,
+      minEvacuated: 4,
+      evacuateRatio: 0.4,
       requireKeyUnit: true,
       minEnemiesRouted: 2,
       evacOpensOnTurn: 5,
@@ -736,7 +737,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     mapNote: "北在上；五圣山纵深在北，597.9 与 537.7 是紧邻的坑道堡垒，中间只有短交通壕。南侧是破碎高地，没有贯穿南北的公路脊柱。",
     weather: { options: ["overcast", "rain", "snow"], label: "深秋转初冬", detail: "战斗持续43天，经历阴雨、低云和初雪。" },
     playerEquipment: PVA_LATE,
-    enemyDamageMultiplier: 1.22,
+    enemyDamageMultiplier: 1.26,
     maxTurns: 17,
     map: [
       "FF^^^^^^^^^^^^^^^^FF",
@@ -811,7 +812,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
     brief: "借雨雾接近猪排山，夺取东、西两个前沿支撑点并顶住反击。壕沟和高地减伤明显，迫击炮与炮火支援是打开缺口的关键。",
     mapNote: "北在上；东西两个支撑点是同一条猪排山脊上的地堡，中间交通壕相连；南北都是接近地，没有贯穿全图的密林夹道。",
     weather: { options: ["rain", "fog"], label: "季风雨雾", detail: "持续降雨与山雾削弱远程火力，谷地泥泞。" },
-    enemyDamageMultiplier: 1.42,
+    enemyDamageMultiplier: 1.5,
     playerEquipment: PVA_LATE_ARMOR,
     maxTurns: 17,
     map: [
@@ -869,7 +870,7 @@ export const HISTORICAL_MISSIONS: MissionConfig[] = [
       { kind: "barrage", turns: [3, 6], damage: 8, note: "美7师炮火反击" },
     ],
     // 新版包围火力会提高前沿伤亡；保留夺点与坚守要求，但允许一个分队减员。
-    victory: { requiredCaptures: 2, holdTurns: 4, minSurvivors: 5 },
+    victory: { requiredCaptures: 2, holdTurns: 4, minSurvivors: 6 },
   },
   {
     id: "m12-kumsong",
