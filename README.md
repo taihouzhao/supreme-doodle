@@ -74,4 +74,4 @@ node --import tsx src/sim/trace.ts m12-kumsong tactical 7   # 单局复盘
 
 ## 当前状态
 
-正式基线为每关每策略 200 seeds、连续战役 50 seeds，11/11 自动门槛通过；115/115 测试与生产构建通过。数学报告见 [`reports/balance.md`](./reports/balance.md)，未完成的视觉/真人验收见 [`PRD/06-audit-and-optimization-plan.md`](./PRD/06-audit-and-optimization-plan.md)。试玩站：https://korea-tactics.dashjie.net/index.html 。
+正式基线为每关每策略 200 seeds、连续战役 50 seeds，**12/12** 自动门槛通过；基础策略十二关平均任务胜率 **18.5%**（可玩带 8%–20%，靶心 15%）。数学报告见 [`reports/balance.md`](./reports/balance.md)，未完成的真人验收见 [`PRD/06-audit-and-optimization-plan.md`](./PRD/06-audit-and-optimization-plan.md)。试玩站：https://korea-tactics.dashjie.net/index.html 。

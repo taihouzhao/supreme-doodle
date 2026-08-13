@@ -94,9 +94,12 @@ export function renderReport(result: SimulationResult): string {
   sections.push(
     unwinnable.length === 0
       ? "未发现任何一个种子是所有策略都无法完成核心目标的。"
-      : unwinnable
-          .map(([mission, seeds]) => `- ${missionName(mission)}: ${seeds.join(", ")}`)
-          .join("\n"),
+      : [
+          "下列种子在已登记策略库中未被打通（搜索证据，不是可解性证明）：",
+          ...unwinnable.map(
+            ([mission, seeds]) => `- ${missionName(mission)}: ${seeds.join(", ")}`,
+          ),
+        ].join("\n"),
   );
 
   return `${sections.join("\n\n")}\n`;

@@ -44,7 +44,8 @@ jobs:
         run: npm run test:playtest
 
       - name: Balance gates (smoke)
-        # 小样本下胜率标准差会偏大；CI 只做方向性冒烟，正式报告用 npm run sim
+        # 小样本下胜率标准差会偏大；gates.ts 对 <50 战役 / <100 分关样本放宽。
+        # --quiet 仍会打印失败门槛，避免再出现“只看到 exit 1”的日志。
         run: npm run sim -- --seeds=80 --campaign-seeds=20 --quiet
 
       - name: Upload dist artifact
