@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "金庸群侠传：开放世界武侠（筹备中）",
+  "description": "金庸群侠传 Web Classic Engine（无画面核心，未导入原版资源）",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

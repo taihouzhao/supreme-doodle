@@ -11,5 +11,6 @@ describe("金庸群侠传脚手架", () => {
   it("落地页标题是金庸群侠传", () => {
     const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
     expect(html).toContain("<title>金庸群侠传</title>");
+    expect(html).toContain("尚未导入原版资源");
   });
 });

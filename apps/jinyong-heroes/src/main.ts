@@ -3,16 +3,16 @@ if (!app) throw new Error("缺少 #app");
 
 app.innerHTML = `
   <main class="page">
-    <div class="seal">筹备中</div>
+    <div class="seal">引擎开发中</div>
     <h1>金庸群侠传</h1>
     <p class="lede">
-      开放世界武侠。从中原到西域，门派、江湖与侠义会慢慢铺开。
-      现在还没有可玩关卡，这是 monorepo 里的空项目壳。
+      Web Classic Engine：以 1996 年 DOS 版为唯一基准。网页只改操作、分辨率、存档与兼容性。
+      <strong>尚未导入原版资源</strong>，这不是可玩复刻。公开站点不携带原作美术、音乐或台词。
     </p>
     <ul class="worlds">
-      <li><strong>中原</strong><span>射雕、神雕一线的中原门派与江湖恩怨</span></li>
-      <li><strong>江南</strong><span>笑傲江湖的庙堂与绿林</span></li>
-      <li><strong>大理 / 西夏</strong><span>天龙八部的边地与佛门</span></li>
+      <li><strong>当前可验收</strong><span>无画面核心 + 《连城诀》最短路线的自动测试，不在浏览器里开战。</span></li>
+      <li><strong>原典模式</strong><span>同一套数据和规则。增强模式以后只减操作摩擦，不降低探索难度。</span></li>
+      <li><strong>资源</strong><span>将来由拥有原游戏的用户在本地导入；本仓与 R2 不托管 DAT/GRP。</span></li>
     </ul>
     <nav class="links">
       <a href="../games/index.html">游戏目录</a>

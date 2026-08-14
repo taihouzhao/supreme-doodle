@@ -1,0 +1,29 @@
+{
+  "id": "liancheng-shortest-path",
+  "status": "reconstructed-from-walkthrough",
+  "source": "Public walkthrough structure cited in PRD 00 §连城诀 chain; not yet verified against a hashed DOS binary.",
+  "repro": [
+    "goTo nanxian_house",
+    "talkTo nanxian",
+    "goTo jiangnan_cave",
+    "take cave_poetry",
+    "goTo beichou_house",
+    "useOn tang_poetry water",
+    "goTo tianning_temple",
+    "battleMove player 2,2",
+    "battleAttack player tianning_monk",
+    "interact statue"
+  ],
+  "before": {
+    "locationId": "home",
+    "knownLocations": ["home", "nanxian_house"],
+    "heavenBooks": [],
+    "inventory": {}
+  },
+  "after": {
+    "locationId": "tianning_temple",
+    "inventory.liancheng_book": 1,
+    "flags.heaven_book_liancheng": true,
+    "heavenBooks": ["liancheng"]
+  }
+}

@@ -5,7 +5,7 @@
 | 项目 | 包名 | 状态 | 试玩 |
 |------|------|------|------|
 | [决战朝鲜](./apps/korea-tactics/) | `@dashjie/korea-tactics` | 可玩 | https://korea-tactics.dashjie.net/index.html |
-| [金庸群侠传](./apps/jinyong-heroes/) | `@dashjie/jinyong-heroes` | 空项目 / 已归档 PRD | https://korea-tactics.dashjie.net/jinyong-heroes/index.html |
+| [金庸群侠传](./apps/jinyong-heroes/) | `@dashjie/jinyong-heroes` | Classic Engine 无画面核心（未导入原版资源） | https://korea-tactics.dashjie.net/jinyong-heroes/index.html |
 | [游戏目录](./apps/studio-site/) | `@dashjie/studio-site` | 索引页 | https://korea-tactics.dashjie.net/games/index.html |
 
 决战朝鲜继续占据站点根路径，旧书签不用改。其它游戏写在独立 URL 前缀下，部署时不会互相删文件。
@@ -15,7 +15,7 @@
 ```text
 apps/
   korea-tactics/     决战朝鲜（规则核心、关卡、模拟器、网页）
-  jinyong-heroes/    金庸群侠传（空壳 + PRD）
+  jinyong-heroes/    金庸群侠传 Classic Engine（无画面核心 + PRD）
   studio-site/       /games/ 目录页
 packages/
   deploy/            多游戏 R2 同步
