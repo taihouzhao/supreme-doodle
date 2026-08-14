@@ -1,9 +1,10 @@
 import { ClassicRng } from "../core/rng";
-import { i16, i16Add, i16Sub } from "../core/i16";
+import { i16, i16Add, i16Mul, i16Sub } from "../core/i16";
 import type {
   BattleState,
   BattleUnit,
   ContentPack,
+  GameAction,
   Presentation,
   WorldState,
 } from "../core/types";
@@ -11,7 +12,6 @@ import type {
 /** Draft range. Marked unverified until a hashed DOS binary is locked. */
 const MOVE_RANGE = 2;
 const ATTACK_RANGE = 1;
-const DAMAGE_SPREAD = 3;
 
 export function startBattle(state: WorldState, content: ContentPack, battleId: string): void {
   const template = content.battles[battleId];
@@ -100,11 +100,7 @@ function applyAttack(
   if (actor.side === target.side) return false;
   if (manhattan(actor.x, actor.y, target.x, target.y) > ATTACK_RANGE) return false;
 
-  const rng = new ClassicRng(state.rngSeed);
-  const spread = rng.bounded(DAMAGE_SPREAD);
-  state.rngSeed = rng.getSeed();
-  const raw = i16Add(i16Sub(actor.attack, target.defence), spread);
-  const amount = i16(Math.max(1, raw));
+  const amount = rollCommunityDamage(state, actor, target);
   target.hp = i16(Math.max(0, i16Sub(target.hp, amount)));
   if (target.hp <= 0) {
     target.alive = false;
@@ -245,6 +241,38 @@ function stepToward(
     }
   }
   return best;
+}
+
+/**
+ * Community reconstruction (C_Chat / kamyung 2011), still unverified-vs-original:
+ * (skillPower + attack - defence * 2) ± 30; if ≤ 0, roll a hit below 30.
+ */
+function rollCommunityDamage(state: WorldState, actor: BattleUnit, target: BattleUnit): number {
+  const rng = new ClassicRng(state.rngSeed);
+  const jitter = rng.bounded(61) - 30;
+  let raw = i16Add(i16Add(actor.skillPower, actor.attack), i16Mul(target.defence, -2));
+  raw = i16Add(raw, jitter);
+  if (raw <= 0) {
+    raw = rng.bounded(30);
+  }
+  state.rngSeed = rng.getSeed();
+  return i16(Math.max(0, raw));
+}
+
+/** Player-side hint for tests and the text shell. Does not mutate state. */
+export function suggestBattleAction(state: WorldState): GameAction | null {
+  const battle = state.battle;
+  if (!battle || battle.result !== "ongoing") return null;
+  const actor = currentActor(battle);
+  if (!actor || actor.side !== "player") return null;
+  const foe = nearestFoe(battle, actor);
+  if (!foe) return { type: "BATTLE_WAIT", unitId: actor.id };
+  if (manhattan(actor.x, actor.y, foe.x, foe.y) <= ATTACK_RANGE) {
+    return { type: "BATTLE_ATTACK", unitId: actor.id, targetId: foe.id };
+  }
+  const step = stepToward(battle, actor, foe);
+  if (step) return { type: "BATTLE_MOVE", unitId: actor.id, x: step.x, y: step.y };
+  return { type: "BATTLE_WAIT", unitId: actor.id };
 }
 
 /** Leave a finished grid so world travel resumes. Encounter id stays in `battlesWon`. */

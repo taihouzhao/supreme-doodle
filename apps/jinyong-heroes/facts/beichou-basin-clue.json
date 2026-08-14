@@ -1,0 +1,12 @@
+{
+  "id": "beichou-basin-clue",
+  "status": "reconstructed-from-walkthrough",
+  "source": "https://www.52miji.com/cheats/X,MBPYff_Q.shtml",
+  "repro": [
+    "At Beichou's house, use 唐诗选辑 on the water basin (walkthroughs say the left basin).",
+    "The revealed clue: 连城诀 is behind the Buddha in Tianning temple, south-west of Jiangling."
+  ],
+  "before": { "inventory.tang_poetry": 1, "tianning known": false },
+  "after": { "flags.poetry_revealed": true, "tianning_temple": "known" },
+  "notes": "The exact sentence is cited from walkthroughs as the puzzle answer, not dumped from DAT."
+}

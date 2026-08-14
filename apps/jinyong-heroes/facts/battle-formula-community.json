@@ -1,0 +1,8 @@
+{
+  "id": "battle-formula-community",
+  "status": "reconstructed-from-walkthrough",
+  "source": "http://kamyung.blogspot.com/2014/12/blog-post_10.html",
+  "repro": "Community post (C_Chat / kamyung 2011): damage = (skill power + attack - defence * 2) ± 30; if the result is ≤ 0, roll a hit below 30. Distance modifier unknown.",
+  "engine": "src/battle/engine.ts still sets formulaStatus unverified-vs-original",
+  "notes": "Do not copy HeroesOfJinYong or jynew source. This is a published player reconstruction of behavior."
+}

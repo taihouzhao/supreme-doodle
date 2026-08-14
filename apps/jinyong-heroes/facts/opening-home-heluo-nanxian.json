@@ -1,0 +1,18 @@
+{
+  "id": "opening-home-heluo-nanxian",
+  "status": "reconstructed-from-walkthrough",
+  "source": [
+    "https://www.bilibili.com/read/cv24093037/",
+    "https://forum.gamer.com.tw/G2.php?bsn=10859&sn=561",
+    "https://youxi.orz123.net/9905.html"
+  ],
+  "repro": [
+    "Start at home; moral is about 50 (Nanxian mirror).",
+    "Search chests: jingqi pill, ginseng, xiaohuandan, huanglian pill, silver.",
+    "Heluo inn (359,229) is next door. Tip the waiter 1 silver to learn Nanxian.",
+    "Nanxian house (388,325): fourteen-book quest; compass in the cabinet."
+  ],
+  "before": { "locationId": "home", "inventory": {}, "moral": 50 },
+  "after": { "knownLocations": ["nanxian_house"], "inventory.compass": 1 },
+  "disputed": "Home coordinates 352,233 vs 357,235 appear in different maps. This pack uses 352,233 from the same table as Tianning 330,237."
+}

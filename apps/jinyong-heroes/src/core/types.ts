@@ -37,6 +37,7 @@ export type EventAction =
   | { type: "addHeavenBook"; bookId: string }
   | { type: "startBattle"; battleId: string }
   | { type: "goto"; locationId: string }
+  | { type: "addParty"; characterId: string }
   | { type: "moral"; delta: number }
   | { type: "reputation"; delta: number };
 
@@ -56,6 +57,11 @@ export interface EventDefinition {
 export interface LocationDefinition {
   id: string;
   sceneId: string;
+  /** Reconstructed map label from public walkthroughs, not original art. */
+  title: string;
+  /** Overworld coordinates from public maps. Conflicts go in facts/. */
+  worldX: number;
+  worldY: number;
   /** Adjacent scene ids. World-map travel still requires the destination to be known. */
   exits: string[];
 }
@@ -96,6 +102,8 @@ export interface BattleUnit {
   attack: number;
   defence: number;
   speed: number;
+  /** Draft skill power for the community damage formula. */
+  skillPower: number;
   alive: boolean;
 }
 
@@ -171,6 +179,8 @@ export interface ContentPack {
   id: string;
   startLocationId: string;
   startKnownLocations: string[];
+  startMoral: number;
+  startInventory: Record<string, number>;
   playerId: string;
   partyMax: number;
   locations: LocationDefinition[];

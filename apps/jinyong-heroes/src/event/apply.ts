@@ -52,6 +52,12 @@ export function applyEventAction(
         state.log.push(`heaven-book:${action.bookId}`);
       }
       return;
+    case "addParty":
+      if (!state.party.includes(action.characterId) && state.party.length < state.partyMax) {
+        state.party.push(action.characterId);
+        state.log.push(`party+${action.characterId}`);
+      }
+      return;
     case "startBattle":
       startBattle(state, content, action.battleId);
       presentation.animation.push(`battle:${action.battleId}`);

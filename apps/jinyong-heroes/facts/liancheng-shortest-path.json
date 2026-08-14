@@ -1,29 +1,40 @@
 {
   "id": "liancheng-shortest-path",
   "status": "reconstructed-from-walkthrough",
-  "source": "Public walkthrough structure cited in PRD 00 §连城诀 chain; not yet verified against a hashed DOS binary.",
+  "source": [
+    "https://www.tls999.com/n/20150409/154833.html",
+    "https://www.bilibili.com/read/cv24093037/",
+    "https://www.52miji.com/cheats/X,MBPYff_Q.shtml",
+    "https://pinogamer.com/5111"
+  ],
   "repro": [
+    "take home_chest",
+    "goTo heluo_inn",
+    "talkTo waiter",
+    "talkTo inn_crowd",
     "goTo nanxian_house",
-    "talkTo nanxian",
+    "interact nanxian_cabinet",
+    "goTo fuwei_biaoju",
+    "interact cave_trail",
     "goTo jiangnan_cave",
     "take cave_poetry",
     "goTo beichou_house",
-    "useOn tang_poetry water",
+    "useOn tang_poetry basin",
     "goTo tianning_temple",
-    "battleMove player 2,2",
-    "battleAttack player tianning_monk",
-    "interact statue"
+    "win tianning_raid",
+    "interact statue_back"
   ],
   "before": {
     "locationId": "home",
-    "knownLocations": ["home", "nanxian_house"],
-    "heavenBooks": [],
-    "inventory": {}
+    "knownLocations": ["home", "heluo_inn"],
+    "moral": 50,
+    "heavenBooks": []
   },
   "after": {
     "locationId": "tianning_temple",
     "inventory.liancheng_book": 1,
     "flags.heaven_book_liancheng": true,
     "heavenBooks": ["liancheng"]
-  }
+  },
+  "notes": "Diyun/dalunsi is optional if the Tang-poetry cave is found south of Fuwei. That split is recorded in facts/diyun-moral.json."
 }
