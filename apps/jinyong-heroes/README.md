@@ -7,7 +7,7 @@
 产品需求：[`PRD/`](./PRD/)。事实库：[`facts/`](./facts/)。
 
 - 说明页：https://korea-tactics.dashjie.net/jinyong-heroes/index.html
-- 文本壳：https://korea-tactics.dashjie.net/jinyong-heroes/index.html?play=1
+- 文本壳（含江湖地图）：https://korea-tactics.dashjie.net/jinyong-heroes/index.html?play=1
 
 ## 命令
 

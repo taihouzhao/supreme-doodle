@@ -110,7 +110,7 @@ body.playing #app {
 }
 
 .shell {
-  max-width: 44rem;
+  max-width: 52rem;
   margin: 0 auto;
   text-align: left;
 }
@@ -170,8 +170,60 @@ body.playing #app {
   border-color: var(--ink);
 }
 
-.log {
-  padding-left: 1.1rem;
-  color: var(--muted);
-  line-height: 1.6;
+.world-map {
+  display: block;
+  width: 100%;
+  max-height: min(70vh, 36rem);
+  background:
+    radial-gradient(800px 400px at 70% 40%, #3a3126 0%, transparent 55%),
+    #241e18;
+  border: 1px solid #3d342a;
+}
+
+.world-map .land {
+  fill: #2a231c;
+}
+
+.world-map .water {
+  fill: none;
+  stroke: #4a6a78;
+  stroke-width: 8;
+  opacity: 0.45;
+}
+
+.world-map .ridge {
+  fill: none;
+  stroke: #6b5d4a;
+  stroke-width: 2;
+  opacity: 0.55;
+}
+
+.world-map .rose {
+  fill: var(--muted);
+  font-size: 14px;
+  text-anchor: middle;
+}
+
+.world-map .pin {
+  cursor: pointer;
+}
+
+.world-map .pin circle {
+  fill: #c9b896;
+  stroke: #1a1612;
+  stroke-width: 1;
+}
+
+.world-map .pin.here circle {
+  fill: var(--seal);
+}
+
+.world-map .pin text {
+  fill: var(--ink);
+  font-size: 13px;
+  text-anchor: middle;
+}
+
+.map-wrap h2 {
+  margin-top: 0.4rem;
 }
