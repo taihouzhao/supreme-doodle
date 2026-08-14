@@ -7,41 +7,22 @@ import { deserializeSave, serializeSave } from "../core/save";
 import { createInitialWorld } from "../core/state";
 import type { Facing, GameAction, WorldState } from "../core/types";
 import { currentLocation } from "./scene";
+import {
+  PAL,
+  drawActor,
+  drawCaveTile,
+  drawDoorTile,
+  drawFloorTile,
+  drawGrassTile,
+  drawHouse,
+  drawSceneObject,
+  drawWallTile,
+} from "./sprites";
+import { pickBattleTile, pickDevicePixelRatio, pickDialogHeight, pickTileSize } from "./view";
 
 const content = lianchengContent;
 const SAVE_KEY = "jinyong-heroes-classic-v2";
-
-const LOGICAL_W = 320;
-const LOGICAL_H = 200;
-const TILE = 16;
-const MAP_H = 160;
-const DIALOG_H = LOGICAL_H - MAP_H;
-
-const PAL = {
-  grass: "#3a5a38",
-  grass2: "#324e31",
-  cave: "#2a3a28",
-  dirt: "#6b5d4a",
-  wall: "#3d342a",
-  wallHi: "#5c4e3e",
-  floor: "#c4b08a",
-  floor2: "#b39e76",
-  door: "#7a5a3a",
-  roof: "#8b2e2e",
-  house: "#5c4033",
-  player: "#c45c4a",
-  npc: "#4a7a8c",
-  chest: "#c9a227",
-  ink: "#e8dcc4",
-  muted: "#9a8b72",
-  paper: "#1a1612",
-  wash: "#2a231c",
-  seal: "#8b2e2e",
-  gridA: "#3a3126",
-  gridB: "#2a231c",
-  move: "#3d6b45",
-  attack: "#8b2e2e",
-};
+const FONT = '"Noto Sans SC", "Noto Serif SC", sans-serif';
 
 type MenuTab = "status" | "items" | "skills" | "save";
 
@@ -54,35 +35,44 @@ const TAB_LABEL: Record<MenuTab, string> = {
 };
 
 let world: WorldState = createInitialWorld(content, 1);
-let dialogue: string[] = ["攻略重建，占位像素，不是原版画面。方向键走，空格面对，ESC 菜单。"];
+let dialogue: string[] = ["攻略重建，自绘高清占位，不是原版贴图。方向键走，空格面对，ESC 菜单。"];
 let menuTab: MenuTab = "status";
 let menuIndex = 0;
 let canvas: HTMLCanvasElement | undefined;
 let keys = new Set<string>();
 let lastStepAt = 0;
 
+let viewW = 1280;
+let viewH = 720;
+let tile = 64;
+let mapH = 600;
+let dialogH = 120;
+let dpr = 1;
+
 export function mountPlayCanvas(root: HTMLElement): void {
   root.innerHTML = "";
   const stage = document.createElement("div");
-  stage.className = "dos-stage";
+  stage.className = "play-stage";
+
+  const wrap = document.createElement("div");
+  wrap.className = "play-canvas-wrap";
 
   canvas = document.createElement("canvas");
-  canvas.className = "dos-canvas";
-  canvas.width = LOGICAL_W;
-  canvas.height = LOGICAL_H;
+  canvas.className = "play-canvas";
   canvas.tabIndex = 0;
   canvas.setAttribute("role", "application");
   canvas.setAttribute("aria-label", "金庸群侠传行走画面");
 
   const hint = document.createElement("p");
-  hint.className = "dos-hint";
-  hint.textContent = "占位外观 · 无原作资源 · 箭头移动 · 空格面对 · ESC 状态/物品/存档";
+  hint.className = "play-hint";
+  hint.textContent = "自绘高清占位 · 无原作资源 · 箭头移动 · 空格面对 · ESC 状态/物品/存档";
 
   const nav = document.createElement("nav");
   nav.className = "links";
   nav.innerHTML = `<a href="./index.html">返回说明页</a><a href="../games/index.html">游戏目录</a>`;
 
-  stage.append(canvas, hint, nav);
+  wrap.append(canvas);
+  stage.append(wrap, hint, nav);
   root.append(stage);
   canvas.focus();
 
@@ -91,8 +81,27 @@ export function mountPlayCanvas(root: HTMLElement): void {
   canvas.addEventListener("blur", () => keys.clear());
   canvas.addEventListener("click", onClick);
   window.addEventListener("keydown", preventScroll, { passive: false });
+  window.addEventListener("resize", resize);
 
+  resize();
   requestAnimationFrame(tick);
+}
+
+function resize(): void {
+  if (!canvas) return;
+  const wrap = canvas.parentElement;
+  if (!wrap) return;
+  const rect = wrap.getBoundingClientRect();
+  viewW = Math.max(640, Math.floor(rect.width));
+  viewH = Math.max(400, Math.floor(rect.height));
+  dpr = pickDevicePixelRatio(window.devicePixelRatio || 1);
+  dialogH = pickDialogHeight(viewH);
+  mapH = viewH - dialogH;
+  tile = pickTileSize(viewW, mapH);
+  canvas.width = Math.floor(viewW * dpr);
+  canvas.height = Math.floor(viewH * dpr);
+  canvas.style.width = `${viewW}px`;
+  canvas.style.height = `${viewH}px`;
   paint();
 }
 
@@ -243,29 +252,28 @@ function facingDelta(facing: Facing): { dx: number; dy: number } {
 function onClick(event: MouseEvent): void {
   if (!canvas) return;
   const rect = canvas.getBoundingClientRect();
-  const x = Math.floor(((event.clientX - rect.left) / rect.width) * LOGICAL_W);
-  const y = Math.floor(((event.clientY - rect.top) / rect.height) * LOGICAL_H);
+  const x = ((event.clientX - rect.left) / rect.width) * viewW;
+  const y = ((event.clientY - rect.top) / rect.height) * viewH;
   if (world.view === "menu") {
     handleMenuClick(x, y);
     return;
   }
-  if (y >= MAP_H) {
+  if (y >= mapH) {
     handleConfirm();
     return;
   }
-  const tile = screenToTile(x, y);
-  if (!tile) {
+  const tileHit = screenToTile(x, y);
+  if (!tileHit) {
     handleConfirm();
     return;
   }
   const here = currentTile();
-  const dx = Math.sign(tile.x - here.x);
-  const dy = Math.sign(tile.y - here.y);
-  if (tile.x === here.x && tile.y === here.y) {
+  const dx = Math.sign(tileHit.x - here.x);
+  const dy = Math.sign(tileHit.y - here.y);
+  if (tileHit.x === here.x && tileHit.y === here.y) {
     handleConfirm();
     return;
   }
-  if (Math.abs(tile.x - here.x) + Math.abs(tile.y - here.y) === 0) return;
   if (dx !== 0 && dy !== 0) {
     handleMove(dx, 0);
     return;
@@ -273,9 +281,22 @@ function onClick(event: MouseEvent): void {
   handleMove(dx, dy);
 }
 
+function menuLayout(): { x: number; y: number; w: number; h: number; tabH: number; lineH: number } {
+  return {
+    x: Math.round(viewW * 0.08),
+    y: Math.round(viewH * 0.08),
+    w: Math.round(viewW * 0.84),
+    h: Math.round(viewH * 0.72),
+    tabH: 52,
+    lineH: 36,
+  };
+}
+
 function handleMenuClick(x: number, y: number): void {
-  if (y < 24) {
-    const tab = TABS[Math.floor(x / 80)];
+  const box = menuLayout();
+  if (x < box.x || y < box.y || x > box.x + box.w || y > box.y + box.h) return;
+  if (y < box.y + box.tabH) {
+    const tab = TABS[Math.floor((x - box.x) / (box.w / TABS.length))];
     if (tab) {
       menuTab = tab;
       menuIndex = 0;
@@ -283,20 +304,17 @@ function handleMenuClick(x: number, y: number): void {
     }
     return;
   }
+  const row = Math.floor((y - box.y - box.tabH - 12) / box.lineH);
   if (menuTab === "items") {
-    const row = Math.floor((y - 32) / 12);
     if (row >= 0 && row < inventoryRows().length) {
       menuIndex = row;
       confirmMenu();
     }
     return;
   }
-  if (menuTab === "save") {
-    const row = Math.floor((y - 32) / 14);
-    if (row >= 0 && row <= 2) {
-      menuIndex = row;
-      confirmMenu();
-    }
+  if (menuTab === "save" && row >= 0 && row <= 2) {
+    menuIndex = row;
+    confirmMenu();
   }
 }
 
@@ -366,28 +384,29 @@ function currentTile(): { x: number; y: number } {
 
 function screenToTile(px: number, py: number): { x: number; y: number } | null {
   if (world.view === "battle" && world.battle) {
-    const origin = battleOrigin(world.battle.width, world.battle.height);
-    const x = Math.floor((px - origin.x) / TILE);
-    const y = Math.floor((py - origin.y) / TILE);
+    const cell = pickBattleTile(viewW, mapH, world.battle.width, world.battle.height);
+    const origin = battleOrigin(world.battle.width, world.battle.height, cell);
+    const x = Math.floor((px - origin.x) / cell);
+    const y = Math.floor((py - origin.y) / cell);
     if (x < 0 || y < 0 || x >= world.battle.width || y >= world.battle.height) return null;
     return { x, y };
   }
   const cam = camera();
-  return { x: Math.floor((px + cam.x) / TILE), y: Math.floor((py + cam.y) / TILE) };
+  return { x: Math.floor((px + cam.x) / tile), y: Math.floor((py + cam.y) / tile) };
 }
 
 function camera(): { x: number; y: number } {
   const here = currentTile();
   return {
-    x: here.x * TILE - LOGICAL_W / 2 + TILE / 2,
-    y: here.y * TILE - MAP_H / 2 + TILE / 2,
+    x: here.x * tile - viewW / 2 + tile / 2,
+    y: here.y * tile - mapH / 2 + tile / 2,
   };
 }
 
-function battleOrigin(width: number, height: number): { x: number; y: number } {
+function battleOrigin(width: number, height: number, cell: number): { x: number; y: number } {
   return {
-    x: Math.floor((LOGICAL_W - width * TILE) / 2),
-    y: Math.floor((MAP_H - height * TILE) / 2),
+    x: Math.floor((viewW - width * cell) / 2),
+    y: Math.floor((mapH - height * cell) / 2),
   };
 }
 
@@ -401,9 +420,11 @@ function paint(): void {
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  ctx.imageSmoothingEnabled = false;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.fillStyle = PAL.paper;
-  ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+  ctx.fillRect(0, 0, viewW, viewH);
 
   const backdrop = world.view === "menu" ? world.menuReturnView : world.view;
   if (backdrop === "battle" && world.battle) drawBattle(ctx);
@@ -416,97 +437,85 @@ function paint(): void {
 
 function drawOverworld(ctx: CanvasRenderingContext2D): void {
   const cam = camera();
-  const x0 = Math.floor(cam.x / TILE) - 1;
-  const y0 = Math.floor(cam.y / TILE) - 1;
-  const cols = Math.ceil(LOGICAL_W / TILE) + 2;
-  const rows = Math.ceil(MAP_H / TILE) + 2;
+  const x0 = Math.floor(cam.x / tile) - 1;
+  const y0 = Math.floor(cam.y / tile) - 1;
+  const cols = Math.ceil(viewW / tile) + 2;
+  const rows = Math.ceil(mapH / tile) + 2;
   const size = content.overworld.size;
 
   for (let row = 0; row < rows; row += 1) {
     for (let col = 0; col < cols; col += 1) {
       const x = x0 + col;
       const y = y0 + row;
-      const px = x * TILE - cam.x;
-      const py = y * TILE - cam.y;
+      const px = x * tile - cam.x;
+      const py = y * tile - cam.y;
       if (x < 0 || y < 0 || x >= size || y >= size) {
         ctx.fillStyle = PAL.paper;
-        ctx.fillRect(px, py, TILE, TILE);
+        ctx.fillRect(px, py, tile, tile);
         continue;
       }
-      ctx.fillStyle = (x + y) % 2 === 0 ? PAL.grass : PAL.grass2;
-      ctx.fillRect(px, py, TILE, TILE);
+      drawGrassTile(ctx, px, py, tile, x, y);
     }
   }
 
   for (const building of content.overworld.buildings) {
-    const px = building.x * TILE - cam.x;
-    const py = building.y * TILE - cam.y;
-    if (px > LOGICAL_W || py > MAP_H || px + building.w * TILE < 0 || py + building.h * TILE < 0) continue;
+    const px = building.x * tile - cam.x;
+    const py = building.y * tile - cam.y;
+    const bw = building.w * tile;
+    const bh = building.h * tile;
+    if (px > viewW || py > mapH || px + bw < 0 || py + bh < 0) continue;
     if (building.hidden) {
-      ctx.fillStyle = PAL.cave;
-      ctx.fillRect(px, py, TILE, TILE);
+      drawCaveTile(ctx, px, py, tile);
       continue;
     }
-    ctx.fillStyle = PAL.house;
-    ctx.fillRect(px, py, building.w * TILE, building.h * TILE);
-    ctx.fillStyle = PAL.roof;
-    ctx.fillRect(px, py, building.w * TILE, 6);
+    drawHouse(ctx, px, py, bw, bh, building.locationId);
   }
 
-  drawActor(ctx, world.overworldX * TILE - cam.x, world.overworldY * TILE - cam.y, world.facing, PAL.player);
+  drawActor(ctx, world.overworldX * tile - cam.x, world.overworldY * tile - cam.y, tile, world.facing, "player");
 }
 
 function drawScene(ctx: CanvasRenderingContext2D): void {
   const scene = content.scenes[world.locationId];
   const cam = camera();
   ctx.fillStyle = PAL.wall;
-  ctx.fillRect(0, 0, LOGICAL_W, MAP_H);
+  ctx.fillRect(0, 0, viewW, mapH);
   if (!scene) return;
 
   for (let y = 0; y < scene.height; y += 1) {
     for (let x = 0; x < scene.width; x += 1) {
       const cell = cellAt(scene, x, y);
-      const px = x * TILE - cam.x;
-      const py = y * TILE - cam.y;
-      if (cell === "#") {
-        ctx.fillStyle = (x + y) % 2 === 0 ? PAL.wall : PAL.wallHi;
-        ctx.fillRect(px, py, TILE, TILE);
-      } else if (cell === "D") {
-        ctx.fillStyle = PAL.door;
-        ctx.fillRect(px, py, TILE, TILE);
-      } else {
-        ctx.fillStyle = (x + y) % 2 === 0 ? PAL.floor : PAL.floor2;
-        ctx.fillRect(px, py, TILE, TILE);
-      }
+      const px = x * tile - cam.x;
+      const py = y * tile - cam.y;
+      if (cell === "#") drawWallTile(ctx, px, py, tile, x, y);
+      else if (cell === "D") drawDoorTile(ctx, px, py, tile);
+      else drawFloorTile(ctx, px, py, tile, x, y);
     }
   }
 
   for (const obj of scene.objects) {
-    const px = obj.x * TILE - cam.x;
-    const py = obj.y * TILE - cam.y;
-    if (obj.kind === "npc") {
-      drawActor(ctx, px, py, "south", PAL.npc);
-    } else {
-      ctx.fillStyle = PAL.chest;
-      ctx.fillRect(px + 3, py + 5, TILE - 6, TILE - 8);
-      ctx.fillStyle = PAL.dirt;
-      ctx.fillRect(px + 3, py + 9, TILE - 6, 2);
-    }
+    const px = obj.x * tile - cam.x;
+    const py = obj.y * tile - cam.y;
+    if (obj.kind === "npc") drawActor(ctx, px, py, tile, "south", "npc");
+    else drawSceneObject(ctx, obj.id, px, py, tile);
   }
 
-  drawActor(ctx, world.sceneX * TILE - cam.x, world.sceneY * TILE - cam.y, world.facing, PAL.player);
+  drawActor(ctx, world.sceneX * tile - cam.x, world.sceneY * tile - cam.y, tile, world.facing, "player");
 }
 
 function drawBattle(ctx: CanvasRenderingContext2D): void {
   const battle = world.battle;
   if (!battle) return;
-  const origin = battleOrigin(battle.width, battle.height);
+  const cell = pickBattleTile(viewW, mapH, battle.width, battle.height);
+  const origin = battleOrigin(battle.width, battle.height, cell);
   const actor = currentActor(battle);
+
+  ctx.fillStyle = "#1c1814";
+  ctx.fillRect(0, 0, viewW, mapH);
 
   for (let y = 0; y < battle.height; y += 1) {
     for (let x = 0; x < battle.width; x += 1) {
       ctx.fillStyle = (x + y) % 2 === 0 ? PAL.gridA : PAL.gridB;
-      ctx.fillRect(origin.x + x * TILE, origin.y + y * TILE, TILE, TILE);
+      ctx.fillRect(origin.x + x * cell, origin.y + y * cell, cell - 2, cell - 2);
     }
   }
 
@@ -516,14 +525,14 @@ function drawBattle(ctx: CanvasRenderingContext2D): void {
         const dist = Math.abs(actor.x - x) + Math.abs(actor.y - y);
         if (dist > 0 && dist <= 2) {
           ctx.fillStyle = PAL.move;
-          ctx.globalAlpha = 0.35;
-          ctx.fillRect(origin.x + x * TILE, origin.y + y * TILE, TILE, TILE);
+          ctx.globalAlpha = 0.28;
+          ctx.fillRect(origin.x + x * cell, origin.y + y * cell, cell - 2, cell - 2);
           ctx.globalAlpha = 1;
         }
         if (dist === 1) {
           ctx.fillStyle = PAL.attack;
-          ctx.globalAlpha = 0.2;
-          ctx.fillRect(origin.x + x * TILE, origin.y + y * TILE, TILE, TILE);
+          ctx.globalAlpha = 0.18;
+          ctx.fillRect(origin.x + x * cell, origin.y + y * cell, cell - 2, cell - 2);
           ctx.globalAlpha = 1;
         }
       }
@@ -532,44 +541,41 @@ function drawBattle(ctx: CanvasRenderingContext2D): void {
 
   for (const unit of battle.units) {
     if (!unit.alive) continue;
-    const color = unit.side === "player" ? PAL.player : PAL.npc;
-    drawActor(ctx, origin.x + unit.x * TILE, origin.y + unit.y * TILE, "east", color);
+    const role = unit.side === "player" ? "player" : "enemy";
+    drawActor(ctx, origin.x + unit.x * cell, origin.y + unit.y * cell, cell, "east", role);
+    const barW = cell - 16;
+    ctx.fillStyle = "rgba(0,0,0,0.45)";
+    ctx.fillRect(origin.x + unit.x * cell + 8, origin.y + unit.y * cell + cell - 12, barW, 6);
     ctx.fillStyle = PAL.seal;
-    ctx.fillRect(origin.x + unit.x * TILE + 2, origin.y + unit.y * TILE + TILE - 3, Math.floor(((TILE - 4) * unit.hp) / unit.maxHp), 2);
+    ctx.fillRect(
+      origin.x + unit.x * cell + 8,
+      origin.y + unit.y * cell + cell - 12,
+      Math.floor((barW * unit.hp) / unit.maxHp),
+      6,
+    );
   }
 }
 
-function drawActor(ctx: CanvasRenderingContext2D, px: number, py: number, facing: Facing, color: string): void {
-  ctx.fillStyle = color;
-  ctx.fillRect(px + 3, py + 2, 10, 12);
-  ctx.fillStyle = PAL.paper;
-  const eye =
-    facing === "north"
-      ? { x: px + 6, y: py + 4 }
-      : facing === "south"
-        ? { x: px + 6, y: py + 8 }
-        : facing === "west"
-          ? { x: px + 4, y: py + 6 }
-          : { x: px + 10, y: py + 6 };
-  ctx.fillRect(eye.x, eye.y, 3, 3);
-}
-
 function drawDialog(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = PAL.paper;
-  ctx.fillRect(0, MAP_H, LOGICAL_W, DIALOG_H);
-  ctx.strokeStyle = PAL.dirt;
-  ctx.strokeRect(1, MAP_H + 1, LOGICAL_W - 2, DIALOG_H - 2);
-  ctx.fillStyle = PAL.ink;
-  ctx.font = "9px sans-serif";
+  ctx.fillStyle = "rgba(18, 14, 12, 0.94)";
+  ctx.fillRect(0, mapH, viewW, dialogH);
+  ctx.strokeStyle = "rgba(201, 184, 150, 0.35)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(8, mapH + 8, viewW - 16, dialogH - 16);
+
   const location = currentLocation(world, content);
   const title =
-    world.view === "overworld"
-      ? `大地图 ${world.overworldX},${world.overworldY}`
+    world.view === "overworld" || (world.view === "menu" && world.menuReturnView === "overworld")
+      ? `大地图  ${world.overworldX}，${world.overworldY}`
       : `${location?.title ?? world.locationId}`;
-  ctx.fillText(title, 6, MAP_H + 12);
+
+  ctx.fillStyle = PAL.ink;
+  ctx.font = `600 20px ${FONT}`;
+  ctx.fillText(title, 24, mapH + 36);
   ctx.fillStyle = PAL.muted;
+  ctx.font = `16px ${FONT}`;
   const line = dialogue.at(-1) ?? "";
-  wrapText(ctx, line, 6, MAP_H + 24, LOGICAL_W - 12, 11);
+  wrapText(ctx, line, 24, mapH + 62, viewW - 48, 22, 3);
 }
 
 function wrapText(
@@ -579,6 +585,7 @@ function wrapText(
   y: number,
   width: number,
   lineHeight: number,
+  maxRows: number,
 ): void {
   let line = "";
   let row = 0;
@@ -588,41 +595,58 @@ function wrapText(
       ctx.fillText(line, x, y + row * lineHeight);
       line = ch;
       row += 1;
-      if (row > 1) break;
+      if (row >= maxRows) return;
     } else {
       line = next;
     }
   }
-  if (row <= 1) ctx.fillText(line, x, y + row * lineHeight);
+  if (row < maxRows) ctx.fillText(line, x, y + row * lineHeight);
 }
 
 function drawMenu(ctx: CanvasRenderingContext2D): void {
-  ctx.fillStyle = "rgba(12, 10, 8, 0.82)";
-  ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+  ctx.fillStyle = "rgba(8, 6, 4, 0.72)";
+  ctx.fillRect(0, 0, viewW, viewH);
+  const box = menuLayout();
   ctx.fillStyle = PAL.wash;
-  ctx.fillRect(16, 12, LOGICAL_W - 32, LOGICAL_H - 24);
-  ctx.strokeStyle = PAL.dirt;
-  ctx.strokeRect(16, 12, LOGICAL_W - 32, LOGICAL_H - 24);
+  roundMenu(ctx, box.x, box.y, box.w, box.h, 16);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(201, 184, 150, 0.4)";
+  ctx.lineWidth = 2;
+  roundMenu(ctx, box.x, box.y, box.w, box.h, 16);
+  ctx.stroke();
 
-  ctx.font = "10px sans-serif";
+  ctx.font = `600 20px ${FONT}`;
   TABS.forEach((tab, index) => {
-    const x = 24 + index * 70;
+    const x = box.x + 28 + index * (box.w / TABS.length);
     ctx.fillStyle = tab === menuTab ? PAL.ink : PAL.muted;
-    ctx.fillText(TAB_LABEL[tab], x, 28);
+    ctx.fillText(TAB_LABEL[tab], x, box.y + 34);
     if (tab === menuTab) {
       ctx.fillStyle = PAL.seal;
-      ctx.fillRect(x, 32, 28, 2);
+      ctx.fillRect(x, box.y + 42, 36, 3);
     }
   });
 
-  ctx.fillStyle = PAL.ink;
-  ctx.font = "9px sans-serif";
+  ctx.font = `18px ${FONT}`;
   const lines = menuLines();
   lines.forEach((line, index) => {
     ctx.fillStyle = index === menuIndex ? PAL.ink : PAL.muted;
-    if (index === menuIndex) ctx.fillText(">", 24, 52 + index * 12);
-    ctx.fillText(line, 36, 52 + index * 12);
+    const y = box.y + box.tabH + 28 + index * box.lineH;
+    if (index === menuIndex) ctx.fillText("▸", box.x + 24, y);
+    ctx.fillText(line, box.x + 52, y);
   });
+}
+
+function roundMenu(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  ctx.beginPath();
+  if (typeof ctx.roundRect === "function") ctx.roundRect(x, y, w, h, r);
+  else ctx.rect(x, y, w, h);
 }
 
 function menuLines(): string[] {
