@@ -3,9 +3,9 @@
   "status": "reconstructed-from-walkthrough",
   "source": "https://www.tls999.com/n/20150409/154833.html",
   "repro": [
-    "Plot locations in the public 480×480 coord space (origin north-west, Y increases south).",
-    "The shell map marks only knownLocations. Hidden caves and unheard temples stay off the map."
+    "Walk the public 480×480 coord space (origin north-west, Y increases south).",
+    "Visible buildings are house sprites. The hidden cave is never labeled; rumors do not fog-bust it."
   ],
-  "before": { "knownLocations": ["home", "heluo_inn"] },
-  "after": { "mapShows": ["自宅", "河洛客栈"], "mapHides": ["天宁寺", "唐诗山洞"] }
+  "before": { "knownLocations": ["home"] },
+  "after": { "spritesShow": ["自宅", "河洛客栈", "南贤居"], "spritesHide": ["唐诗山洞"] }
 }

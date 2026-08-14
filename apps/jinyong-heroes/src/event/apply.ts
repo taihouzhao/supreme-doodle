@@ -64,12 +64,20 @@ export function applyEventAction(
       return;
     case "goto": {
       const location = content.locations.find((entry) => entry.id === action.locationId);
-      if (!location) {
+      const scene = content.scenes[action.locationId];
+      if (!location || !scene) {
         throw new Error(`unknown location ${action.locationId}`);
       }
       state.locationId = location.id;
+      state.view = "scene";
+      state.sceneX = scene.spawn.x;
+      state.sceneY = scene.spawn.y;
+      state.facing = scene.spawn.facing;
       if (!state.knownLocations.includes(location.id)) {
         state.knownLocations.push(location.id);
+      }
+      if (!state.visitedLocations.includes(location.id)) {
+        state.visitedLocations.push(location.id);
       }
       state.log.push(`goto:${location.id}`);
       presentation.animation.push(`scene:${location.id}`);

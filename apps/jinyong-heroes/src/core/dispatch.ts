@@ -1,5 +1,6 @@
 import { clearFinishedBattle, tryBattleAttack, tryBattleMove, tryBattleWait } from "../battle/engine";
 import { matchingEvents, runEvents } from "../event/engine";
+import { enterLocation, faceInteract, stepWorld } from "./move";
 import { cloneWorld, emptyPresentation } from "./state";
 import type {
   ContentPack,
@@ -18,6 +19,27 @@ export function dispatch(state: WorldState, action: GameAction, content: Content
   const presentation = emptyPresentation();
 
   switch (action.type) {
+    case "STEP":
+      stepWorld(next, content, action.dx, action.dy, presentation);
+      break;
+    case "FACE_INTERACT":
+      faceInteract(next, content, presentation);
+      break;
+    case "OPEN_MENU":
+      if (next.view !== "menu") {
+        next.menuReturnView = next.view;
+        next.view = "menu";
+      }
+      break;
+    case "CLOSE_MENU":
+      if (next.view === "menu") next.view = next.menuReturnView;
+      break;
+    case "MENU_USE":
+      if (next.view === "menu") next.view = next.menuReturnView;
+      if (next.view === "scene") {
+        faceInteract(next, content, presentation, action.itemId);
+      }
+      break;
     case "GO_TO":
       travel(next, content, action.locationId, presentation);
       break;
@@ -68,19 +90,11 @@ function travel(
     presentation.dialogue.push("cannot-travel-in-battle");
     return;
   }
-  const location = content.locations.find((entry) => entry.id === locationId);
-  if (!location) {
-    presentation.dialogue.push("unknown-location");
+  if (state.mode !== "enhanced" || !state.visitedLocations.includes(locationId)) {
+    presentation.dialogue.push("walk-there");
     return;
   }
-  if (!state.knownLocations.includes(locationId)) {
-    presentation.dialogue.push("location-unknown");
-    return;
-  }
-  state.locationId = location.id;
-  state.log.push(`travel:${location.id}`);
-  presentation.animation.push(`scene:${location.id}`);
-  runEvents(state, content, matchingEvents(state, content, "ENTER"), presentation);
+  enterLocation(state, content, locationId, presentation);
 }
 
 function talk(

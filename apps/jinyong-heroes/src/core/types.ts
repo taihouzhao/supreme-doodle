@@ -1,3 +1,7 @@
+export type Facing = "north" | "south" | "east" | "west";
+
+export type ViewMode = "overworld" | "scene" | "battle" | "menu";
+
 export type UiMode = "classic" | "enhanced";
 
 export type FlagValue = boolean | number | string;
@@ -131,6 +135,11 @@ export interface BattleLogEntry {
 }
 
 export type GameAction =
+  | { type: "STEP"; dx: number; dy: number }
+  | { type: "FACE_INTERACT" }
+  | { type: "OPEN_MENU" }
+  | { type: "CLOSE_MENU" }
+  | { type: "MENU_USE"; itemId: string }
   | { type: "GO_TO"; locationId: string }
   | { type: "TALK"; actorId: string }
   | { type: "INTERACT"; targetId: string }
@@ -150,8 +159,16 @@ export interface WorldState {
   saveVersion: number;
   mode: UiMode;
   rngSeed: number;
+  view: ViewMode;
   locationId: string;
+  overworldX: number;
+  overworldY: number;
+  sceneX: number;
+  sceneY: number;
+  facing: Facing;
+  menuReturnView: ViewMode;
   knownLocations: string[];
+  visitedLocations: string[];
   inventory: Record<string, number>;
   flags: Record<string, FlagValue>;
   heavenBooks: string[];
@@ -175,6 +192,35 @@ export type BattleTemplate = Omit<
   "seedAtStart" | "turnIndex" | "round" | "result" | "log" | "formulaStatus"
 >;
 
+export interface SceneObject {
+  id: string;
+  x: number;
+  y: number;
+  kind: "npc" | "object";
+}
+
+export interface SceneMap {
+  locationId: string;
+  width: number;
+  height: number;
+  spawn: { x: number; y: number; facing: Facing };
+  /** Added to the building's world coords when walking out the door. */
+  leave: { dx: number; dy: number };
+  /** `#` wall `.` floor `D` door `@` spawn (floor). */
+  rows: string[];
+  objects: SceneObject[];
+}
+
+export interface OverworldBuilding {
+  locationId: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Unmarked entrance; no label until visited. */
+  hidden: boolean;
+}
+
 export interface ContentPack {
   id: string;
   startLocationId: string;
@@ -189,4 +235,6 @@ export interface ContentPack {
   interactables: InteractableDefinition[];
   events: EventDefinition[];
   battles: Record<string, BattleTemplate>;
+  scenes: Record<string, SceneMap>;
+  overworld: { size: number; buildings: OverworldBuilding[] };
 }

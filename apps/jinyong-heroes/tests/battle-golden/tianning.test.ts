@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { fingerprint } from "../../src/core/hash";
 import { lianchengContent } from "../../src/content/liancheng";
-import { LIANCHENG_SHORTEST_PATH } from "../quest-paths/liancheng.test";
+import { LIANCHENG_ENTER_TIANNING } from "../quest-paths/liancheng.test";
 import { runBattleAuto, runPath } from "../quest-paths/script";
 
 const meta = JSON.parse(
@@ -20,8 +20,7 @@ describe("天宁寺战斗黄金样本占位", () => {
   });
 
   it("同一战斗操作逐步可重放", () => {
-    const enter = LIANCHENG_SHORTEST_PATH.slice(0, 14);
-    const first = runPath(lianchengContent, enter, meta.seed).state;
+    const first = runPath(lianchengContent, LIANCHENG_ENTER_TIANNING, meta.seed).state;
     expect(first.battle?.formulaStatus).toBe("unverified-vs-original");
     expect(first.battle?.id).toBe("tianning_raid");
 

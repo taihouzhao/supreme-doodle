@@ -1,4 +1,5 @@
 import type { BattleUnit, ConditionTree, ContentPack, EventDefinition } from "../core/types";
+import { LIANCHENG_BUILDINGS, LIANCHENG_SCENES, WORLD_SIZE } from "./maps";
 
 const always: ConditionTree = { all: [] };
 
@@ -25,7 +26,7 @@ function once(
 export const lianchengContent: ContentPack = {
   id: "liancheng-slice",
   startLocationId: "home",
-  startKnownLocations: ["home", "heluo_inn"],
+  startKnownLocations: ["home"],
   startMoral: 50,
   startInventory: {},
   playerId: "player",
@@ -153,7 +154,6 @@ export const lianchengContent: ContentPack = {
     { id: "nanxian", sceneId: "nanxian_house", kind: "npc" },
     { id: "nanxian_cabinet", sceneId: "nanxian_house", kind: "object" },
     { id: "nanxian_mirror", sceneId: "nanxian_house", kind: "object" },
-    { id: "cave_trail", sceneId: "fuwei_biaoju", kind: "object" },
     { id: "cave_poetry", sceneId: "jiangnan_cave", kind: "object" },
     { id: "diyun_cell", sceneId: "dalun_temple", kind: "object" },
     { id: "diyun", sceneId: "dalun_temple", kind: "npc" },
@@ -240,17 +240,6 @@ export const lianchengContent: ContentPack = {
       priority: 5,
       repeatable: true,
     },
-    once({
-      id: "find_cave_trail",
-      sceneId: "fuwei_biaoju",
-      trigger: "INTERACT",
-      targetId: "cave_trail",
-      conditions: always,
-      actions: [
-        { type: "unlockLocation", locationId: "jiangnan_cave" },
-        { type: "dialogue", id: "fuwei-cave-trail" },
-      ],
-    }),
     once({
       id: "take_cave_poetry",
       sceneId: "jiangnan_cave",
@@ -409,4 +398,6 @@ export const lianchengContent: ContentPack = {
       ],
     },
   },
+  scenes: LIANCHENG_SCENES,
+  overworld: { size: WORLD_SIZE, buildings: LIANCHENG_BUILDINGS },
 };
