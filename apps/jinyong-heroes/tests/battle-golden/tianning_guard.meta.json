@@ -1,0 +1,8 @@
+{
+  "id": "battle-golden/tianning_guard",
+  "status": "pending-original",
+  "formulaStatus": "unverified-vs-original",
+  "battleId": "tianning_guard",
+  "seed": 1,
+  "notes": "Placeholder until a hashed DOS 1996 binary is locked. Replay must stay byte-stable in this engine."
+}

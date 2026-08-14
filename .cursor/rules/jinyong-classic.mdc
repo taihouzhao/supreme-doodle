@@ -1,0 +1,29 @@
+---
+description: Jin Yong Classic Engine standing orders
+globs: apps/jinyong-heroes/**
+alwaysApply: false
+---
+
+# 金庸群侠传 Classic Engine 站规
+
+以 [`apps/jinyong-heroes/PRD/00-original-brief.md`](apps/jinyong-heroes/PRD/00-original-brief.md) 为原文。工程目标是 **1996 DOS 行为兼容**，不是现代武侠 RPG。
+
+## 必做
+
+1. 改事件条件、数值、战斗数学、AI：更新 `facts/` 或黄金样本，并跑 `npm run test -w @dashjie/jinyong-heroes`
+2. 剧情只进 `src/content/` 与事件表，不进 React/渲染层
+3. 规则层禁止 `Math.random()`；用 `ClassicRng` 与 i16
+4. 增强模式只减操作摩擦，不降低探索/决策难度，不揭示未发现地点
+5. 公开仓库禁止提交原作美术、音乐、台词包、DAT/GRP、jynew 素材
+
+## 禁止
+
+- 任务箭头、自动寻路到未发现地点、抽卡、天赋树、每日任务、动态等级、装备词条、技能冷却栏
+- 把朝鲜战争 `apps/korea-tactics` 规则核心拷进本项目
+- 复制 HeroesOfJinYong 源码或 Unity 工程
+- 用 `npm run sim`（那是决战朝鲜蒙特卡洛）验收本项目
+- 在连城诀路径测试未绿之前做其余十三本天书或 Phaser 画面
+
+## 闭环
+
+当前只要求无画面跑通：自宅 → 南贤 → 江南山洞 → 北丑 → 天宁寺 → 战斗 → 《连城诀》。

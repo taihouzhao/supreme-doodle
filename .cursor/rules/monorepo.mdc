@@ -17,3 +17,4 @@ alwaysApply: true
 - 依赖只在仓库根执行 `npm install` / `npm ci`
 - 新增游戏：在 `apps/` 建包，并登记 `packages/deploy/catalog.mjs` 的 `prefix`
 - 决战朝鲜仍部署在站点根路径；金庸群侠传在 `/jinyong-heroes/`
+- 金庸群侠传是 Classic Engine（DOS 行为兼容），站规见 `.cursor/rules/jinyong-classic.mdc`；不要用朝鲜战争的 `npm run sim` 验收它
