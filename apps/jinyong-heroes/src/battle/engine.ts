@@ -31,6 +31,7 @@ export function startBattle(state: WorldState, content: ContentPack, battleId: s
     log: [],
   };
   skipDeadTurns(state.battle);
+  state.view = "battle";
   state.log.push(`battle:${battleId}`);
 }
 
@@ -279,5 +280,6 @@ export function suggestBattleAction(state: WorldState): GameAction | null {
 export function clearFinishedBattle(state: WorldState): void {
   if (state.battle && state.battle.result !== "ongoing") {
     state.battle = null;
+    if (state.view === "battle") state.view = "scene";
   }
 }

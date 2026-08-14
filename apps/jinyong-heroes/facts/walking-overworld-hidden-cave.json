@@ -1,0 +1,15 @@
+{
+  "id": "walking-overworld-hidden-cave",
+  "status": "reconstructed-from-walkthrough",
+  "source": "https://www.tls999.com/n/20150409/154833.html",
+  "repro": [
+    "Travel is walking on the 480×480 overworld. Buildings occupy hitboxes at public coords.",
+    "The Fuwei-south cave is a 1×1 unmarked tile at 364,279. It is not a pin that appears after a rumor.",
+    "Classic GO_TO does not teleport. Enhanced GO_TO only jumps among already visited places."
+  ],
+  "before": { "view": "scene", "locationId": "home", "knownLocations": ["home"] },
+  "after": {
+    "walkEnters": ["heluo_inn", "nanxian_house", "jiangnan_cave"],
+    "unlabeled": ["jiangnan_cave"]
+  }
+}

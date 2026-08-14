@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "金庸群侠传 Web Classic Engine（无画面核心，未导入原版资源）",
+  "description": "金庸群侠传 Web Classic Engine（行走+棋盘，未导入原版资源）",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

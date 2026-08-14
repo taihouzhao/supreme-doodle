@@ -1,38 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { renderWorldMap } from "../../src/client/world-map";
+import { compassReadout, overworldSpriteIds } from "../../src/client/world-map";
 import { cloneWorld, createInitialWorld } from "../../src/core/state";
 import { fingerprint } from "../../src/core/hash";
 import { lianchengContent } from "../../src/content/liancheng";
 import { runPath } from "../quest-paths/script";
 
-describe("江湖地图", () => {
-  it("开局只标已知道的自宅和河洛客栈", () => {
-    const svg = renderWorldMap(createInitialWorld(lianchengContent, 1), lianchengContent);
-    expect(svg).toContain("自宅");
-    expect(svg).toContain("河洛客栈");
-    expect(svg).toContain('locationId":"home"');
-    expect(svg).not.toContain("天宁寺");
-    expect(svg).not.toContain("北丑居");
-    expect(svg).not.toContain("唐诗山洞");
-    expect(svg).not.toContain("南贤居");
-    expect(svg).not.toContain("大轮寺");
+describe("江湖大地图", () => {
+  it("看得见的房子不是图钉清单，隐洞永不标名", () => {
+    const ids = overworldSpriteIds(lianchengContent);
+    expect(ids).toContain("home");
+    expect(ids).toContain("heluo_inn");
+    expect(ids).toContain("nanxian_house");
+    expect(ids).not.toContain("jiangnan_cave");
+    const cave = lianchengContent.overworld.buildings.find((building) => building.locationId === "jiangnan_cave");
+    expect(cave?.hidden).toBe(true);
+    expect(cave?.w).toBe(1);
+    expect(cave?.h).toBe(1);
   });
 
-  it("发现地点后才在图上出现", () => {
+  it("小二指路不会把隐洞画成房子", () => {
     const { state } = runPath(
       lianchengContent,
       [{ take: "home_chest" }, { goTo: "heluo_inn" }, { talkTo: "waiter" }],
       1,
     );
-    const svg = renderWorldMap(state, lianchengContent);
-    expect(svg).toContain("南贤居");
-    expect(svg).not.toContain("天宁寺");
+    expect(state.knownLocations).toContain("nanxian_house");
+    expect(overworldSpriteIds(lianchengContent)).not.toContain("jiangnan_cave");
   });
 
-  it("渲染不修改世界状态", () => {
+  it("罗盘读数不修改世界状态", () => {
     const state = createInitialWorld(lianchengContent, 1);
     const copy = cloneWorld(state);
-    renderWorldMap(state, lianchengContent);
+    compassReadout(state, lianchengContent);
     expect(fingerprint(state)).toBe(fingerprint(copy));
   });
 });
