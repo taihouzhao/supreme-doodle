@@ -1,0 +1,30 @@
+{
+  "name": "dashjie-games",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "大杰游戏 monorepo：多款网页游戏共用同一套开发与 R2 部署流水线",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @dashjie/korea-tactics",
+    "dev:korea": "npm run dev -w @dashjie/korea-tactics",
+    "dev:jinyong": "npm run dev -w @dashjie/jinyong-heroes",
+    "build": "npm run build --workspaces --if-present",
+    "preview": "npm run preview -w @dashjie/korea-tactics",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:mobile": "npm run test:mobile -w @dashjie/korea-tactics",
+    "test:viewport": "npm run test:viewport -w @dashjie/korea-tactics",
+    "test:playtest": "npm run test:playtest -w @dashjie/korea-tactics",
+    "sim": "npm run sim -w @dashjie/korea-tactics --",
+    "balance:tune": "npm run balance:tune -w @dashjie/korea-tactics --",
+    "ship": "npm run ship -w @dashjie/korea-tactics",
+    "deploy:r2": "node packages/deploy/r2.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

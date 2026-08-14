@@ -1,0 +1,10 @@
+{
+  "name": "@dashjie/deploy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "把各游戏 dist/ 同步到 Cloudflare R2，互不覆盖前缀",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.758.0"
+  }
+}

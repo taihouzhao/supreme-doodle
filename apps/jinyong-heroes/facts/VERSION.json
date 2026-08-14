@@ -1,0 +1,7 @@
+{
+  "id": "version-lock",
+  "original": "DOS 1996 金庸群侠传",
+  "fileHashSha256": null,
+  "status": "pending-original",
+  "notes": "Hash stays empty until a user-supplied original binary is measured. CI does not require the binary."
+}

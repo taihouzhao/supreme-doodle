@@ -1,0 +1,20 @@
+---
+description: Monorepo layout and how to run each game
+alwaysApply: true
+---
+
+# 多游戏 monorepo
+
+本仓是 npm workspaces。**决战朝鲜只是其中一个子项目**，不要把根目录当成单一游戏。
+
+| 包 | 路径 | 根目录命令 |
+|----|------|------------|
+| `@dashjie/korea-tactics` | `apps/korea-tactics/` | `npm run dev:korea` / `npm run sim` |
+| `@dashjie/jinyong-heroes` | `apps/jinyong-heroes/` | `npm run dev:jinyong` |
+| `@dashjie/studio-site` | `apps/studio-site/` | 随 `npm run build` 产出 `/games/` |
+| `@dashjie/deploy` | `packages/deploy/` | `npm run deploy:r2` |
+
+- 依赖只在仓库根执行 `npm install` / `npm ci`
+- 新增游戏：在 `apps/` 建包，并登记 `packages/deploy/catalog.mjs` 的 `prefix`
+- 决战朝鲜仍部署在站点根路径；金庸群侠传在 `/jinyong-heroes/`
+- 金庸群侠传是 Classic Engine（DOS 行为兼容），站规见 `.cursor/rules/jinyong-classic.mdc`；不要用朝鲜战争的 `npm run sim` 验收它

@@ -1,0 +1,16 @@
+
+.dev.vars
+dist/
+.DS_Store
+.idea/
+*.local
+*.log
+node_modules/
+public/assets/masters/
+reports/*.json
+test-results/
+Thumbs.db
+.vite/
+.vscode/
+.wrangler/
+# 本地生成母版体积较大，不进入版本库或线上静态产物；游戏使用切分后的派生素材。

@@ -1,0 +1,1744 @@
+import { TERRAIN } from "../content/terrain";
+import { WEAPONS } from "../content/weapons";
+import { attackRange, manhattan, resupplyOutcome, unitAt } from "../core/grid";
+import type { Faction, GameState, Objective, TerrainId, Unit, UnitTypeId, Vec2 } from "../core/types";
+import { BRIDGE_ICON, ITEM_ICON, UI_ICON, UNIT_ROLE_ICON, terrainIcon, unitPortrait } from "./assets";
+import { buildAttackPreview, type AttackPreview, type DamageRange } from "./combatPreview";
+import { imageCache } from "./imageCache";
+import type { VisualFrame } from "./presentation";
+import { bridgeAxisAt, CONNECTION, terrainConnectionMask } from "./terrainConnections";
+import { FACTION_STYLE, HIGHLIGHT, TERRAIN_STYLE } from "./theme";
+
+/** 大格但不过分：整图通常略大于视口，靠拖拽 / 方向键浏览 */
+const TARGET_CSS_TILE = 76;
+const MIN_CSS_TILE = 52;
+const PAN_THRESHOLD = 8;
+/** 镜头可越出地图边缘的缓冲（格），避免贴边单位被 UI/视口裁切且拖不动 */
+const EDGE_BUFFER_TILES = 1.25;
+const KEY_PAN_STEP = 0.85;
+
+function weaponEffectLabel(type: UnitTypeId, weapon: string): string {
+  const profile = WEAPONS[weapon as keyof typeof WEAPONS]?.effectProfile;
+  if (profile === "mg" || type === "mg") return "机枪火力走廊";
+  if (profile === "mortar" || type === "mortar") return "迫击炮曲射";
+  if (profile === "artillery" || type === "artillery") return "炮兵远程覆盖";
+  if (profile === "rocket" || weapon === "bazooka") return "火箭爆破";
+  if (profile === "tank" || type === "tank") return "坦克直射";
+  if (type === "logistics") return "后勤支援";
+  return "步枪直射";
+}
+
+export interface BoardOverlay {
+  selectedUnitId: string | null;
+  moveTiles: Set<number>;
+  /** 攻击半径（含空地） */
+  attackTiles: Set<number>;
+  /** 当前可点选的敌方目标格 */
+  attackTargets: Set<number>;
+  /** 点击确认前的攻击预判；直接用于目标血条的虚拟扣减。 */
+  attackPreview: AttackPreview | null;
+  /** 当前预览攻击会波及的次级格（含友伤格）。 */
+  attackImpactTiles: Set<number>;
+  /** 后勤可补充的友军格 */
+  resupplyTiles: Set<number>;
+  /** 邻接但暂无需补给的友军格（仅提示） */
+  resupplyIdleTiles: Set<number>;
+  itemTiles: Set<number>;
+  inspected: Vec2 | null;
+  /** 任务目标点击后的地名高亮 */
+  highlightObjectiveId: string | null;
+  visual: VisualFrame | null;
+  /** 目标是否算「已完成控制」：己方持有 */
+  objectiveDone: (objective: Objective) => boolean;
+}
+
+export const EMPTY_OVERLAY: BoardOverlay = {
+  selectedUnitId: null,
+  moveTiles: new Set(),
+  attackTiles: new Set(),
+  attackTargets: new Set(),
+  attackPreview: null,
+  attackImpactTiles: new Set(),
+  resupplyTiles: new Set(),
+  resupplyIdleTiles: new Set(),
+  itemTiles: new Set(),
+  inspected: null,
+  highlightObjectiveId: null,
+  visual: null,
+  objectiveDone: (o) => o.owner === "player",
+};
+
+export class Board {
+  readonly canvas: HTMLCanvasElement;
+  private readonly ctx: CanvasRenderingContext2D;
+  /** 设备像素下的格子边长 */
+  private tile = 32;
+  /** CSS 像素下的格子边长（决战朝鲜式大格） */
+  private cssTile: number = TARGET_CSS_TILE;
+  /** 视口左上角在地图上的 CSS 坐标 */
+  private cameraX = 0;
+  private cameraY = 0;
+  private viewCssW = 0;
+  private viewCssH = 0;
+  private originX = 0;
+  private originY = 0;
+  private state: GameState | null = null;
+  private overlay: BoardOverlay = EMPTY_OVERLAY;
+  private onAssetsReady: (() => void) | null = null;
+  private focusedMissionKey: string | null = null;
+
+  private pointerId: number | null = null;
+  private dragStartX = 0;
+  private dragStartY = 0;
+  private camAtDragStartX = 0;
+  private camAtDragStartY = 0;
+  private didPan = false;
+  private onTap: ((tile: Vec2) => void) | null = null;
+  private hoveredTile: Vec2 | null = null;
+
+  constructor(canvas: HTMLCanvasElement, onAssetsReady?: () => void) {
+    this.canvas = canvas;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("画布不可用");
+    this.ctx = ctx;
+    this.onAssetsReady = onAssetsReady ?? null;
+    imageCache.onReady(() => {
+      if (this.state) this.draw();
+      this.onAssetsReady?.();
+    });
+    this.bindPointer();
+    this.bindKeyboard();
+  }
+
+  /** 点击格子（非拖拽）回调 */
+  setTapHandler(handler: (tile: Vec2) => void): void {
+    this.onTap = handler;
+  }
+
+  /** 方向键平移（供战斗界面使用） */
+  panByTiles(dx: number, dy: number): void {
+    if (!this.state) return;
+    this.cameraX += dx * this.cssTile * KEY_PAN_STEP;
+    this.cameraY += dy * this.cssTile * KEY_PAN_STEP;
+    this.clampCamera();
+    this.syncOrigin();
+    this.draw();
+  }
+
+  private bindKeyboard(): void {
+    this.canvas.addEventListener("keydown", (event) => {
+      if (!this.state) return;
+      let dx = 0;
+      let dy = 0;
+      if (event.key === "ArrowLeft" || event.key === "a" || event.key === "A") dx = -1;
+      else if (event.key === "ArrowRight" || event.key === "d" || event.key === "D") dx = 1;
+      else if (event.key === "ArrowUp" || event.key === "w" || event.key === "W") dy = -1;
+      else if (event.key === "ArrowDown" || event.key === "s" || event.key === "S") dy = 1;
+      else return;
+      event.preventDefault();
+      this.panByTiles(dx, dy);
+    });
+  }
+
+  render(state: GameState, overlay: BoardOverlay, missionKey?: string): void {
+    this.state = state;
+    this.overlay = overlay;
+    const key = missionKey ?? `${state.width}x${state.height}`;
+    const missionChanged = this.focusedMissionKey !== key;
+    this.resize();
+    if (missionChanged) {
+      this.focusedMissionKey = key;
+      this.focusPlayerArmy(state);
+    }
+    this.clampCamera();
+    this.syncOrigin();
+    this.draw();
+  }
+
+  /** 把屏幕坐标换算成格子坐标（计入镜头） */
+  toTile(clientX: number, clientY: number): Vec2 | null {
+    if (!this.state || this.cssTile <= 0) return null;
+    const rect = this.canvas.getBoundingClientRect();
+    const mapX = this.cameraX + (clientX - rect.left);
+    const mapY = this.cameraY + (clientY - rect.top);
+    const x = Math.floor(mapX / this.cssTile);
+    const y = Math.floor(mapY / this.cssTile);
+    if (x < 0 || y < 0 || x >= this.state.width || y >= this.state.height) return null;
+    return { x, y };
+  }
+
+  focusTile(x: number, y: number): void {
+    if (!this.state) return;
+    this.cameraX = x * this.cssTile + this.cssTile / 2 - this.viewCssW / 2;
+    this.cameraY = y * this.cssTile + this.cssTile / 2 - this.viewCssH / 2;
+    this.clampCamera();
+    this.syncOrigin();
+  }
+
+  /** 格子在 `.stage__map` 内的 CSS 矩形，供跟手操作条定位 */
+  tileCssRect(x: number, y: number): { left: number; top: number; width: number; height: number } | null {
+    if (!this.state || this.viewCssW <= 0 || this.viewCssH <= 0) return null;
+    return {
+      left: x * this.cssTile - this.cameraX,
+      top: y * this.cssTile - this.cameraY,
+      width: this.cssTile,
+      height: this.cssTile,
+    };
+  }
+
+  private focusPlayerArmy(state: GameState): void {
+    const players = state.units.filter((u) => u.faction === "player" && u.alive && !u.evacuated);
+    if (players.length === 0) {
+      this.cameraX = 0;
+      this.cameraY = Math.max(0, state.height * this.cssTile - this.viewCssH);
+      return;
+    }
+    const cx = players.reduce((s, u) => s + u.x, 0) / players.length;
+    const cy = players.reduce((s, u) => s + u.y, 0) / players.length;
+    this.focusTile(cx, cy);
+  }
+
+  private bindPointer(): void {
+    const el = this.canvas;
+    el.style.touchAction = "none";
+    el.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      el.focus({ preventScroll: true });
+      this.pointerId = event.pointerId;
+      this.didPan = false;
+      this.dragStartX = event.clientX;
+      this.dragStartY = event.clientY;
+      this.camAtDragStartX = this.cameraX;
+      this.camAtDragStartY = this.cameraY;
+      this.setHoveredTile(null);
+      el.setPointerCapture(event.pointerId);
+    });
+    el.addEventListener("pointermove", (event) => {
+      if (this.pointerId === null) {
+        if (event.pointerType !== "touch") {
+          this.setHoveredTile(this.toTile(event.clientX, event.clientY));
+        }
+        return;
+      }
+      if (this.pointerId !== event.pointerId) return;
+      const dx = event.clientX - this.dragStartX;
+      const dy = event.clientY - this.dragStartY;
+      if (!this.didPan && dx * dx + dy * dy < PAN_THRESHOLD * PAN_THRESHOLD) return;
+      this.didPan = true;
+      this.cameraX = this.camAtDragStartX - dx;
+      this.cameraY = this.camAtDragStartY - dy;
+      this.clampCamera();
+      this.syncOrigin();
+      this.draw();
+    });
+    const end = (event: PointerEvent) => {
+      if (this.pointerId !== event.pointerId) return;
+      const wasPan = this.didPan;
+      this.pointerId = null;
+      this.didPan = false;
+      try {
+        el.releasePointerCapture(event.pointerId);
+      } catch {
+        /* already released */
+      }
+      if (wasPan) return;
+      const tile = this.toTile(event.clientX, event.clientY);
+      if (tile && this.onTap) this.onTap(tile);
+      if (event.pointerType !== "touch") this.setHoveredTile(tile);
+    };
+    el.addEventListener("pointerup", end);
+    el.addEventListener("pointercancel", end);
+    el.addEventListener("pointerleave", () => {
+      if (this.pointerId === null) this.setHoveredTile(null);
+    });
+  }
+
+  private setHoveredTile(tile: Vec2 | null): void {
+    if (this.hoveredTile?.x === tile?.x && this.hoveredTile?.y === tile?.y) return;
+    this.hoveredTile = tile;
+    if (this.state) this.draw();
+  }
+
+  /**
+   * 画布铺满舞台视口；格子用大尺寸，地图整体大于屏幕，靠拖拽浏览。
+   */
+  private resize(): void {
+    const state = this.state;
+    const parent = this.canvas.parentElement;
+    if (!state || !parent) return;
+
+    const style = getComputedStyle(parent);
+    const availableWidth =
+      parent.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    const availableHeight =
+      parent.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+    if (availableWidth <= 0 || availableHeight <= 0) return;
+
+    this.viewCssW = availableWidth;
+    this.viewCssH = availableHeight;
+    // 保证一屏能看到大半张地图，同时格子仍然够大能认清兵种
+    const fitW = availableWidth / Math.max(7, state.width * 0.72);
+    const fitH = availableHeight / Math.max(6, state.height * 0.72);
+    this.cssTile = Math.max(
+      MIN_CSS_TILE,
+      Math.min(TARGET_CSS_TILE, Math.floor(Math.min(fitW, fitH))),
+    );
+
+    this.canvas.style.width = `${availableWidth}px`;
+    this.canvas.style.height = `${availableHeight}px`;
+
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.round(availableWidth * dpr);
+    const height = Math.round(availableHeight * dpr);
+    if (this.canvas.width !== width || this.canvas.height !== height) {
+      this.canvas.width = width;
+      this.canvas.height = height;
+    }
+
+    this.tile = this.cssTile * dpr;
+    this.clampCamera();
+    this.syncOrigin();
+  }
+
+  private mapCssWidth(): number {
+    return (this.state?.width ?? 0) * this.cssTile;
+  }
+
+  private mapCssHeight(): number {
+    return (this.state?.height ?? 0) * this.cssTile;
+  }
+
+  private clampCamera(): void {
+    const pad = this.cssTile * EDGE_BUFFER_TILES;
+    const maxX = Math.max(0, this.mapCssWidth() - this.viewCssW);
+    const maxY = Math.max(0, this.mapCssHeight() - this.viewCssH);
+    // 允许越界缓冲：边缘单位可拖进视口中部
+    this.cameraX = Math.min(maxX + pad, Math.max(-pad, this.cameraX));
+    this.cameraY = Math.min(maxY + pad, Math.max(-pad, this.cameraY));
+  }
+
+  private syncOrigin(): void {
+    const dpr = window.devicePixelRatio || 1;
+    this.originX = -this.cameraX * dpr;
+    this.originY = -this.cameraY * dpr;
+  }
+
+  private drawImage(
+    src: string,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+    alpha = 1,
+  ): boolean {
+    const img = imageCache.get(src);
+    if (!img) return false;
+    const { ctx } = this;
+    const prev = ctx.globalAlpha;
+    ctx.globalAlpha = prev * alpha;
+    ctx.drawImage(img, dx, dy, dw, dh);
+    ctx.globalAlpha = prev;
+    return true;
+  }
+
+  private drawImageQuarterTurn(
+    src: string,
+    dx: number,
+    dy: number,
+    size: number,
+    turns: number,
+  ): boolean {
+    const img = imageCache.get(src);
+    if (!img) return false;
+    const { ctx } = this;
+    ctx.save();
+    ctx.translate(dx + size / 2, dy + size / 2);
+    ctx.rotate((Math.PI / 2) * turns);
+    ctx.drawImage(img, -size / 2, -size / 2, size, size);
+    ctx.restore();
+    return true;
+  }
+
+  private draw(): void {
+    const state = this.state;
+    if (!state) return;
+    const { ctx, tile } = this;
+
+    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    // 视口外衬底（地图卷轴感）
+    ctx.fillStyle = "#2a3228";
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    ctx.save();
+    ctx.translate(this.originX, this.originY);
+
+    const dpr = window.devicePixelRatio || 1;
+    const x0 = Math.max(0, Math.floor(this.cameraX / this.cssTile) - 1);
+    const y0 = Math.max(0, Math.floor(this.cameraY / this.cssTile) - 1);
+    const x1 = Math.min(state.width - 1, Math.ceil((this.cameraX + this.viewCssW) / this.cssTile) + 1);
+    const y1 = Math.min(
+      state.height - 1,
+      Math.ceil((this.cameraY + this.viewCssH) / this.cssTile) + 1,
+    );
+
+    for (let y = y0; y <= y1; y += 1) {
+      for (let x = x0; x <= x1; x += 1) {
+        this.drawTile(state, x, y);
+      }
+    }
+
+    this.drawWeatherLayer(state, x0, y0, x1, y1);
+
+    for (const zone of state.evacZone) {
+      if (zone.x < x0 || zone.x > x1 || zone.y < y0 || zone.y > y1) continue;
+      ctx.fillStyle = HIGHLIGHT.evac;
+      ctx.fillRect(zone.x * tile, zone.y * tile, tile, tile);
+      const pad = tile * 0.18;
+      if (
+        !this.drawImage(
+          UI_ICON.evac,
+          zone.x * tile + pad,
+          zone.y * tile + pad,
+          tile - pad * 2,
+          tile - pad * 2,
+          0.92,
+        )
+      ) {
+        ctx.fillStyle = "rgba(47, 111, 94, 0.85)";
+        ctx.font = `700 ${Math.round(tile * 0.28)}px "Noto Sans SC", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("撤", zone.x * tile + tile / 2, zone.y * tile + tile / 2);
+      }
+    }
+
+    const visual = this.overlay.visual;
+    if (visual) {
+      for (const trail of visual.trail) {
+        ctx.fillStyle = `rgba(58, 122, 196, ${trail.alpha})`;
+        ctx.fillRect(trail.x * tile + 2, trail.y * tile + 2, tile - 4, tile - 4);
+      }
+    }
+
+    this.drawPlaceLabels(state, x0, y0, x1, y1);
+    this.drawSupplyPoints(state, x0, y0, x1, y1);
+
+    for (const objective of state.objectives) {
+      this.drawObjective(objective);
+    }
+
+    for (const item of state.fieldItems) {
+      this.drawFieldItem(item.x, item.y);
+    }
+    for (const weapon of state.fieldWeapons) {
+      this.drawFieldItem(weapon.x, weapon.y);
+    }
+    for (const attachment of state.fieldAttachments ?? []) {
+      this.drawFieldItem(attachment.x, attachment.y);
+    }
+
+    this.drawOverlay(state);
+    this.drawTacticalMarkers(state);
+
+    if (this.overlay.inspected) {
+      const { x, y } = this.overlay.inspected;
+      ctx.fillStyle = HIGHLIGHT.inspect;
+      ctx.fillRect(x * tile, y * tile, tile, tile);
+      ctx.strokeStyle = HIGHLIGHT.selected;
+      ctx.lineWidth = Math.max(2, tile * 0.06);
+      ctx.strokeRect(x * tile + 1.5, y * tile + 1.5, tile - 3, tile - 3);
+    }
+
+    const activePreview = this.activeAttackPreview(state);
+    for (const unit of state.units) {
+      if (unit.evacuated) continue;
+      const linger = visual?.lingerUnits[unit.id];
+      // 演出期间：终局已溃散但时间线尚未走到溃散的单位靠 linger / 粘性坐标继续绘制
+      if (!unit.alive && !linger) continue;
+      const hpOverride =
+        linger?.hp ??
+        (visual?.busy && visual.hpDisplay[unit.id] !== undefined
+          ? visual.hpDisplay[unit.id]
+          : undefined);
+      this.drawUnit(unit, linger?.alpha ?? 1, hpOverride, activePreview);
+    }
+
+    this.drawTargetMarks(state, this.overlay.attackTargets);
+    this.drawImpactTargetMarks(state, this.overlay.attackImpactTiles);
+    this.drawTargetMarks(state, this.overlay.resupplyTiles);
+    this.drawTargetMarks(state, this.overlay.itemTiles);
+
+    if (visual?.strikeLine) {
+      this.drawStrikeLine(state, visual);
+    }
+    if (visual?.impact && visual.impactUnitId) {
+      this.drawImpactForUnit(state, visual);
+    }
+    if (visual?.secondaryImpacts.length) {
+      this.drawSecondaryImpacts(visual);
+    }
+    if (visual?.routBurst) {
+      this.drawRoutBurst(state, visual);
+    }
+    if (visual?.promoteBurst) {
+      this.drawPromoteBurst(state, visual);
+    }
+
+    this.drawHoverPreview(state);
+
+    ctx.restore();
+    this.drawMinimap(state, dpr);
+  }
+
+  private activeAttackPreview(state: GameState): AttackPreview | null {
+    const selected = state.units.find((unit) => unit.id === this.overlay.selectedUnitId);
+    if (!selected || selected.faction !== "player" || selected.hasActed) return null;
+    const pending = this.overlay.attackPreview;
+    if (pending && pending.attackerId === selected.id) return pending;
+    const hovered = this.hoveredTile;
+    if (!hovered) return null;
+    const index = hovered.y * state.width + hovered.x;
+    if (!this.overlay.attackTargets.has(index)) return null;
+    const target = unitAt(state, hovered.x, hovered.y);
+    if (!target || target.faction === selected.faction || !target.alive) return null;
+    return buildAttackPreview(state, selected, target);
+  }
+
+  /** 真实地名标注：让「云山」「三所里」这类地标出现在棋盘上而不只在简报里 */
+  private drawPlaceLabels(
+    state: GameState,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): void {
+    if (state.places.length === 0) return;
+    const { ctx, tile } = this;
+    ctx.save();
+    ctx.font = `600 ${Math.round(tile * 0.2)}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const place of state.places) {
+      if (place.x < x0 || place.x > x1 || place.y < y0 || place.y > y1) continue;
+      const cx = place.x * tile + tile / 2;
+      const cy = place.y * tile + tile * 0.86;
+      const w = ctx.measureText(place.name).width + tile * 0.16;
+      ctx.fillStyle = "rgba(22, 26, 20, 0.62)";
+      ctx.beginPath();
+      ctx.roundRect(cx - w / 2, cy - tile * 0.11, w, tile * 0.22, tile * 0.05);
+      ctx.fill();
+      ctx.fillStyle = "rgba(240, 236, 214, 0.92)";
+      ctx.fillText(place.name, cx, cy);
+    }
+    ctx.restore();
+  }
+
+  /** 补给点：青绿角标，提示站上可恢复弹药窗口 */
+  private drawSupplyPoints(
+    state: GameState,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): void {
+    if (state.supplyPoints.length === 0) return;
+    const { ctx, tile } = this;
+    ctx.save();
+    for (const point of state.supplyPoints) {
+      if (point.x < x0 || point.x > x1 || point.y < y0 || point.y > y1) continue;
+      const cx = point.x * tile + tile * 0.78;
+      const cy = point.y * tile + tile * 0.22;
+      ctx.fillStyle = "rgba(46, 140, 110, 0.85)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, tile * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+      this.drawImage(UI_ICON.fieldItem, cx - tile * 0.14, cy - tile * 0.14, tile * 0.28, tile * 0.28);
+    }
+    ctx.restore();
+  }
+
+  /** 固定种子下完全静态的天气层：既表现战场气候，又不影响棋子可读性。 */
+  private drawWeatherLayer(
+    state: GameState,
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+  ): void {
+    const { ctx, tile } = this;
+    if (state.weather === "clear") return;
+
+    const left = x0 * tile;
+    const top = y0 * tile;
+    const width = (x1 - x0 + 1) * tile;
+    const height = (y1 - y0 + 1) * tile;
+
+    ctx.save();
+    if (state.weather === "overcast") {
+      ctx.fillStyle = "rgba(76, 84, 82, 0.14)";
+      ctx.fillRect(left, top, width, height);
+    } else if (state.weather === "fog") {
+      ctx.fillStyle = "rgba(220, 224, 216, 0.26)";
+      ctx.fillRect(left, top, width, height);
+      ctx.strokeStyle = "rgba(244, 241, 226, 0.2)";
+      ctx.lineWidth = tile * 0.28;
+      for (let y = top + tile * 0.4; y < top + height; y += tile * 1.4) {
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(left + width, y + tile * 0.15);
+        ctx.stroke();
+      }
+    } else if (state.weather === "rain") {
+      ctx.fillStyle = "rgba(47, 70, 82, 0.2)";
+      ctx.fillRect(left, top, width, height);
+      ctx.strokeStyle = "rgba(202, 222, 231, 0.42)";
+      ctx.lineWidth = Math.max(1, tile * 0.018);
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          if ((x * 7 + y * 11 + state.seed) % 3 !== 0) continue;
+          const sx = x * tile + tile * 0.72;
+          const sy = y * tile + tile * 0.18;
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.lineTo(sx - tile * 0.16, sy + tile * 0.28);
+          ctx.stroke();
+        }
+      }
+    } else if (state.weather === "snow") {
+      // 地面已换成雪地贴图，这里只补飘雪颗粒，不再压一层白蒙版
+      ctx.fillStyle = "rgba(255, 255, 250, 0.8)";
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const hash = (x * 31 + y * 17 + state.seed) >>> 0;
+          const cx = x * tile + tile * (0.2 + ((hash % 57) / 100));
+          const cy = y * tile + tile * (0.18 + (((hash >> 3) % 61) / 100));
+          ctx.beginPath();
+          ctx.arc(cx, cy, Math.max(1.5, tile * 0.035), 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  /** 右上角小地图（地图视口内，不再被顶栏遮挡） */
+  private drawMinimap(state: GameState, dpr: number): void {
+    const { ctx } = this;
+    const pad = 10 * dpr;
+    const maxW = Math.min(132 * dpr, this.canvas.width * 0.26);
+    const scale = maxW / (state.width * this.tile);
+    const mw = state.width * this.tile * scale;
+    const mh = state.height * this.tile * scale;
+    const mx = this.canvas.width - mw - pad;
+    const my = pad;
+
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = "rgba(20, 24, 18, 0.82)";
+    ctx.fillRect(mx - 4 * dpr, my - 4 * dpr, mw + 8 * dpr, mh + 8 * dpr);
+    ctx.strokeStyle = "rgba(245, 215, 110, 0.55)";
+    ctx.lineWidth = Math.max(1, dpr);
+    ctx.strokeRect(mx - 4 * dpr, my - 4 * dpr, mw + 8 * dpr, mh + 8 * dpr);
+
+    for (let y = 0; y < state.height; y += 1) {
+      for (let x = 0; x < state.width; x += 1) {
+        const terrainId = state.tiles[y * state.width + x]!;
+        ctx.fillStyle = TERRAIN_STYLE[terrainId].fill;
+        ctx.fillRect(mx + x * this.tile * scale, my + y * this.tile * scale, this.tile * scale + 0.5, this.tile * scale + 0.5);
+      }
+    }
+
+    for (const unit of state.units) {
+      if (!unit.alive || unit.evacuated) continue;
+      ctx.fillStyle = unit.faction === "player" ? FACTION_STYLE.player.body : FACTION_STYLE.enemy.body;
+      const r = Math.max(1.5 * dpr, this.tile * scale * 0.35);
+      ctx.beginPath();
+      ctx.arc(
+        mx + (unit.x + 0.5) * this.tile * scale,
+        my + (unit.y + 0.5) * this.tile * scale,
+        r,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+
+    // 当前视口框
+    ctx.strokeStyle = "#f5d76e";
+    ctx.lineWidth = Math.max(1.5, 1.5 * dpr);
+    ctx.strokeRect(
+      mx + this.cameraX * dpr * scale,
+      my + this.cameraY * dpr * scale,
+      this.viewCssW * dpr * scale,
+      this.viewCssH * dpr * scale,
+    );
+    ctx.restore();
+  }
+
+  private drawTile(state: GameState, x: number, y: number): void {
+    const { ctx, tile } = this;
+    const terrainId = state.tiles[y * state.width + x]!;
+    const style = TERRAIN_STYLE[terrainId];
+    const snow = state.weather === "snow";
+
+    // 雪天连底色一起换成积雪色，靠贴图而不是蒙版表现天气
+    ctx.fillStyle = snow ? snowFill(style.fill) : style.fill;
+    if (terrainId === "cliff" || terrainId === "fort" || terrainId === "forest") {
+      // 非规则四边形边缘，打破「全是整齐小方块」的观感
+      const j = tile * 0.08;
+      const hash = (x * 13 + y * 29) & 7;
+      const ox = (hash & 1) === 0 ? j : -j * 0.4;
+      const oy = (hash & 2) === 0 ? j * 0.5 : -j;
+      ctx.beginPath();
+      ctx.moveTo(x * tile + ox, y * tile);
+      ctx.lineTo(x * tile + tile, y * tile + oy);
+      ctx.lineTo(x * tile + tile - ox * 0.5, y * tile + tile);
+      ctx.lineTo(x * tile, y * tile + tile - oy * 0.5);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      ctx.fillRect(x * tile, y * tile, tile, tile);
+    }
+
+    // 道路与河流按相邻格自动连接；其他地形仍直接铺贴图。
+    const drawn =
+      terrainId === "road" || terrainId === "river"
+        ? this.drawConnectedTerrain(state, x, y, terrainId)
+        : this.drawImage(
+            terrainIcon(terrainId, state.weather),
+            x * tile,
+            y * tile,
+            tile,
+            tile,
+            1,
+          );
+    if (!drawn) this.drawTerrainIconFallback(terrainId, x, y);
+
+    ctx.strokeStyle = snow ? "rgba(60, 70, 78, 0.22)" : "rgba(20, 24, 16, 0.18)";
+    ctx.lineWidth = Math.max(1, tile * 0.02);
+    ctx.strokeRect(x * tile + 0.5, y * tile + 0.5, tile - 1, tile - 1);
+  }
+
+  private drawConnectedTerrain(
+    state: GameState,
+    x: number,
+    y: number,
+    terrain: "road" | "river",
+  ): boolean {
+    const { ctx, tile } = this;
+    const dx = x * tile;
+    const dy = y * tile;
+    if (terrain === "road") {
+      const bridge = bridgeAxisAt(state, x, y);
+      if (bridge) {
+        const src = BRIDGE_ICON[state.weather === "snow" ? "snow" : "clear"];
+        return this.drawImageQuarterTurn(src, dx, dy, tile, bridge === "east-west" ? 1 : 0);
+      }
+    }
+
+    const mask = terrainConnectionMask(state, x, y, terrain);
+    const vertical = mask & (CONNECTION.north | CONNECTION.south);
+    const horizontal = mask & (CONNECTION.east | CONNECTION.west);
+    const count = [CONNECTION.north, CONNECTION.east, CONNECTION.south, CONNECTION.west]
+      .filter((bit) => (mask & bit) !== 0).length;
+
+    // 直线与端点保留原始高细节贴图，仅按轴旋转。
+    if (count <= 1 || (vertical === 5 && horizontal === 0)) {
+      return this.drawImageQuarterTurn(terrainIcon(terrain, state.weather), dx, dy, tile, 0);
+    }
+    if (horizontal === 10 && vertical === 0) {
+      return this.drawImageQuarterTurn(terrainIcon(terrain, state.weather), dx, dy, tile, 1);
+    }
+
+    // 转弯、三岔和交叉使用连接笔刷；曲线在相邻正交格之间形成清楚的斜向走势。
+    const baseDrawn = this.drawImage(
+      terrainIcon("plain", state.weather),
+      dx,
+      dy,
+      tile,
+      tile,
+    );
+    const cx = dx + tile / 2;
+    const cy = dy + tile / 2;
+    const points: Array<{ x: number; y: number }> = [];
+    if (mask & CONNECTION.north) points.push({ x: cx, y: dy - tile * 0.02 });
+    if (mask & CONNECTION.east) points.push({ x: dx + tile * 1.02, y: cy });
+    if (mask & CONNECTION.south) points.push({ x: cx, y: dy + tile * 1.02 });
+    if (mask & CONNECTION.west) points.push({ x: dx - tile * 0.02, y: cy });
+
+    const strokeConnector = (width: number, colour: string) => {
+      ctx.strokeStyle = colour;
+      ctx.lineWidth = width;
+      ctx.lineCap = "butt";
+      ctx.lineJoin = "round";
+      if (points.length === 2) {
+        ctx.beginPath();
+        ctx.moveTo(points[0]!.x, points[0]!.y);
+        ctx.quadraticCurveTo(cx, cy, points[1]!.x, points[1]!.y);
+        ctx.stroke();
+      } else {
+        for (const point of points) {
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(point.x, point.y);
+          ctx.stroke();
+        }
+      }
+    };
+
+    ctx.save();
+    if (terrain === "road") {
+      strokeConnector(tile * 0.48, state.weather === "snow" ? "#70695d" : "#5b4934");
+      strokeConnector(tile * 0.36, state.weather === "snow" ? "#b9afa0" : "#a78961");
+      strokeConnector(tile * 0.055, state.weather === "snow" ? "rgba(82,73,63,.55)" : "rgba(68,48,28,.5)");
+    } else {
+      strokeConnector(tile * 0.68, state.weather === "snow" ? "#6c7779" : "#514b38");
+      strokeConnector(tile * 0.55, state.weather === "snow" ? "#718b91" : "#456f73");
+      strokeConnector(tile * 0.07, state.weather === "snow" ? "rgba(235,245,245,.7)" : "rgba(190,220,214,.6)");
+    }
+    ctx.restore();
+    return baseDrawn;
+  }
+
+  private drawHoverPreview(state: GameState): void {
+    const hovered = this.hoveredTile;
+    const selected = state.units.find((unit) => unit.id === this.overlay.selectedUnitId);
+    if (!hovered || !selected || selected.hasActed || this.overlay.visual?.busy) {
+      this.canvas.style.cursor = "default";
+      return;
+    }
+    const index = hovered.y * state.width + hovered.x;
+    const target = unitAt(state, hovered.x, hovered.y);
+    let title = "";
+    let tone: "attack" | "resupply" = "attack";
+    const lines: string[] = [];
+    if (this.overlay.attackTiles.has(index)) {
+      const weapon = WEAPONS[selected.weapon];
+      const range = attackRange(state, selected);
+      const distance = manhattan(selected, hovered);
+      const effect = weaponEffectLabel(selected.type, selected.weapon);
+      const preview =
+        target && target.faction !== selected.faction && this.overlay.attackTargets.has(index)
+          ? buildAttackPreview(state, selected, target)
+          : null;
+      title = `武器范围 · ${weapon?.name ?? "当前武器"}`;
+      lines.push(`射程  ${range.min}～${range.max} 格 · 当前 ${distance} 格`);
+      lines.push(`作用  ${effect}${preview && preview.impactTiles.length > 0 ? ` · 波及 ${preview.impactTiles.length} 格` : " · 单点"}`);
+      if (preview && target) {
+        lines.push(`目标生命  ${target.hp} → ${preview.defenderHpAfter.min}～${preview.defenderHpAfter.max}`);
+        lines.push(
+          preview.counter
+            ? `守方可回射  −${preview.counter.min}～${preview.counter.max}`
+            : "守方不会自动反击",
+        );
+        if (preview.rout !== "none") lines.push(preview.rout === "certain" ? "结果  确定击溃" : "结果  可能击溃");
+      } else if (!target) {
+        lines.push("空白落点  可在射程内选择敌方单位");
+      }
+    } else if (target && this.overlay.resupplyTiles.has(index) && target.faction === selected.faction) {
+      const preview = resupplyOutcome(state, selected, target);
+      tone = "resupply";
+      title = `补充预判 · ${target.name}`;
+      if (preview.personnel > 0) {
+        lines.push(`作战部队  +${preview.personnel} · ${target.hp} → ${preview.targetHpAfter}`);
+        lines.push(`后勤兵员  −${preview.personnel} · ${selected.hp} → ${preview.sourceHpAfter}`);
+      }
+      if (preview.fatigueRelief > 0) lines.push(`疲劳缓解  −${preview.fatigueRelief}`);
+      if (preview.ammoRestored) lines.push("弹药窗口  恢复 3 回合");
+    } else {
+      this.canvas.style.cursor = "default";
+      return;
+    }
+
+    this.canvas.style.cursor = "pointer";
+    const { ctx, tile } = this;
+    const lineHeight = tile * 0.25;
+    const width = tile * 4.2;
+    const height = tile * (0.56 + lines.length * 0.25);
+    const dpr = window.devicePixelRatio || 1;
+    const viewLeft = this.cameraX * dpr;
+    const viewTop = this.cameraY * dpr;
+    const viewRight = viewLeft + this.viewCssW * dpr;
+    const viewBottom = viewTop + this.viewCssH * dpr;
+    let left = (hovered.x + 1.05) * tile;
+    // 攻击范围框优先放在目标格上方，避免被跟手操作条（确认/休整）盖住。
+    // 贴近视口边缘时再由下面的 clamp 逻辑回退到可见区域。
+    let top =
+      tone === "attack"
+        ? hovered.y * tile - height - tile * 0.12
+        : hovered.y * tile - tile * 0.08;
+    if (left + width > viewRight - tile * 0.1) left = hovered.x * tile - width - tile * 0.05;
+    if (top + height > viewBottom - tile * 0.1) top = viewBottom - height - tile * 0.1;
+    left = Math.max(viewLeft + tile * 0.1, left);
+    top = Math.max(viewTop + tile * 0.1, top);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(20, 24, 20, 0.94)";
+    ctx.strokeStyle = tone === "attack" ? "#e48a76" : "#68c59d";
+    ctx.lineWidth = Math.max(2, tile * 0.035);
+    ctx.beginPath();
+    ctx.roundRect(left, top, width, height, tile * 0.12);
+    ctx.fill();
+    ctx.stroke();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = tone === "attack" ? "#ffd7cc" : "#c9f3df";
+    ctx.font = `700 ${Math.round(tile * 0.18)}px "Noto Sans SC", sans-serif`;
+    ctx.fillText(title, left + tile * 0.16, top + tile * 0.24);
+    ctx.fillStyle = "#f1eee2";
+    ctx.font = `600 ${Math.round(tile * 0.16)}px "Noto Sans SC", sans-serif`;
+    lines.forEach((line, lineIndex) => {
+      ctx.fillText(line, left + tile * 0.16, top + tile * 0.5 + lineIndex * lineHeight);
+    });
+    ctx.restore();
+  }
+
+  private drawTerrainIconFallback(terrainId: TerrainId, x: number, y: number): void {
+    const { ctx, tile } = this;
+    const cx = x * tile + tile / 2;
+    const cy = y * tile + tile / 2;
+    ctx.save();
+    ctx.strokeStyle = "rgba(38, 43, 34, 0.38)";
+    ctx.fillStyle = "rgba(38, 43, 34, 0.28)";
+    ctx.lineWidth = Math.max(1.2, tile * 0.045);
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+
+    switch (terrainId) {
+      case "forest": {
+        for (const [ox, oy, s] of [
+          [-0.16, 0.08, 0.22],
+          [0.14, 0.02, 0.26],
+          [0, -0.1, 0.2],
+        ] as const) {
+          ctx.beginPath();
+          ctx.moveTo(cx + ox * tile, cy + (oy + s) * tile);
+          ctx.lineTo(cx + (ox - s * 0.7) * tile, cy + (oy + s) * tile);
+          ctx.lineTo(cx + ox * tile, cy + (oy - s) * tile);
+          ctx.lineTo(cx + (ox + s * 0.7) * tile, cy + (oy + s) * tile);
+          ctx.closePath();
+          ctx.fill();
+        }
+        break;
+      }
+      case "hill": {
+        ctx.beginPath();
+        ctx.moveTo(cx - tile * 0.34, cy + tile * 0.22);
+        ctx.lineTo(cx - tile * 0.08, cy - tile * 0.18);
+        ctx.lineTo(cx + tile * 0.06, cy + tile * 0.02);
+        ctx.lineTo(cx + tile * 0.34, cy - tile * 0.22);
+        ctx.stroke();
+        break;
+      }
+      case "village": {
+        const w = tile * 0.34;
+        const h = tile * 0.22;
+        ctx.fillRect(cx - w / 2, cy - h * 0.1, w, h);
+        ctx.beginPath();
+        ctx.moveTo(cx - w * 0.65, cy - h * 0.1);
+        ctx.lineTo(cx, cy - h * 0.85);
+        ctx.lineTo(cx + w * 0.65, cy - h * 0.1);
+        ctx.closePath();
+        ctx.fill();
+        break;
+      }
+      case "road": {
+        ctx.beginPath();
+        ctx.moveTo(cx - tile * 0.28, cy - tile * 0.08);
+        ctx.lineTo(cx + tile * 0.28, cy - tile * 0.08);
+        ctx.moveTo(cx - tile * 0.28, cy + tile * 0.08);
+        ctx.lineTo(cx + tile * 0.28, cy + tile * 0.08);
+        ctx.stroke();
+        break;
+      }
+      case "river": {
+        ctx.beginPath();
+        ctx.moveTo(cx - tile * 0.3, cy - tile * 0.06);
+        ctx.quadraticCurveTo(cx - tile * 0.1, cy - tile * 0.18, cx + tile * 0.05, cy - tile * 0.04);
+        ctx.quadraticCurveTo(cx + tile * 0.18, cy + tile * 0.06, cx + tile * 0.3, cy - tile * 0.02);
+        ctx.moveTo(cx - tile * 0.28, cy + tile * 0.12);
+        ctx.quadraticCurveTo(cx, cy + tile * 0.02, cx + tile * 0.28, cy + tile * 0.14);
+        ctx.stroke();
+        break;
+      }
+      default:
+        break;
+    }
+    ctx.restore();
+  }
+
+  private drawObjective(objective: Objective): void {
+    const { ctx, tile } = this;
+    const done = this.overlay.objectiveDone(objective);
+    const focused = this.overlay.highlightObjectiveId === objective.id;
+    const colour =
+      objective.owner === "player"
+        ? HIGHLIGHT.objectivePlayer
+        : objective.owner === "enemy"
+          ? HIGHLIGHT.objectiveEnemy
+          : HIGHLIGHT.objectiveNeutral;
+    ctx.save();
+    if (focused) {
+      ctx.fillStyle = HIGHLIGHT.objectiveFocus;
+      ctx.fillRect(objective.x * tile, objective.y * tile, tile, tile);
+      ctx.strokeStyle = HIGHLIGHT.selected;
+      ctx.lineWidth = Math.max(3, tile * 0.12);
+      ctx.strokeRect(objective.x * tile + 2, objective.y * tile + 2, tile - 4, tile - 4);
+    }
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = Math.max(2.5, tile * 0.1);
+    if (done) ctx.setLineDash([]);
+    else ctx.setLineDash([tile * 0.16, tile * 0.1]);
+    ctx.strokeRect(objective.x * tile + 3, objective.y * tile + 3, tile - 6, tile - 6);
+
+    const label = focused ? objective.name : objective.name.slice(0, 2) || "标";
+    ctx.fillStyle = colour;
+    ctx.font = `700 ${Math.round(tile * (focused ? 0.2 : 0.22))}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(label, objective.x * tile + tile * 0.12, objective.y * tile + tile * 0.1);
+
+    const markSize = tile * 0.28;
+    const bx = objective.x * tile + tile * 0.68;
+    const by = objective.y * tile + tile * 0.08;
+    const markSrc = done ? UI_ICON.objDone : UI_ICON.objPending;
+    if (!this.drawImage(markSrc, bx, by, markSize, markSize)) {
+      ctx.beginPath();
+      const cx = bx + markSize / 2;
+      const cy = by + markSize / 2;
+      const r = markSize * 0.42;
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      if (done) {
+        ctx.fillStyle = HIGHLIGHT.objectivePlayer;
+        ctx.fill();
+        ctx.strokeStyle = "#f4f7f2";
+        ctx.lineWidth = Math.max(1.5, tile * 0.04);
+        ctx.beginPath();
+        ctx.moveTo(cx - r * 0.45, cy);
+        ctx.lineTo(cx - r * 0.1, cy + r * 0.4);
+        ctx.lineTo(cx + r * 0.5, cy - r * 0.35);
+        ctx.stroke();
+      } else {
+        ctx.strokeStyle = colour;
+        ctx.lineWidth = Math.max(1.5, tile * 0.045);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  private drawFieldItem(x: number, y: number): void {
+    const { ctx, tile } = this;
+    const size = tile * 0.42;
+    const dx = x * tile + tile / 2 - size / 2;
+    const dy = y * tile + tile * 0.08;
+    if (this.drawImage(UI_ICON.fieldItem, dx, dy, size, size)) return;
+
+    ctx.save();
+    ctx.fillStyle = "#d69e2e";
+    ctx.strokeStyle = "#7a5a14";
+    ctx.lineWidth = 1.5;
+    const fallback = tile * 0.24;
+    ctx.beginPath();
+    ctx.rect(x * tile + tile / 2 - fallback / 2, y * tile + tile * 0.16, fallback, fallback);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** 烟幕与信号弹是临时战术状态，直接叠在地图上，避免效果只存在于数值拆解里。 */
+  private drawTacticalMarkers(state: GameState): void {
+    const { ctx, tile } = this;
+    for (const smoke of state.smokeTiles ?? []) {
+      if (smoke.until <= state.turn) continue;
+      const x = smoke.x * tile;
+      const y = smoke.y * tile;
+      ctx.save();
+      const gradient = ctx.createRadialGradient(
+        x + tile / 2,
+        y + tile / 2,
+        tile * 0.08,
+        x + tile / 2,
+        y + tile / 2,
+        tile * 0.7,
+      );
+      gradient.addColorStop(0, "rgba(230, 232, 220, 0.34)");
+      gradient.addColorStop(1, "rgba(156, 166, 156, 0.03)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(x, y, tile, tile);
+      ctx.strokeStyle = "rgba(218, 226, 211, 0.7)";
+      ctx.lineWidth = Math.max(1.5, tile * 0.035);
+      ctx.setLineDash([tile * 0.1, tile * 0.08]);
+      ctx.strokeRect(x + tile * 0.12, y + tile * 0.12, tile * 0.76, tile * 0.76);
+      ctx.restore();
+    }
+    for (const signal of state.signalTiles ?? []) {
+      if (signal.until <= state.turn) continue;
+      const cx = signal.x * tile + tile / 2;
+      const cy = signal.y * tile + tile / 2;
+      const color = signal.faction === "enemy" ? "#d88972" : "#f0c85f";
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = Math.max(1.5, tile * 0.035);
+      ctx.setLineDash([tile * 0.08, tile * 0.06]);
+      ctx.beginPath();
+      ctx.arc(cx, cy, tile * 0.31, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (const angle of [-Math.PI / 2, Math.PI / 6, (5 * Math.PI) / 6]) {
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * tile * 0.18, cy + Math.sin(angle) * tile * 0.18);
+        ctx.lineTo(cx + Math.cos(angle) * tile * 0.42, cy + Math.sin(angle) * tile * 0.42);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.arc(cx, cy, tile * 0.07, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /**
+   * 移动格铺蓝底并只在区域外沿描边；攻击半径改用红色斜线阴影。
+   * 两者重叠时读作「蓝底 + 红斜线」，不会互相盖住。
+   */
+  private drawOverlay(state: GameState): void {
+    const { ctx, tile } = this;
+
+    const fillRegion = (indices: Set<number>, fill: string) => {
+      ctx.fillStyle = fill;
+      for (const index of indices) {
+        const x = index % state.width;
+        const y = Math.floor(index / state.width);
+        ctx.fillRect(x * tile, y * tile, tile, tile);
+      }
+    };
+
+    /** 只描区域外沿，避免每格一个方框把地图切碎 */
+    const outlineRegion = (indices: Set<number>, color: string, width: number, inset: number) => {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = "square";
+      ctx.beginPath();
+      for (const index of indices) {
+        const x = index % state.width;
+        const y = Math.floor(index / state.width);
+        const left = x * tile + inset;
+        const top = y * tile + inset;
+        const right = (x + 1) * tile - inset;
+        const bottom = (y + 1) * tile - inset;
+        if (!indices.has(index - state.width) || y === 0) {
+          ctx.moveTo(left, top);
+          ctx.lineTo(right, top);
+        }
+        if (!indices.has(index + state.width) || y === state.height - 1) {
+          ctx.moveTo(left, bottom);
+          ctx.lineTo(right, bottom);
+        }
+        if (x === 0 || !indices.has(index - 1)) {
+          ctx.moveTo(left, top);
+          ctx.lineTo(left, bottom);
+        }
+        if (x === state.width - 1 || !indices.has(index + 1)) {
+          ctx.moveTo(right, top);
+          ctx.lineTo(right, bottom);
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    };
+
+    const hatchRegion = (indices: Set<number>, color: string) => {
+      const step = Math.max(6, tile * 0.22);
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(1.5, tile * 0.045);
+      for (const index of indices) {
+        const x = (index % state.width) * tile;
+        const y = Math.floor(index / state.width) * tile;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, tile, tile);
+        ctx.clip();
+        ctx.beginPath();
+        for (let offset = -tile; offset <= tile; offset += step) {
+          ctx.moveTo(x + offset, y + tile);
+          ctx.lineTo(x + offset + tile, y);
+        }
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+    };
+
+    fillRegion(this.overlay.moveTiles, HIGHLIGHT.move);
+    outlineRegion(this.overlay.moveTiles, HIGHLIGHT.moveEdge, Math.max(2, tile * 0.05), 1);
+
+    hatchRegion(this.overlay.attackTiles, HIGHLIGHT.attackHatch);
+    outlineRegion(this.overlay.attackTiles, HIGHLIGHT.attackEdge, Math.max(2, tile * 0.06), 2.5);
+
+    fillRegion(this.overlay.resupplyIdleTiles, HIGHLIGHT.resupplyIdle);
+    outlineRegion(this.overlay.resupplyIdleTiles, HIGHLIGHT.resupplyIdleEdge, Math.max(1.5, tile * 0.04), 1.5);
+
+    fillRegion(this.overlay.resupplyTiles, HIGHLIGHT.resupply);
+    hatchRegion(this.overlay.resupplyTiles, HIGHLIGHT.resupplyHatch);
+    outlineRegion(this.overlay.resupplyTiles, HIGHLIGHT.resupplyEdge, Math.max(2, tile * 0.05), 2.5);
+
+    fillRegion(this.overlay.itemTiles, HIGHLIGHT.item);
+    hatchRegion(this.overlay.itemTiles, HIGHLIGHT.itemHatch);
+    outlineRegion(this.overlay.itemTiles, HIGHLIGHT.attackEdge, Math.max(2, tile * 0.05), 2.5);
+  }
+
+  /** 目标标记画在单位之上，否则会被单位圆形盖住 */
+  private drawTargetMarks(state: GameState, indices: Set<number>): void {
+    const { ctx, tile } = this;
+    for (const index of indices) {
+      const x = (index % state.width) * tile;
+      const y = Math.floor(index / state.width) * tile;
+      const cx = x + tile / 2;
+      const cy = y + tile / 2;
+      const radius = tile * 0.44;
+      ctx.save();
+
+      // 双层描边保证在任何地形与单位色上都看得清
+      ctx.lineWidth = Math.max(3, tile * 0.09);
+      ctx.strokeStyle = "rgba(20, 10, 8, 0.55)";
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = Math.max(1.6, tile * 0.05);
+      ctx.strokeStyle = "#ffd9cf";
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // 四角括号，突出「这是可打的目标」
+      const arm = tile * 0.18;
+      const pad = tile * 0.08;
+      ctx.lineWidth = Math.max(2, tile * 0.06);
+      ctx.strokeStyle = HIGHLIGHT.attackEdge;
+      ctx.beginPath();
+      for (const [sx, sy] of [
+        [1, 1],
+        [-1, 1],
+        [1, -1],
+        [-1, -1],
+      ] as const) {
+        const px = sx > 0 ? x + pad : x + tile - pad;
+        const py = sy > 0 ? y + pad : y + tile - pad;
+        ctx.moveTo(px + sx * arm, py);
+        ctx.lineTo(px, py);
+        ctx.lineTo(px, py + sy * arm);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  private drawImpactTargetMarks(state: GameState, indices: Set<number>): void {
+    const { ctx, tile } = this;
+    for (const index of indices) {
+      const x = (index % state.width) * tile;
+      const y = Math.floor(index / state.width) * tile;
+      ctx.save();
+      ctx.fillStyle = "rgba(226, 170, 72, 0.22)";
+      ctx.fillRect(x + tile * 0.08, y + tile * 0.08, tile * 0.84, tile * 0.84);
+      ctx.strokeStyle = "rgba(244, 208, 119, 0.95)";
+      ctx.lineWidth = Math.max(2, tile * 0.045);
+      ctx.setLineDash([tile * 0.12, tile * 0.08]);
+      ctx.strokeRect(x + tile * 0.12, y + tile * 0.12, tile * 0.76, tile * 0.76);
+      ctx.restore();
+    }
+  }
+
+  private unitDrawPos(unit: Unit): { cx: number; cy: number } {
+    const { tile } = this;
+    const visual = this.overlay.visual;
+    const pos = visual?.unitPositions[unit.id];
+    if (pos) {
+      return { cx: pos.x * tile + tile / 2, cy: pos.y * tile + tile / 2 };
+    }
+    return { cx: unit.x * tile + tile / 2, cy: unit.y * tile + tile / 2 };
+  }
+
+  private tokenFace(faction: Faction): string {
+    return faction === "player" ? "#e7efe9" : "#f6e9e6";
+  }
+
+  private drawUnit(
+    unit: Unit,
+    alpha = 1,
+    hpOverride?: number,
+    attackPreview?: AttackPreview | null,
+  ): void {
+    const { ctx, tile } = this;
+    const style = FACTION_STYLE[unit.faction];
+    const { cx, cy } = this.unitDrawPos(unit);
+    const radius = tile * 0.36;
+    const visual = this.overlay.visual;
+    const acted = unit.hasActed && unit.faction === "player";
+
+    if (this.overlay.selectedUnitId === unit.id) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius + tile * 0.1, 0, Math.PI * 2);
+      ctx.fillStyle = HIGHLIGHT.selected;
+      ctx.fill();
+    }
+
+    ctx.save();
+    ctx.globalAlpha = (acted ? 0.55 : 1) * alpha;
+
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fillStyle = this.tokenFace(unit.faction);
+    ctx.fill();
+    ctx.lineWidth = Math.max(2.4, tile * 0.08);
+    ctx.strokeStyle = style.body;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius - tile * 0.03, 0, Math.PI * 2);
+    ctx.strokeStyle = style.ring;
+    ctx.lineWidth = Math.max(1.2, tile * 0.035);
+    ctx.stroke();
+
+    // 老存档/增援单位可能没有持久化 eliteTier；敌军主将仍必须保持
+    // 同一套精英识别，否则头像会退回普通红圈而丢失战场层级信息。
+    const eliteTier =
+      unit.eliteTier ??
+      (unit.faction === "enemy" && unit.duty === "敌军主将" ? "boss" : null);
+    if (unit.faction === "player" && unit.classId) {
+      // 玩家编制装饰：细色环，stage 越高越完整（对标精英麦穗但不混用史实军衔）
+      const stage =
+        (
+          {
+            rifle_line: 0,
+            rifle_assault: 1,
+            rifle_marksman: 2,
+            rifle_vanguard: 3,
+            mg_gunner: 0,
+            mg_section: 1,
+            mg_heavy: 2,
+            mg_fortress: 3,
+            mortar_crew: 0,
+            mortar_heavy: 1,
+            arty_field: 2,
+            arty_rocket: 3,
+            logi_porter: 0,
+            logi_pack: 1,
+            logi_motor: 1,
+            logi_column: 2,
+            logi_depot: 3,
+            ac_scout: 0,
+            ac_gun: 1,
+            tank_crew: 2,
+            tank_ace: 3,
+          } as Record<string, number>
+        )[unit.classId] ?? 0;
+      if (stage > 0) {
+        const colors: Record<string, string> = {
+          rifle: "rgba(90, 140, 70, 0.95)",
+          mg: "rgba(90, 90, 90, 0.95)",
+          mortar: "rgba(70, 110, 160, 0.95)",
+          artillery: "rgba(168, 68, 58, 0.95)",
+          logistics: "rgba(138, 106, 78, 0.95)",
+          armored_car: "rgba(70, 110, 110, 0.95)",
+          tank: "rgba(201, 162, 79, 0.95)",
+        };
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + tile * (0.06 + stage * 0.02), 0, Math.PI * (0.5 + stage * 0.5));
+        ctx.strokeStyle = colors[unit.type] ?? "rgba(200,180,120,0.9)";
+        ctx.lineWidth = Math.max(2, tile * 0.06);
+        ctx.stroke();
+      }
+    }
+    if (eliteTier) {
+      const wreathSize = radius * (eliteTier === "boss" ? 3.35 : 3.05);
+      const wreathDrawn = this.drawImage(
+        UI_ICON.eliteWreath,
+        cx - wreathSize / 2,
+        cy - wreathSize / 2,
+        wreathSize,
+        wreathSize,
+        eliteTier === "boss" ? 1 : 0.88,
+      );
+      if (!wreathDrawn) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius + tile * (eliteTier === "boss" ? 0.11 : 0.08), 0, Math.PI * 2);
+        ctx.strokeStyle = eliteTier === "boss" ? "rgba(248, 205, 92, 0.98)" : "rgba(224, 182, 90, 0.92)";
+        ctx.lineWidth = Math.max(2, tile * 0.05);
+        ctx.stroke();
+      }
+    }
+
+    const iconSize = radius * 1.95;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 0.86, 0, Math.PI * 2);
+    ctx.clip();
+    const portrait = unitPortrait(unit);
+    const iconDrawn = this.drawImage(
+      portrait,
+      cx - iconSize / 2,
+      cy - iconSize / 2,
+      iconSize,
+      iconSize,
+    );
+    ctx.restore();
+    if (!iconDrawn) {
+      this.drawUnitSilhouette(unit.type, cx, cy, radius, style.body);
+    }
+
+    // 人物肖像是单位主体；右下角用独立兵种角标保证缩小时仍可识别。
+    const roleSize = radius * 0.78;
+    const roleX = cx + radius * 0.18;
+    const roleY = cy + radius * 0.18;
+    ctx.beginPath();
+    ctx.arc(roleX + roleSize / 2, roleY + roleSize / 2, roleSize * 0.55, 0, Math.PI * 2);
+    ctx.fillStyle = unit.faction === "player" ? "#e4d39d" : "#d9b4aa";
+    ctx.fill();
+    ctx.strokeStyle = style.body;
+    ctx.lineWidth = Math.max(1.5, tile * 0.025);
+    ctx.stroke();
+    this.drawImage(UNIT_ROLE_ICON[unit.type], roleX, roleY, roleSize, roleSize);
+
+    ctx.restore();
+
+    if (visual?.flashUnitId === unit.id) {
+      ctx.beginPath();
+      ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.55)";
+      ctx.fill();
+    }
+
+    const hp =
+      hpOverride !== undefined
+        ? hpOverride
+        : visual?.hpDisplay[unit.id] !== undefined
+          ? visual.hpDisplay[unit.id]!
+          : unit.hp;
+    const barWidth = tile * 0.72;
+    const barHeight = Math.max(3, tile * 0.09);
+    const barX = cx - barWidth / 2;
+    const barY = cy + radius + tile * 0.04;
+    ctx.fillStyle = "rgba(22, 26, 20, 0.45)";
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+    const ratio = Math.max(0, Math.min(1, hp / unit.maxHp));
+    ctx.fillStyle = ratio > 0.55 ? "#5aa469" : ratio > 0.28 ? "#d9a326" : "#c8503c";
+    ctx.fillRect(barX, barY, barWidth * ratio, barHeight);
+
+    const projected = this.projectedHp(unit, attackPreview);
+    if (projected) {
+      const expectedRatio = Math.max(0, Math.min(1, projected.expected / unit.maxHp));
+      const lowRatio = Math.max(0, Math.min(1, projected.min / unit.maxHp));
+      // 直接在真实生命条上叠加预测损失带：不新增伤害图标，金线表示中值。
+      if (expectedRatio < ratio) {
+        ctx.fillStyle = "rgba(202, 73, 55, 0.75)";
+        ctx.fillRect(barX + barWidth * expectedRatio, barY, barWidth * (ratio - expectedRatio), barHeight);
+      }
+      if (lowRatio < expectedRatio) {
+        ctx.fillStyle = "rgba(232, 163, 75, 0.36)";
+        ctx.fillRect(barX + barWidth * lowRatio, barY, barWidth * (expectedRatio - lowRatio), barHeight);
+      }
+      ctx.fillStyle = "rgba(255, 239, 190, 0.95)";
+      ctx.fillRect(barX + barWidth * expectedRatio - Math.max(1, tile * 0.018), barY - tile * 0.035, Math.max(2, tile * 0.036), barHeight + tile * 0.07);
+    }
+
+    if (unit.keyUnit) {
+      const star = tile * 0.3;
+      if (
+        !this.drawImage(
+          UI_ICON.keyUnit,
+          cx + radius * 0.35,
+          cy - radius * 1.05,
+          star,
+          star,
+        )
+      ) {
+        ctx.fillStyle = "#f5d76e";
+        ctx.font = `700 ${Math.round(tile * 0.2)}px "Noto Sans SC", sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("主", cx + radius * 0.75, cy - radius * 0.75);
+      }
+    }
+  }
+
+  private projectedHp(unit: Unit, preview?: AttackPreview | null): DamageRange | null {
+    if (!preview || preview.defenderId !== unit.id || unit.faction === "player") return null;
+    return preview.defenderHpAfter;
+  }
+
+  private drawUnitSilhouette(
+    type: UnitTypeId,
+    cx: number,
+    cy: number,
+    radius: number,
+    color: string,
+  ): void {
+    const { ctx } = this;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = Math.max(1.4, radius * 0.14);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    switch (type) {
+      case "rifle": {
+        ctx.beginPath();
+        ctx.arc(cx, cy - radius * 0.35, radius * 0.22, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - radius * 0.1);
+        ctx.lineTo(cx, cy + radius * 0.45);
+        ctx.moveTo(cx - radius * 0.32, cy + radius * 0.05);
+        ctx.lineTo(cx + radius * 0.32, cy + radius * 0.05);
+        ctx.stroke();
+        break;
+      }
+      case "mg": {
+        ctx.beginPath();
+        ctx.moveTo(cx - radius * 0.35, cy + radius * 0.15);
+        ctx.lineTo(cx + radius * 0.4, cy - radius * 0.25);
+        ctx.moveTo(cx - radius * 0.35, cy + radius * 0.32);
+        ctx.lineTo(cx + radius * 0.4, cy - radius * 0.08);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx - radius * 0.28, cy + radius * 0.24, radius * 0.12, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "mortar": {
+        ctx.beginPath();
+        ctx.moveTo(cx - radius * 0.28, cy + radius * 0.35);
+        ctx.lineTo(cx, cy + radius * 0.35);
+        ctx.lineTo(cx + radius * 0.05, cy - radius * 0.35);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(cx + radius * 0.18, cy - radius * 0.42, radius * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "artillery": {
+        ctx.beginPath();
+        ctx.moveTo(cx - radius * 0.4, cy + radius * 0.3);
+        ctx.lineTo(cx + radius * 0.35, cy - radius * 0.25);
+        ctx.lineWidth = Math.max(2, radius * 0.22);
+        ctx.stroke();
+        ctx.lineWidth = Math.max(1.4, radius * 0.14);
+        ctx.beginPath();
+        ctx.arc(cx - radius * 0.28, cy + radius * 0.28, radius * 0.16, 0, Math.PI * 2);
+        ctx.arc(cx - radius * 0.05, cy + radius * 0.32, radius * 0.16, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
+      case "logistics": {
+        const w = radius * 0.9;
+        const h = radius * 0.55;
+        ctx.strokeRect(cx - w / 2, cy - h / 2, w, h);
+        ctx.beginPath();
+        ctx.moveTo(cx - w * 0.15, cy);
+        ctx.lineTo(cx + w * 0.15, cy);
+        ctx.moveTo(cx, cy - h * 0.25);
+        ctx.lineTo(cx, cy + h * 0.25);
+        ctx.stroke();
+        break;
+      }
+      case "tank": {
+        const w = radius * 1.1;
+        const h = radius * 0.55;
+        ctx.fillRect(cx - w / 2, cy - h * 0.15, w, h);
+        ctx.fillRect(cx - w * 0.2, cy - h * 0.7, w * 0.4, h * 0.55);
+        ctx.beginPath();
+        ctx.moveTo(cx + w * 0.2, cy - h * 0.35);
+        ctx.lineTo(cx + w * 0.55, cy - h * 0.35);
+        ctx.stroke();
+        break;
+      }
+    }
+    ctx.restore();
+  }
+
+  private drawStrikeLine(state: GameState, visual: VisualFrame): void {
+    const line = visual.strikeLine;
+    if (!line) return;
+    const from = state.units.find((u) => u.id === line.fromId);
+    const to = state.units.find((u) => u.id === line.toId);
+    if (!from || !to) return;
+    const a = this.unitDrawPos(from);
+    const b = this.unitDrawPos(to);
+    const { ctx, tile } = this;
+    ctx.save();
+    ctx.globalAlpha = line.alpha;
+    const profile = line.profile ?? "rifle";
+    const color = profile === "mg" ? "#f0bd59" : profile === "mortar" || profile === "artillery" ? "#d5d0ba" : profile === "rocket" ? "#f27d3d" : "#c8503c";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2, tile * (profile === "mg" ? 0.08 : 0.06));
+    if (profile === "mg") ctx.setLineDash([tile * 0.16, tile * 0.08]);
+    ctx.beginPath();
+    if (profile === "mortar" || profile === "artillery") {
+      const midX = (a.cx + b.cx) / 2;
+      const midY = Math.min(a.cy, b.cy) - tile * (profile === "artillery" ? 0.8 : 0.5);
+      ctx.moveTo(a.cx, a.cy);
+      ctx.quadraticCurveTo(midX, midY, b.cx, b.cy);
+    } else {
+      ctx.moveTo(a.cx, a.cy);
+      ctx.lineTo(b.cx, b.cy);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private drawImpactForUnit(state: GameState, visual: VisualFrame): void {
+    const impact = visual.impact;
+    const unitId = visual.impactUnitId;
+    if (!impact || !unitId) return;
+    const unit = state.units.find((u) => u.id === unitId);
+    if (!unit) return;
+    const { cx, cy } = this.unitDrawPos(unit);
+    const { ctx, tile } = this;
+    ctx.save();
+    ctx.globalAlpha = impact.alpha;
+    ctx.font = `700 ${Math.round(tile * 0.42)}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(20, 20, 20, 0.75)";
+    const y = cy - tile * 0.55;
+    ctx.strokeText(impact.text, cx, y);
+    ctx.fillStyle = "#ffd9a0";
+    ctx.fillText(impact.text, cx, y);
+    ctx.restore();
+  }
+
+  private drawSecondaryImpacts(visual: VisualFrame): void {
+    const { ctx, tile } = this;
+    for (const impact of visual.secondaryImpacts) {
+      const cx = impact.x * tile + tile / 2;
+      const cy = impact.y * tile + tile / 2;
+      ctx.save();
+      ctx.globalAlpha = impact.alpha;
+      ctx.beginPath();
+      ctx.arc(cx, cy, tile * 0.2, 0, Math.PI * 2);
+      ctx.fillStyle = impact.friendly ? "#d88972" : "#e6c067";
+      ctx.fill();
+      ctx.font = `700 ${Math.round(tile * 0.34)}px "Noto Sans SC", sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = "rgba(20, 20, 20, 0.75)";
+      ctx.strokeText(impact.text, cx, cy - tile * 0.38);
+      ctx.fillStyle = impact.friendly ? "#ffb19d" : "#ffe2a3";
+      ctx.fillText(impact.text, cx, cy - tile * 0.38);
+      ctx.restore();
+    }
+  }
+
+  /** 溃散：红色横幅 + 叉号，确保单位消失前有明确交代 */
+  private drawRoutBurst(state: GameState, visual: VisualFrame): void {
+    const burst = visual.routBurst;
+    if (!burst) return;
+    const unit = state.units.find((u) => u.id === burst.unitId);
+    if (!unit) return;
+    const { cx, cy } = this.unitDrawPos(unit);
+    const { ctx, tile } = this;
+    ctx.save();
+    ctx.globalAlpha = burst.alpha;
+
+    const cross = tile * 0.26;
+    ctx.strokeStyle = "rgba(28, 12, 10, 0.7)";
+    ctx.lineWidth = Math.max(4, tile * 0.11);
+    ctx.beginPath();
+    ctx.moveTo(cx - cross, cy - cross);
+    ctx.lineTo(cx + cross, cy + cross);
+    ctx.moveTo(cx + cross, cy - cross);
+    ctx.lineTo(cx - cross, cy + cross);
+    ctx.stroke();
+    ctx.strokeStyle = "#ff8f7a";
+    ctx.lineWidth = Math.max(2, tile * 0.055);
+    ctx.beginPath();
+    ctx.moveTo(cx - cross, cy - cross);
+    ctx.lineTo(cx + cross, cy + cross);
+    ctx.moveTo(cx + cross, cy - cross);
+    ctx.lineTo(cx - cross, cy + cross);
+    ctx.stroke();
+
+    const label = burst.text;
+    ctx.font = `700 ${Math.round(tile * 0.3)}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const y = cy - tile * 0.52;
+    const w = ctx.measureText(label).width + tile * 0.24;
+    ctx.fillStyle = "rgba(120, 24, 18, 0.88)";
+    ctx.beginPath();
+    ctx.roundRect(cx - w / 2, y - tile * 0.16, w, tile * 0.32, tile * 0.08);
+    ctx.fill();
+    ctx.strokeStyle = "#ffb9a8";
+    ctx.lineWidth = Math.max(1.5, tile * 0.02);
+    ctx.stroke();
+    ctx.fillStyle = "#fff1ec";
+    ctx.fillText(label, cx, y);
+    ctx.restore();
+  }
+
+  /** 晋升：金色横幅弹出 */
+  private drawPromoteBurst(state: GameState, visual: VisualFrame): void {
+    const burst = visual.promoteBurst;
+    if (!burst) return;
+    const unit = state.units.find((u) => u.id === burst.unitId);
+    if (!unit) return;
+    const { cx, cy } = this.unitDrawPos(unit);
+    const { ctx, tile } = this;
+    ctx.save();
+    ctx.globalAlpha = burst.alpha;
+    ctx.translate(cx, cy - tile * 0.62);
+    ctx.scale(burst.scale, burst.scale);
+    ctx.font = `700 ${Math.round(tile * 0.3)}px "Noto Sans SC", sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const w = ctx.measureText(burst.text).width + tile * 0.3;
+    ctx.fillStyle = "rgba(70, 52, 12, 0.9)";
+    ctx.beginPath();
+    ctx.roundRect(-w / 2, -tile * 0.18, w, tile * 0.36, tile * 0.09);
+    ctx.fill();
+    ctx.strokeStyle = "#f5d76e";
+    ctx.lineWidth = Math.max(1.8, tile * 0.025);
+    ctx.stroke();
+    ctx.fillStyle = "#ffeeb4";
+    ctx.fillText(burst.text, 0, 0);
+
+    // 星芒点出「这是好事」
+    ctx.strokeStyle = "#f5d76e";
+    ctx.lineWidth = Math.max(1.5, tile * 0.02);
+    ctx.beginPath();
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (Math.PI * 2 * i) / 6;
+      const r0 = tile * 0.24;
+      const r1 = tile * 0.34;
+      ctx.moveTo(Math.cos(angle) * r0, Math.sin(angle) * r0 * 0.6);
+      ctx.lineTo(Math.cos(angle) * r1, Math.sin(angle) * r1 * 0.6);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+export function terrainName(state: GameState, x: number, y: number): string {
+  return TERRAIN[state.tiles[y * state.width + x]!].name;
+}
+
+/** 把地形底色推向积雪色，作为雪地贴图的兜底底板 */
+function snowFill(hex: string): string {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  const mix = (channel: number, target: number) => Math.round(channel + (target - channel) * 0.72);
+  return `rgb(${mix(r, 246)}, ${mix(g, 249)}, ${mix(b, 253)})`;
+}
+
+/** Expose item icon path for panel buttons (canvas uses UI field-item). */
+export { ITEM_ICON };
