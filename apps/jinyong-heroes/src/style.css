@@ -102,3 +102,76 @@ h1 {
 .links a:hover {
   border-bottom-color: var(--ink);
 }
+
+body.playing #app {
+  display: block;
+  place-items: unset;
+  padding: 24px 16px 48px;
+}
+
+.shell {
+  max-width: 44rem;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.shell h1 {
+  letter-spacing: 0.2em;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  margin-left: 0;
+}
+
+.shell-banner {
+  color: var(--seal);
+  font-size: 0.85rem;
+}
+
+.shell .lede {
+  margin-left: 0;
+  text-align: left;
+}
+
+.grid {
+  background: color-mix(in srgb, var(--wash) 80%, black);
+  border: 1px solid #3d342a;
+  padding: 0.85rem 1rem;
+  overflow: auto;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.inv,
+.muted {
+  color: var(--muted);
+}
+
+.shell h2 {
+  font-family: "Noto Serif SC", serif;
+  font-size: 1rem;
+  margin: 1.4rem 0 0.5rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.shell button {
+  background: var(--wash);
+  color: var(--ink);
+  border: 1px solid #6b5d4a;
+  padding: 0.4rem 0.7rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.shell button:hover {
+  border-color: var(--ink);
+}
+
+.log {
+  padding-left: 1.1rem;
+  color: var(--muted);
+  line-height: 1.6;
+}
