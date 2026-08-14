@@ -17,6 +17,7 @@ if (play) {
         <strong>仍未导入原版资源</strong>，对话是攻略转写，战斗公式未对照二进制。
       </p>
       <ul class="worlds">
+        <li><strong>江湖地图</strong><span>按公开攻略坐标画出大地图。只标已经听说或到达的地点，不揭示隐藏点。</span></li>
         <li><strong>文本试玩</strong><span>自宅搜刮 → 河洛客栈一两银子 → 南贤罗盘 → 福威隐洞唐诗选辑 → 北丑面盆 → 天宁寺佛像后。</span></li>
         <li><strong>狄云</strong><span>开局品德约 50，低于 60 时狄云不入队，这是攻略里写明的条件。</span></li>
         <li><strong>资源</strong><span>本仓与 R2 不托管 DAT/GRP。有原版后再锁哈希、换黄金样本。</span></li>

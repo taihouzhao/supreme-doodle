@@ -1,6 +1,7 @@
 import { suggestBattleAction } from "../battle/engine";
 import { renderTextGrid } from "./text-grid";
-import { currentLocation, knownLocationList, sceneInteractables } from "./scene";
+import { compassReadout, renderWorldMap } from "./world-map";
+import { currentLocation, sceneInteractables } from "./scene";
 import { ITEM_LABELS, STRINGS } from "../content/strings";
 import { lianchengContent } from "../content/liancheng";
 import { dispatch } from "../core/dispatch";
@@ -9,7 +10,7 @@ import type { GameAction, WorldState } from "../core/types";
 
 const content = lianchengContent;
 let world: WorldState = createInitialWorld(content, 1);
-const log: string[] = ["这是公开攻略重建的文本壳，不是原作导入，也还没有原版贴图。"];
+const log: string[] = ["这是公开攻略重建的文本壳。大地图只标已经听说或到达的地方。"];
 
 export function mountPlayShell(root: HTMLElement): void {
   root.innerHTML = "";
@@ -19,12 +20,21 @@ export function mountPlayShell(root: HTMLElement): void {
   draw(shell);
 
   shell.addEventListener("click", (event) => {
-    const button = (event.target as HTMLElement | null)?.closest("button[data-action]");
-    if (!(button instanceof HTMLButtonElement)) return;
-    const raw = button.dataset.action;
+    const host = (event.target as HTMLElement | null)?.closest("[data-action]");
+    if (!(host instanceof Element)) return;
+    const raw = host instanceof HTMLElement ? host.dataset.action : host.getAttribute("data-action");
     if (!raw) return;
-    const action = JSON.parse(raw) as GameAction;
-    apply(shell, action);
+    apply(shell, JSON.parse(raw) as GameAction);
+  });
+
+  shell.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const host = (event.target as HTMLElement | null)?.closest("[data-action]");
+    if (!(host instanceof Element)) return;
+    event.preventDefault();
+    const raw = host instanceof HTMLElement ? host.dataset.action : host.getAttribute("data-action");
+    if (!raw) return;
+    apply(shell, JSON.parse(raw) as GameAction);
   });
 }
 
@@ -47,27 +57,18 @@ function draw(shell: HTMLElement): void {
     .map(([id, qty]) => `${ITEM_LABELS[id] ?? id}×${qty}`)
     .join("、");
   const people = sceneInteractables(world, content);
-  const places = knownLocationList(world, content);
 
   shell.innerHTML = `
     <p class="shell-banner">攻略重建 / 无原作资源 · 品德 ${world.moral} · 天书 ${world.heavenBooks.length}/14</p>
     <h1>金庸群侠传</h1>
     <p class="lede">${title}</p>
-    <pre class="grid" aria-label="状态">${escapeHtml(renderTextGrid(world))}</pre>
-    <p class="inv">行囊：${escapeHtml(items || "空")}</p>
-    <section>
-      <h2>已知道的地方</h2>
-      <div class="row">
-        ${places
-          .map((place) =>
-            actionButton(`${place.title} ${place.worldX},${place.worldY}`, {
-              type: "GO_TO",
-              locationId: place.id,
-            }),
-          )
-          .join("")}
-      </div>
+    <section class="map-wrap">
+      <h2>江湖地图</h2>
+      ${renderWorldMap(world, content)}
+      <p class="inv">${escapeHtml(compassReadout(world, content))}</p>
     </section>
+    ${world.battle?.result === "ongoing" ? `<pre class="grid" aria-label="战场">${escapeHtml(renderTextGrid(world))}</pre>` : ""}
+    <p class="inv">行囊：${escapeHtml(items || "空")}</p>
     ${world.battle?.result === "ongoing" ? battlePanel() : interactPanel(people)}
     <section>
       <h2>记录</h2>
