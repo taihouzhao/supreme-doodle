@@ -1,0 +1,104 @@
+:root {
+  color-scheme: dark;
+  --ink: #e8dcc4;
+  --muted: #9a8b72;
+  --paper: #1a1612;
+  --wash: #2a231c;
+  --seal: #8b2e2e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(1200px 600px at 50% -10%, #3a3126 0%, transparent 55%),
+    var(--paper);
+  color: var(--ink);
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+#app {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 48px 24px;
+}
+
+.page {
+  max-width: 42rem;
+  text-align: center;
+}
+
+.seal {
+  display: inline-block;
+  border: 1px solid var(--seal);
+  color: var(--seal);
+  font-family: "Noto Serif SC", serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.4em;
+  padding: 0.35rem 0.7rem 0.35rem 1.05rem;
+  margin-bottom: 1.5rem;
+}
+
+h1 {
+  font-family: "Noto Serif SC", serif;
+  font-size: clamp(2.4rem, 6vw, 3.6rem);
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  margin: 0 0 0.75rem 0.28em;
+}
+
+.lede {
+  color: var(--muted);
+  line-height: 1.8;
+  margin: 0 auto 2rem;
+  max-width: 28rem;
+}
+
+.worlds {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 2rem;
+  padding: 0;
+  list-style: none;
+}
+
+.worlds li {
+  background: color-mix(in srgb, var(--wash) 80%, black);
+  border: 1px solid #3d342a;
+  padding: 0.85rem 1rem;
+}
+
+.worlds strong {
+  display: block;
+  font-family: "Noto Serif SC", serif;
+  margin-bottom: 0.25rem;
+}
+
+.worlds span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.links a {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid #6b5d4a;
+  padding-bottom: 0.15rem;
+}
+
+.links a:hover {
+  border-bottom-color: var(--ink);
+}

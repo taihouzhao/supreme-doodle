@@ -48,9 +48,12 @@ jobs:
         # --quiet 仍会打印失败门槛，避免再出现“只看到 exit 1”的日志。
         run: npm run sim -- --seeds=80 --campaign-seeds=20 --quiet
 
-      - name: Upload dist artifact
+      - name: Upload dist artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist/
+          path: |
+            apps/korea-tactics/dist/
+            apps/jinyong-heroes/dist/
+            apps/studio-site/dist/
           retention-days: 7

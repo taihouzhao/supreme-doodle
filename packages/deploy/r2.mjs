@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * 把 dist/ 同步到 Cloudflare R2 公共桶。
+ * 把各游戏 dist/ 同步到 Cloudflare R2 公共桶。
+ * 每个站点有独立 prefix；决战朝鲜仍在桶根，删除过期对象时会跳过其它游戏前缀。
  *
  * 需要的环境变量：
  *   CLOUDFLARE_ACCOUNT_ID
@@ -9,27 +10,29 @@
  *   R2_BUCKET_NAME
  *
  * 可选：
- *   R2_PREFIX          上传到桶内子目录（默认空，即桶根）
  *   R2_ENDPOINT        覆盖默认 endpoint
+ *   DEPLOY_GAME=id     只同步 catalog 中的某一个站点
  *   DRY_RUN=1          只打印不上传
  */
-import { createReadStream, readdirSync, statSync } from "node:fs";
-import { join, relative, extname } from "node:path";
+import { createReadStream, existsSync, readdirSync, statSync } from "node:fs";
+import { dirname, extname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
-  S3Client,
-  PutObjectCommand,
-  ListObjectsV2Command,
   DeleteObjectsCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
 } from "@aws-sdk/client-s3";
+import { GAMES } from "./catalog.mjs";
 
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const accountId = required("CLOUDFLARE_ACCOUNT_ID");
 const accessKeyId = required("R2_ACCESS_KEY_ID");
 const secretAccessKey = required("R2_SECRET_ACCESS_KEY");
 const bucket = required("R2_BUCKET_NAME");
-const prefix = (process.env.R2_PREFIX ?? "").replace(/^\/+|\/+$/g, "");
 const endpoint = process.env.R2_ENDPOINT ?? `https://${accountId}.r2.cloudflarestorage.com`;
-const distDir = process.env.DIST_DIR ?? "dist";
 const dryRun = process.env.DRY_RUN === "1";
+const onlyId = process.env.DEPLOY_GAME;
 
 const client = new S3Client({
   region: "auto",
@@ -74,7 +77,7 @@ function walk(dir) {
   return files;
 }
 
-function objectKey(filePath) {
+function objectKey(distDir, prefix, filePath) {
   const rel = relative(distDir, filePath).split("\\").join("/");
   return prefix ? `${prefix}/${rel}` : rel;
 }
@@ -82,7 +85,6 @@ function objectKey(filePath) {
 function headersFor(filePath) {
   const ext = extname(filePath).toLowerCase();
   const contentType = MIME[ext] ?? "application/octet-stream";
-  // HTML 必须随时能拿到新版本；带 hash 的静态资源可以长缓存
   const hashedAsset = /\/assets\/.+\.[a-f0-9]{8,}\./i.test(filePath.replace(/\\/g, "/"));
   const cacheControl =
     ext === ".html"
@@ -93,7 +95,7 @@ function headersFor(filePath) {
   return { contentType, cacheControl };
 }
 
-async function listRemoteKeys() {
+async function listRemoteKeys(prefix) {
   const keys = [];
   let token;
   do {
@@ -112,19 +114,41 @@ async function listRemoteKeys() {
   return keys;
 }
 
-async function main() {
+async function deleteKeys(keys) {
+  for (let i = 0; i < keys.length; i += 1000) {
+    const chunk = keys.slice(i, i + 1000);
+    for (const key of chunk) console.log(`  DEL  ${key}`);
+    if (dryRun) continue;
+    await client.send(
+      new DeleteObjectsCommand({
+        Bucket: bucket,
+        Delete: { Objects: chunk.map((Key) => ({ Key })), Quiet: true },
+      }),
+    );
+  }
+}
+
+async function syncGame(game) {
+  const distDir = resolve(repoRoot, game.dist);
+  if (!existsSync(distDir)) {
+    console.error(`目录 ${game.dist} 不存在，请先运行 npm run build`);
+    process.exit(1);
+  }
   const localFiles = walk(distDir);
   if (localFiles.length === 0) {
-    console.error(`目录 ${distDir}/ 为空，请先运行 npm run build`);
+    console.error(`目录 ${game.dist} 为空，请先运行 npm run build`);
     process.exit(1);
   }
 
-  const localKeys = new Set(localFiles.map(objectKey));
+  const prefix = (game.prefix ?? "").replace(/^\/+|\/+$/g, "");
+  const localKeys = new Set(localFiles.map((file) => objectKey(distDir, prefix, file)));
+  const preserve = game.preservePrefixes ?? [];
+
+  console.log(`\n==> ${game.name} (${game.id})`);
   console.log(`准备同步 ${localFiles.length} 个文件 → s3://${bucket}${prefix ? `/${prefix}` : ""}`);
-  console.log(`endpoint: ${endpoint}${dryRun ? " (DRY RUN)" : ""}`);
 
   for (const file of localFiles) {
-    const key = objectKey(file);
+    const key = objectKey(distDir, prefix, file);
     const { contentType, cacheControl } = headersFor(file);
     console.log(`  PUT  ${key}  (${contentType})`);
     if (dryRun) continue;
@@ -139,28 +163,37 @@ async function main() {
     );
   }
 
+  const remoteKeys = await listRemoteKeys(prefix);
+  const stale = remoteKeys.filter((key) => {
+    if (localKeys.has(key)) return false;
+    if (!prefix && preserve.some((keep) => key === keep.replace(/\/$/, "") || key.startsWith(keep))) {
+      return false;
+    }
+    return true;
+  });
+  if (stale.length > 0) {
+    console.log(`删除远端多余的 ${stale.length} 个对象`);
+    await deleteKeys(stale);
+  }
+}
+
+async function main() {
+  const games = onlyId ? GAMES.filter((game) => game.id === onlyId) : GAMES;
+  if (games.length === 0) {
+    console.error(`DEPLOY_GAME=${onlyId} 不在 catalog 中：${GAMES.map((g) => g.id).join(", ")}`);
+    process.exit(1);
+  }
+
+  console.log(`endpoint: ${endpoint}${dryRun ? " (DRY RUN)" : ""}`);
+  for (const game of games) await syncGame(game);
+
   if (dryRun) {
-    console.log("DRY RUN 完成，未写入远端。");
+    console.log("\nDRY RUN 完成，未写入远端。");
     return;
   }
 
-  const remoteKeys = await listRemoteKeys();
-  const stale = remoteKeys.filter((key) => !localKeys.has(key));
-  if (stale.length > 0) {
-    console.log(`删除远端多余的 ${stale.length} 个对象`);
-    for (let i = 0; i < stale.length; i += 1000) {
-      const chunk = stale.slice(i, i + 1000);
-      for (const key of chunk) console.log(`  DEL  ${key}`);
-      await client.send(
-        new DeleteObjectsCommand({
-          Bucket: bucket,
-          Delete: { Objects: chunk.map((Key) => ({ Key })), Quiet: true },
-        }),
-      );
-    }
-  }
-
-  console.log("同步完成。");
+  console.log("\n同步完成。");
+  for (const game of games) console.log(`  ${game.name}: ${game.url}`);
   console.log("若尚未开启公共访问：R2 → 桶 → Settings → Public Development URL / Custom Domains");
 }
 

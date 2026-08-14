@@ -1,0 +1,12 @@
+{
+  "name": "@dashjie/studio-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "游戏目录页：列出本仓所有可玩/筹备中的项目",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "node -e \"process.exit(0)\"",
+    "test": "node --test tests/catalog.test.mjs"
+  }
+}
