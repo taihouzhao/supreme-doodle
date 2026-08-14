@@ -1,0 +1,19 @@
+{
+  "name": "@dashjie/jinyong-heroes",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "金庸群侠传：开放世界武侠（筹备中）",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11",
+    "vitest": "^4.1.10"
+  }
+}

@@ -1,5 +1,7 @@
 # 部署到 Cloudflare R2
 
+本仓是多游戏 monorepo。在**仓库根目录** `npm run build` 后，`npm run deploy:r2` 会按 [`packages/deploy/catalog.mjs`](../../../packages/deploy/catalog.mjs) 把各游戏 `dist/` 同步到同一 R2 桶：决战朝鲜仍在根路径，金庸群侠传在 `jinyong-heroes/`，目录页在 `games/`。删除过期对象时不会跨前缀误删。
+
 把 `npm run build` 产出的 `dist/` 同步到 R2 公共桶，供浏览器直接访问。
 
 ## 你需要准备什么
@@ -62,14 +64,14 @@
 
 | Secret / Env | 作用 |
 |--------------|------|
-| `R2_PREFIX` | 上传到桶内子目录 |
+| `DEPLOY_GAME` | 只同步 catalog 中的某一个 `id` |
 | `R2_ENDPOINT` | 覆盖默认 `https://<ACCOUNT_ID>.r2.cloudflarestorage.com` |
 
 ### 3. 本仓库已提供的部分
 
-- [`scripts/deploy-r2.mjs`](../scripts/deploy-r2.mjs)：按正确 MIME / Cache-Control 同步 `dist/`，并删除远端多余对象
-- [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)：PR / push 时跑类型检查、测试、构建、平衡门槛
-- [`.github/workflows/deploy-r2.yml`](../.github/workflows/deploy-r2.yml)：push 到 `main` 或手动 `workflow_dispatch` 时部署
+- [`packages/deploy/r2.mjs`](../../../packages/deploy/r2.mjs)：按 catalog 同步各游戏 `dist/`，互不覆盖前缀
+- [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml)：PR / push 时跑类型检查、测试、构建、平衡门槛
+- [`.github/workflows/deploy-r2.yml`](../../../.github/workflows/deploy-r2.yml)：push 到 `main` 或手动 `workflow_dispatch` 时部署
 
 ## 本地试部署
 
@@ -79,7 +81,7 @@ export R2_ACCESS_KEY_ID=...
 export R2_SECRET_ACCESS_KEY=...
 export R2_BUCKET_NAME=korea-tactics
 
-npm run build
+npm run build                 # 在仓库根目录，构建全部游戏
 DRY_RUN=1 npm run deploy:r2   # 先看会传什么
 npm run deploy:r2             # 真正上传
 ```

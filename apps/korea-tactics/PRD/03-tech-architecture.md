@@ -37,6 +37,8 @@ src/
 └── ui/             # Canvas 棋盘 + DOM 面板，只渲染事件
 ```
 
+本文件描述 **决战朝鲜** 子项目（`apps/korea-tactics/`）。整个仓库是 npm workspaces monorepo，金庸群侠传等其它游戏不共用这套规则核心。
+
 ## 确定性与重放
 
 - 所有随机来自 `GameState.rng`（mulberry32 32 位状态），随状态一起推进。

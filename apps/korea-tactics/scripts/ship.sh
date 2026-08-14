@@ -7,7 +7,7 @@ SEEDS="${SEEDS:-100}"
 CAMPAIGN_SEEDS="${CAMPAIGN_SEEDS:-30}"
 SKIP_PUSH="${SKIP_PUSH:-0}"
 
-echo "==> 蒙特卡洛模拟（靶心：基础战役全胜 ≈ 60%）"
+echo "==> 蒙特卡洛模拟（靶心：基础策略十二关平均任务完成率 ≈ 15%）"
 npm run sim -- --seeds="$SEEDS" --campaign-seeds="$CAMPAIGN_SEEDS"
 
 echo "==> 构建"
@@ -29,5 +29,7 @@ git push -u origin "$BRANCH"
 
 echo ""
 echo "部署流水线已触发。试玩："
-echo "  https://korea-tactics.dashjie.net/index.html"
+echo "  决战朝鲜    https://korea-tactics.dashjie.net/index.html"
+echo "  金庸群侠传  https://korea-tactics.dashjie.net/jinyong-heroes/index.html"
+echo "  游戏目录    https://korea-tactics.dashjie.net/games/index.html"
 echo "请强制刷新（Ctrl/Cmd+Shift+R）。"

@@ -2,11 +2,19 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { createReadStream, createWriteStream } from "node:fs";
 import { access, chmod, readFile, mkdir } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { extname, dirname, join, normalize } from "node:path";
+import { createRequire } from "node:module";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { pipeline } from "node:stream/promises";
 import { createBrotliDecompress } from "node:zlib";
 import chromium from "@sparticuz/chromium";
 import puppeteer from "puppeteer-core";
+
+const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
+const chromiumBr = () =>
+  join(dirname(require.resolve("@sparticuz/chromium/package.json")), "bin", "chromium.br");
 
 /**
  * PRD 要求的三档同视口视觉回归：
@@ -98,14 +106,7 @@ async function resolveChrome() {
     return executable;
   } catch {
     await mkdir(CHROMIUM_CACHE, { recursive: true });
-    const compressed = join(
-      process.cwd(),
-      "node_modules",
-      "@sparticuz",
-      "chromium",
-      "bin",
-      "chromium.br",
-    );
+    const compressed = chromiumBr();
     await pipeline(
       createReadStream(compressed),
       createBrotliDecompress(),

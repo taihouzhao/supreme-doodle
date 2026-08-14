@@ -5,14 +5,20 @@ alwaysApply: true
 
 # 玩法变更与发布站规
 
-## 1. 蒙特卡洛打磨（玩法变更必做）
+## 0. 适用范围
 
-凡是**影响游戏玩法 / 数值 / 关卡难度 / AI 行为**的变更，不得只靠手感或单局试玩收工：
+蒙特卡洛门槛只约束 **决战朝鲜**（`apps/korea-tactics/`）。金庸群侠传等其它子项目尚未有规则核心，不要对空壳跑 `npm run sim`。仓库级重构、纯文档、其它游戏的落地页改动不要求朝鲜战争模拟。
+
+根目录 `npm run sim` 会转发到 `@dashjie/korea-tactics`。
+
+## 1. 蒙特卡洛打磨（决战朝鲜玩法变更必做）
+
+凡是**影响决战朝鲜玩法 / 数值 / 关卡难度 / AI 行为**的变更，不得只靠手感或单局试玩收工：
 
 1. 用蒙特卡洛工具反复模拟：`npm run sim`，深入调参用 `npm run balance:tune`
-2. 目标：以**基础策略（玩家代理）的十二关平均任务完成率**衡量长战役难度（默认带 **8%–20%**，中心 **15%**，与 `src/sim/gates.ts` 一致）；另以分关胜率、战术≥基础、无死种子门槛防止平均数掩盖坏关卡
+2. 目标：以**基础策略（玩家代理）的十二关平均任务完成率**衡量长战役难度（默认带 **8%–20%**，中心 **15%**，与 `apps/korea-tactics/src/sim/gates.ts` 一致）；另以分关胜率、战术≥基础、无死种子门槛防止平均数掩盖坏关卡
 3. 同时仍须通过既有能力梯度门槛（随机 ≪ 基础 ≤ 战术、无死档种子、无统治性退化打法、重创可恢复等）；分关难度带禁止用 0–100%「假通过」
-4. 调参写回 `src/content/balance.ts`，并更新 `reports/balance.md`
+4. 调参写回 `apps/korea-tactics/src/content/balance.ts`，并更新 `apps/korea-tactics/reports/balance.md`
 5. 门槛未通过时，不得把该玩法变更当作完成
 
 纯表现层（贴图、动画、文案、布局）可不跑完整调参，但若顺带改了规则数值则必须跑。
@@ -24,8 +30,11 @@ alwaysApply: true
 1. **提交并推送**当前工作分支（`cursor/*-eb04`）
 2. 开 PR（若尚无），等 CI 绿（或已绿）后 **自动 merge 进 `main`**（本仓默认分支是 `main`，不是 `master`；可用 `gh pr merge --merge --delete-branch`）
 3. 本地切回并 `git pull` 同步 `main`
-4. GitHub Actions **Deploy to R2** 会对 `cursor/**` 与 `main` 自动构建上传
-5. 试玩地址：https://korea-tactics.dashjie.net/index.html （强制刷新）
-6. 可用 `npm run ship` 一键：模拟门槛 → 构建检查 → 提醒推送部署
+4. GitHub Actions **Deploy to R2** 会对 `cursor/**` 与 `main` 自动构建上传全部游戏
+5. 试玩地址：
+   - 决战朝鲜 https://korea-tactics.dashjie.net/index.html
+   - 金庸群侠传 https://korea-tactics.dashjie.net/jinyong-heroes/index.html
+   - 目录 https://korea-tactics.dashjie.net/games/index.html
+6. 可用 `npm run ship` 一键：模拟门槛 → 构建检查 → 提醒推送部署（朝鲜战争玩法收尾）
 
 不要把「只开了 PR、没推送/没进部署白名单/没 merge」当成已完成。CI 红则先修再合；用户明确说不要 merge 时才停在 PR。

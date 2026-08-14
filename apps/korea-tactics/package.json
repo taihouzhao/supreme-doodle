@@ -1,0 +1,30 @@
+{
+  "name": "@dashjie/korea-tactics",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "决战朝鲜：十二关朝鲜战争历史战棋",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:mobile": "node tests/mobile-layout.mjs",
+    "test:viewport": "node tests/viewport-layout.mjs",
+    "test:playtest": "node tests/playtest-smoke.mjs",
+    "test:watch": "vitest",
+    "sim": "node --import tsx src/sim/cli.ts",
+    "balance:tune": "node --import tsx src/sim/tune.ts",
+    "ship": "bash scripts/ship.sh"
+  },
+  "devDependencies": {
+    "@sparticuz/chromium": "149.0.0",
+    "@types/node": "^26.1.2",
+    "puppeteer-core": "25.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11",
+    "vitest": "^4.1.10"
+  }
+}
