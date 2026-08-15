@@ -11,6 +11,6 @@ describe("游戏目录", () => {
     assert.match(html, /决战朝鲜/);
     assert.match(html, /金庸群侠传/);
     assert.match(html, /jinyong-heroes\/index.html/);
-    assert.match(html, /korea-defense\/index.html/);
+    assert.match(html, /korea-defense\//);
   });
 });

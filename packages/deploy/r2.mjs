@@ -83,6 +83,14 @@ function objectKey(distDir, prefix, filePath) {
   return prefix ? `${prefix}/${rel}` : rel;
 }
 
+function uploadKeys(distDir, prefix, filePath) {
+  const key = objectKey(distDir, prefix, filePath);
+  if (!prefix || relative(distDir, filePath).split("\\").join("/") !== "index.html") return [key];
+  // R2 custom domains do not apply an index document to virtual prefixes.
+  // Uploading the same document at `prefix/` makes /<prefix>/ directly playable.
+  return [key, `${prefix}/`];
+}
+
 function headersFor(filePath) {
   const ext = extname(filePath).toLowerCase();
   const contentType = MIME[ext] ?? "application/octet-stream";
@@ -143,14 +151,14 @@ async function syncGame(game) {
   }
 
   const prefix = (game.prefix ?? "").replace(/^\/+|\/+$/g, "");
-  const localKeys = new Set(localFiles.map((file) => objectKey(distDir, prefix, file)));
+  const uploadEntries = localFiles.flatMap((file) => uploadKeys(distDir, prefix, file).map((key) => ({ file, key })));
+  const localKeys = new Set(uploadEntries.map(({ key }) => key));
   const preserve = game.preservePrefixes ?? [];
 
   console.log(`\n==> ${game.name} (${game.id})`);
-  console.log(`准备同步 ${localFiles.length} 个文件 → s3://${bucket}${prefix ? `/${prefix}` : ""}`);
+  console.log(`准备同步 ${uploadEntries.length} 个对象 → s3://${bucket}${prefix ? `/${prefix}` : ""}`);
 
-  for (const file of localFiles) {
-    const key = objectKey(distDir, prefix, file);
+  for (const { file, key } of uploadEntries) {
     const { contentType, cacheControl } = headersFor(file);
     console.log(`  PUT  ${key}  (${contentType})`);
     if (dryRun) continue;

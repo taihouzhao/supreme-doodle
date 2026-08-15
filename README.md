@@ -6,7 +6,7 @@
 |------|------|------|------|
 | [决战朝鲜](./apps/korea-tactics/) | `@dashjie/korea-tactics` | 可玩 | https://korea-tactics.dashjie.net/index.html |
 | [金庸群侠传](./apps/jinyong-heroes/) | `@dashjie/jinyong-heroes` | 《连城诀》攻略重建（未导入原版） | https://korea-tactics.dashjie.net/jinyong-heroes/index.html |
-| [决战朝鲜：塔防](./apps/korea-defense/) | `@dashjie/korea-defense` | 温井防御战垂直切片 | https://korea-tactics.dashjie.net/korea-defense/index.html |
+| [决战朝鲜：塔防](./apps/korea-defense/) | `@dashjie/korea-defense` | 温井防御战垂直切片 | https://korea-tactics.dashjie.net/korea-defense/ |
 | [游戏目录](./apps/studio-site/) | `@dashjie/studio-site` | 索引页 | https://korea-tactics.dashjie.net/games/index.html |
 
 决战朝鲜继续占据站点根路径，旧书签不用改。其它游戏写在独立 URL 前缀下，部署时不会互相删文件。

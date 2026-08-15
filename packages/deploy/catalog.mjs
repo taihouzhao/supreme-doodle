@@ -16,20 +16,20 @@ export const GAMES = [
     name: "决战朝鲜：塔防",
     dist: "apps/korea-defense/dist",
     prefix: "korea-defense",
-    url: "https://korea-tactics.dashjie.net/korea-defense/index.html",
+    url: "https://korea-tactics.dashjie.net/korea-defense/",
   },
   {
     id: "jinyong-heroes",
     name: "金庸群侠传",
     dist: "apps/jinyong-heroes/dist",
     prefix: "jinyong-heroes",
-    url: "https://korea-tactics.dashjie.net/jinyong-heroes/index.html",
+    url: "https://korea-tactics.dashjie.net/jinyong-heroes/",
   },
   {
     id: "studio-site",
     name: "游戏目录",
     dist: "apps/studio-site/dist",
     prefix: "games",
-    url: "https://korea-tactics.dashjie.net/games/index.html",
+    url: "https://korea-tactics.dashjie.net/games/",
   },
 ];
