@@ -44,14 +44,14 @@ const ENEMY_COLORS: Record<EnemyState["type"], { fill: string; stroke: string }>
 };
 
 const ASSET_URLS = {
-  road: "/assets/terrain/road-snow.png",
-  forest: "/assets/terrain/forest-snow.png",
-  hill: "/assets/terrain/hill-snow.png",
-  faction: "/assets/ui/faction-pva.png",
-  infantry: "/assets/roles/rifle.svg",
-  machineGun: "/assets/roles/mg.svg",
-  mortar: "/assets/roles/mortar.svg",
-  enemyAtlas: "/assets/units/enemy-atlas.webp",
+  road: "./assets/terrain/road-snow.png",
+  forest: "./assets/terrain/forest-snow.png",
+  hill: "./assets/terrain/hill-snow.png",
+  faction: "./assets/ui/faction-pva.png",
+  infantry: "./assets/roles/rifle.svg",
+  machineGun: "./assets/roles/mg.svg",
+  mortar: "./assets/roles/mortar.svg",
+  enemyAtlas: "./assets/units/enemy-atlas.webp",
 } as const;
 
 type AssetKey = keyof typeof ASSET_URLS;
