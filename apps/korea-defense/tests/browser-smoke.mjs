@@ -101,6 +101,7 @@ try {
   assert.equal(rendererState.assets, "8");
   assert.equal(rendererState.failed, "0");
   assert.equal(rendererState.canvas2d, true);
+  assert.notEqual((await page.$eval('[data-testid="variant-copy"]', (element) => element.textContent ?? "")).trim(), "");
   const mapClick = await page.$eval('[data-region="defense-canvas"]', (canvas) => {
     const rect = canvas.getBoundingClientRect();
     const mapWidth = 22 * 64;

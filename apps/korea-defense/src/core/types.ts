@@ -1,6 +1,7 @@
 export const TICKS_PER_SECOND = 20;
 
 export type DefenseMode = "normal" | "hard";
+export type DefenseVariant = "road-raids" | "ridge-relief" | "night-attack";
 export type GameSpeed = 0 | 1 | 2;
 export type TowerType = "infantry" | "machineGun" | "mortar";
 export type EnemyType = "rifle" | "runner" | "heavy" | "armored";
@@ -35,6 +36,7 @@ export interface EnemyDefinition {
   reward: number;
   radius: number;
   color: number;
+  damageTakenMultiplier?: Partial<Record<TowerType, number>>;
 }
 
 export interface BuildNode {
@@ -67,6 +69,7 @@ export interface DefenseMissionConfig {
   height: number;
   terrain: TerrainType[];
   path: Point[];
+  alternatePath: Point[];
   commandPost: Point;
   buildNodes: BuildNode[];
   waves: WaveDefinition[];
@@ -136,6 +139,7 @@ export interface WaveRuntime {
 
 export interface DefenseState {
   mode: DefenseMode;
+  variant: DefenseVariant;
   mission: DefenseMissionConfig;
   armory: ArmoryLevels;
   tick: number;
@@ -146,6 +150,7 @@ export interface DefenseState {
   commandPostIntegrity: number;
   currentWave: number;
   activeWave: WaveRuntime | null;
+  intermissionTicks: number;
   towers: TowerState[];
   enemies: EnemyState[];
   projectiles: ProjectileEffect[];
@@ -168,6 +173,8 @@ export interface SimulationSnapshot {
   commandPostIntegrity: number;
   currentWave: number;
   activeWave: WaveRuntime | null;
+  intermissionTicks: number;
+  variant: DefenseVariant;
   towers: readonly TowerState[];
   enemies: readonly EnemyState[];
   projectiles: readonly ProjectileEffect[];

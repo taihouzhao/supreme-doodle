@@ -1,4 +1,4 @@
-import { ENEMY_DEFINITIONS, TOWER_DEFINITIONS, WONJEONG_MISSION } from "../content/wonjeong";
+import { defenseVariantFromSeed, ENEMY_DEFINITIONS, TOWER_DEFINITIONS, WONJEONG_MISSION } from "../content/wonjeong";
 import { DefenseRng } from "./rng";
 import {
   TICKS_PER_SECOND,
@@ -6,6 +6,7 @@ import {
   type DefenseCommand,
   type DefenseMissionConfig,
   type DefenseState,
+  type DefenseVariant,
   type EnemyState,
   type GameSpeed,
   type Point,
@@ -14,6 +15,7 @@ import {
   type TowerDefinition,
   type TowerState,
   type TowerType,
+  type WaveEnemySpawn,
   type WaveRuntime,
 } from "./types";
 
@@ -96,12 +98,32 @@ export function upgradeCost(type: TowerType, nextLevel: 2 | 3, armory?: ArmoryLe
   return Math.round(base * (nextLevel === 2 ? 0.75 : 1.25));
 }
 
-function buildSpawnPlan(config: DefenseMissionConfig, waveNumber: number, mode: "normal" | "hard"): { type: EnemyState["type"]; dueTick: number }[] {
+function variantSpawns(wave: DefenseMissionConfig["waves"][number], variant: DefenseVariant): WaveEnemySpawn[] {
+  const spawns = wave.spawns.map((spawn) => ({ ...spawn }));
+  if (variant === "road-raids") {
+    if (wave.number === 2) spawns.push({ type: "runner", count: 4, intervalSeconds: 1.55, startDelaySeconds: 2 });
+    if (wave.number === 4) spawns.push({ type: "runner", count: 5, intervalSeconds: 1.2, startDelaySeconds: 1 });
+    if (wave.number === 6) spawns.push({ type: "runner", count: 5, intervalSeconds: 0.95, startDelaySeconds: 1 });
+  } else if (variant === "ridge-relief") {
+    if (wave.number === 2) spawns.push({ type: "heavy", count: 1, intervalSeconds: 1, startDelaySeconds: 6 });
+    if (wave.number === 4) spawns.push({ type: "armored", count: 1, intervalSeconds: 1, startDelaySeconds: 8 });
+    if (wave.number === 5) spawns.push({ type: "heavy", count: 3, intervalSeconds: 1.8, startDelaySeconds: 2 });
+    if (wave.number === 6) spawns.push({ type: "armored", count: 2, intervalSeconds: 1, startDelaySeconds: 8 });
+  } else {
+    if (wave.number === 1) spawns.push({ type: "rifle", count: 2, intervalSeconds: 1.6, startDelaySeconds: 5 });
+    if (wave.number === 3) spawns.push({ type: "runner", count: 3, intervalSeconds: 1.1, startDelaySeconds: 1 });
+    if (wave.number === 5) spawns.push({ type: "runner", count: 4, intervalSeconds: 0.9, startDelaySeconds: 2 });
+  }
+  return spawns;
+}
+
+function buildSpawnPlan(config: DefenseMissionConfig, waveNumber: number, mode: "normal" | "hard", variant: DefenseVariant): { type: EnemyState["type"]; dueTick: number }[] {
   const wave = config.waves[waveNumber - 1];
   if (!wave) return [];
-  const modifier = (mode === "hard" ? config.hardModifier.spawnIntervalMultiplier : 1) * WAVE_PACE_MULTIPLIER;
+  const variantIntervalMultiplier = variant === "night-attack" ? 0.98 : 1;
+  const modifier = (mode === "hard" ? config.hardModifier.spawnIntervalMultiplier : 1) * variantIntervalMultiplier * WAVE_PACE_MULTIPLIER;
   const plan: { type: EnemyState["type"]; dueTick: number }[] = [];
-  for (const spawn of wave.spawns) {
+  for (const spawn of variantSpawns(wave, variant)) {
     const start = Math.round((spawn.startDelaySeconds ?? 0) * TICKS_PER_SECOND * modifier);
     const interval = Math.max(1, Math.round(spawn.intervalSeconds * TICKS_PER_SECOND * modifier));
     const count = mode === "hard" ? Math.ceil(spawn.count * config.hardModifier.spawnCountMultiplier) : spawn.count;
@@ -113,8 +135,8 @@ function buildSpawnPlan(config: DefenseMissionConfig, waveNumber: number, mode: 
   return plan;
 }
 
-function createWaveRuntime(config: DefenseMissionConfig, waveNumber: number, mode: "normal" | "hard"): WaveRuntime {
-  const spawnPlan = buildSpawnPlan(config, waveNumber, mode);
+function createWaveRuntime(config: DefenseMissionConfig, waveNumber: number, mode: "normal" | "hard", variant: DefenseVariant): WaveRuntime {
+  const spawnPlan = buildSpawnPlan(config, waveNumber, mode, variant);
   return {
     number: waveNumber,
     started: true,
@@ -134,9 +156,11 @@ function setNotice(state: DefenseState, message: string): void {
 export function createDefenseState(options: { mode?: "normal" | "hard"; seed?: number; mission?: DefenseMissionConfig; armory?: ArmoryLevels } = {}): DefenseState {
   const mission = options.mission ?? WONJEONG_MISSION;
   const mode = options.mode ?? "normal";
-  const rng = new DefenseRng(options.seed ?? 0x57454e4a);
+  const seed = options.seed ?? 0x57454e4a;
+  const rng = new DefenseRng(seed);
   const state: DefenseState = {
     mode,
+    variant: defenseVariantFromSeed(seed),
     mission,
     armory: cloneArmory(options.armory),
     tick: 0,
@@ -147,6 +171,7 @@ export function createDefenseState(options: { mode?: "normal" | "hard"; seed?: n
     commandPostIntegrity: COMMAND_POST_MAX_INTEGRITY,
     currentWave: 0,
     activeWave: null,
+    intermissionTicks: 0,
     towers: [],
     enemies: [],
     projectiles: [],
@@ -167,6 +192,7 @@ function routeForEnemy(state: DefenseState): Point[] {
     const prefix = state.mission.path.slice(0, 5);
     return [...prefix, ...state.mission.hardModifier.extraBranch];
   }
+  if (state.mode === "normal" && state.variant !== "ridge-relief" && state.nextEntityId % 3 === 0) return state.mission.alternatePath;
   return state.mission.path;
 }
 
@@ -243,7 +269,8 @@ function addEffects(state: DefenseState, tower: TowerState, target: EnemyState, 
 
 function damageTarget(state: DefenseState, tower: TowerState, target: EnemyState, definition: TowerDefinition, rng: DefenseRng): void {
   const jitter = 0.92 + rng.nextFloat() * 0.16;
-  const damage = Math.max(1, Math.round(definition.damage * jitter));
+  const damageMultiplier = ENEMY_DEFINITIONS[target.type]?.damageTakenMultiplier?.[definition.type] ?? 1;
+  const damage = Math.max(1, Math.round(definition.damage * damageMultiplier * jitter));
   const impactX = target.x;
   const impactY = target.y;
   if (definition.splashRadius) {
@@ -324,6 +351,7 @@ function advanceWave(state: DefenseState): void {
     state.activeWave = null;
     if (active.number < state.mission.waves.length) {
       state.deploymentPoints += WAVE_CLEAR_BONUS;
+      state.intermissionTicks = Math.round((state.mission.waves[active.number - 1]?.intermissionSeconds ?? 10) * TICKS_PER_SECOND);
       setNotice(state, `第 ${active.number} 波已清除，补给 +${WAVE_CLEAR_BONUS}。`);
     } else {
       state.result = "won";
@@ -332,11 +360,30 @@ function advanceWave(state: DefenseState): void {
   }
 }
 
+function startNextWave(state: DefenseState): boolean {
+  const nextWave = state.currentWave + 1;
+  if (nextWave > state.mission.waves.length) return false;
+  state.currentWave = nextWave;
+  state.activeWave = createWaveRuntime(state.mission, nextWave, state.mode, state.variant);
+  state.intermissionTicks = 0;
+  state.paused = false;
+  state.speed = state.speed === 0 ? 1 : state.speed;
+  setNotice(state, `第 ${nextWave} 波：${state.mission.waves[nextWave - 1]?.label ?? "敌军来袭"}`);
+  return true;
+}
+
+function advanceIntermission(state: DefenseState): void {
+  if (state.activeWave || state.result !== "playing" || state.currentWave === 0 || state.currentWave >= state.mission.waves.length) return;
+  if (state.intermissionTicks > 0) state.intermissionTicks -= 1;
+  if (state.intermissionTicks === 0) startNextWave(state);
+}
+
 function simulateOneTick(state: DefenseState): void {
   if (state.paused || state.result !== "playing") return;
   state.tick += 1;
   state.simulationSeconds = state.tick / TICKS_PER_SECOND;
   const rng = new DefenseRng(state.rngState);
+  advanceIntermission(state);
   advanceWave(state);
   advanceEnemies(state);
   advanceTowers(state, rng);
@@ -422,17 +469,11 @@ export function dispatchCommand(state: DefenseState, command: DefenseCommand): b
         setNotice(state, "当前波次尚未结束。");
         return false;
       }
-      const nextWave = state.currentWave + 1;
-      if (nextWave > state.mission.waves.length) {
+      if (state.currentWave >= state.mission.waves.length) {
         setNotice(state, "所有波次已完成。");
         return false;
       }
-      state.currentWave = nextWave;
-      state.activeWave = createWaveRuntime(state.mission, nextWave, state.mode);
-      state.paused = false;
-      state.speed = state.speed === 0 ? 1 : state.speed;
-      setNotice(state, `第 ${nextWave} 波：${state.mission.waves[nextWave - 1]?.label ?? "敌军来袭"}`);
-      return true;
+      return startNextWave(state);
     }
     case "DEPLOY":
       return deploy(state, command.towerType, command.nodeId);
@@ -453,6 +494,8 @@ export function snapshot(state: DefenseState): SimulationSnapshot {
     commandPostIntegrity: state.commandPostIntegrity,
     currentWave: state.currentWave,
     activeWave: state.activeWave ? { ...state.activeWave, spawnPlan: state.activeWave.spawnPlan.map((entry) => ({ ...entry })) } : null,
+    intermissionTicks: state.intermissionTicks,
+    variant: state.variant,
     towers: state.towers.map((tower) => ({ ...tower })),
     enemies: state.enemies.map((enemy) => ({ ...enemy, route: enemy.route.map((point) => ({ ...point })) })),
     projectiles: state.projectiles.map((effect) => ({ ...effect })),

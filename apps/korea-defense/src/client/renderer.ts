@@ -1,10 +1,11 @@
-import type { ArmoryLevels, DefenseMode, SimulationSnapshot, TowerType } from "../core/types";
+import type { ArmoryLevels, DefenseMode, DefenseVariant, SimulationSnapshot, TowerType } from "../core/types";
 
 export interface PresentationState {
   selectedNodeId: string | null;
   selectedTowerId: string | null;
   selectedTowerType: TowerType;
   mode: DefenseMode;
+  variant: DefenseVariant;
   quality: "high" | "low";
   armory: ArmoryLevels;
   reducedMotion: boolean;

@@ -1,4 +1,4 @@
-import { TOWER_DEFINITIONS } from "../content/wonjeong";
+import { DEFENSE_VARIANT_LABELS, TOWER_DEFINITIONS } from "../content/wonjeong";
 import { calculateStars, createDefenseState, dispatchCommand, getTowerDefinition, snapshot, stepSimulation } from "../core/engine";
 import { applyMissionResult, buyArmoryUpgrade, loadProfile, resetArmory, saveProfile, type DefenseProfileV1 } from "../core/profile";
 import type { DefenseCommand, DefenseMode, DefenseState, TowerType } from "../core/types";
@@ -117,7 +117,8 @@ export class DefenseApp {
   private startMission(mode: DefenseMode): void {
     if (mode === "hard" && !this.profile.hardUnlocked) return;
     this.view = "mission";
-    this.state = createDefenseState({ mode, armory: this.profile.armory, seed: mode === "hard" ? 0x57454e48 : 0x57454e4a });
+    const seed = Math.floor(Math.random() * 0x1_0000_0000) >>> 0;
+    this.state = createDefenseState({ mode, armory: this.profile.armory, seed });
     this.resultRecorded = false;
     this.selectedNodeId = null;
     this.selectedTowerId = null;
@@ -141,17 +142,18 @@ export class DefenseApp {
   }
 
   private missionMarkup(mode: DefenseMode): string {
+    const variant = DEFENSE_VARIANT_LABELS[this.state?.variant ?? "road-raids"];
     return `
       <main class="defense-game" data-mode="${mode}">
         <header class="game-topbar">
-          <div class="game-title"><span class="eyebrow">温井防御战 · ${mode === "hard" ? "困难" : "普通"}</span><h1>${WONJEONG_MISSION.name}</h1></div>
+          <div class="game-title"><span class="eyebrow">温井防御战 · ${mode === "hard" ? "困难" : "普通"} · ${variant.name}</span><h1>${WONJEONG_MISSION.name}</h1></div>
           <div class="topbar-stats"><span><img src="/assets/ui/faction-pva.png" alt="" />指挥所 <b data-testid="integrity">100</b></span><span>部署点 <b data-testid="points">120</b></span><span>时间 <b data-testid="time">00:00</b></span></div>
           <button class="icon-button" data-action="back-home" aria-label="返回军械库">×</button>
         </header>
         <section class="game-layout">
           <div class="battlefield-wrap"><div class="battlefield" data-region="battlefield"></div><div class="battlefield-caption"><span>北 ↑</span><span>固定路线 · 点击金色节点部署</span></div></div>
           <aside class="control-panel" aria-label="部署与战斗控制">
-            <div class="wave-card"><div><span class="kicker">防线状态</span><strong data-testid="wave-status">准备开始</strong></div><span class="wave-count" data-testid="wave-count">0 / 6</span></div>
+            <div class="wave-card"><div><span class="kicker">防线状态</span><strong data-testid="wave-status">准备开始</strong><small data-testid="variant-copy">${variant.description}</small></div><span class="wave-count" data-testid="wave-count">0 / 6</span></div>
             <div class="integrity-bar"><span data-testid="integrity-bar" style="width:100%"></span></div>
             <p class="notice" data-testid="notice" role="status" aria-live="polite">选择部署点，或开始第一波。</p>
             <section class="deploy-section"><div class="section-heading"><h2>部署火力</h2><span class="muted">点选节点后部署</span></div><div class="tower-list">${this.deployMarkup()}</div><div class="node-list" aria-label="部署节点">${WONJEONG_MISSION.buildNodes.map((node) => `<button data-action="select-node" data-node-id="${node.id}">${node.label}</button>`).join("")}</div></section>
@@ -256,7 +258,7 @@ export class DefenseApp {
     if (integrity) integrity.textContent = `${current.commandPostIntegrity}`;
     if (points) points.textContent = `${current.deploymentPoints}`;
     if (time) time.textContent = this.formatTime(current.simulationSeconds);
-    if (waveStatus) waveStatus.textContent = current.activeWave ? `第 ${current.currentWave} 波 · ${WONJEONG_MISSION.waves[current.currentWave - 1]?.label ?? "推进中"}` : current.result === "playing" ? "准备下一波" : current.result === "won" ? "防线守住" : "指挥所失守";
+    if (waveStatus) waveStatus.textContent = current.activeWave ? `第 ${current.currentWave} 波 · ${WONJEONG_MISSION.waves[current.currentWave - 1]?.label ?? "推进中"}` : current.result === "playing" && current.intermissionTicks > 0 ? `下一波将在 ${Math.ceil(current.intermissionTicks / 20)} 秒后自动开始` : current.result === "playing" ? "准备下一波" : current.result === "won" ? "防线守住" : "指挥所失守";
     if (waveCount) waveCount.textContent = `${current.currentWave} / ${WONJEONG_MISSION.waves.length}`;
     if (notice) notice.textContent = current.notice;
     if (bar) bar.style.width = `${current.commandPostIntegrity}%`;
@@ -302,6 +304,7 @@ export class DefenseApp {
       selectedTowerId: this.selectedTowerId,
       selectedTowerType: this.selectedTowerType,
       mode: this.state?.mode ?? "normal",
+      variant: this.state?.variant ?? "road-raids",
       quality: this.profile.settings.quality,
       armory: this.profile.armory,
       reducedMotion: typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true,

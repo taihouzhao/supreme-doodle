@@ -1,4 +1,14 @@
-import type { DefenseMissionConfig, EnemyDefinition, TowerDefinition, TowerType } from "../core/types";
+import type { DefenseMissionConfig, DefenseVariant, EnemyDefinition, TowerDefinition, TowerType } from "../core/types";
+
+export const DEFENSE_VARIANT_LABELS: Record<DefenseVariant, { name: string; description: string }> = {
+  "road-raids": { name: "公路袭扰", description: "突击小组会从长直公路切入，迫使机枪与步兵分担拦截。" },
+  "ridge-relief": { name: "高地增援", description: "重装纵队更早抵达，迫击炮的范围火力成为关键。" },
+  "night-attack": { name: "夜间强袭", description: "敌军间隔更短，入口会出现连续混合编队。" },
+};
+
+export function defenseVariantFromSeed(seed: number): DefenseVariant {
+  return (["road-raids", "ridge-relief", "night-attack"] as const)[Math.abs(seed | 0) % 3] ?? "road-raids";
+}
 
 export const TOWER_DEFINITIONS: Record<TowerType, TowerDefinition> = {
   infantry: {
@@ -40,9 +50,9 @@ export const TOWER_DEFINITIONS: Record<TowerType, TowerDefinition> = {
 
 export const ENEMY_DEFINITIONS: Record<string, EnemyDefinition> = {
   rifle: { type: "rifle", name: "步兵连", hp: 42, speed: 1.45, leakDamage: 10, reward: 3, radius: 0.23, color: 0xd66a56 },
-  runner: { type: "runner", name: "突击小组", hp: 28, speed: 2.5, leakDamage: 10, reward: 5, radius: 0.2, color: 0xe1b65a },
-  heavy: { type: "heavy", name: "重装步兵", hp: 105, speed: 0.82, leakDamage: 15, reward: 8, radius: 0.3, color: 0xbd4a45 },
-  armored: { type: "armored", name: "装甲车", hp: 250, speed: 0.48, leakDamage: 20, reward: 12, radius: 0.38, color: 0xa7384e },
+  runner: { type: "runner", name: "突击小组", hp: 28, speed: 2.5, leakDamage: 10, reward: 5, radius: 0.2, color: 0xe1b65a, damageTakenMultiplier: { infantry: 1.08, machineGun: 1.18, mortar: 0.9 } },
+  heavy: { type: "heavy", name: "重装步兵", hp: 105, speed: 0.82, leakDamage: 15, reward: 8, radius: 0.3, color: 0xbd4a45, damageTakenMultiplier: { infantry: 0.88, machineGun: 0.72, mortar: 1.12 } },
+  armored: { type: "armored", name: "装甲车", hp: 250, speed: 0.48, leakDamage: 20, reward: 12, radius: 0.38, color: 0xa7384e, damageTakenMultiplier: { infantry: 0.42, machineGun: 0.3, mortar: 1.2 } },
 };
 
 const WIDTH = 22;
@@ -55,6 +65,18 @@ const path = [
   { x: 12, y: 7.5 },
   { x: 12, y: 9.5 },
   { x: 15, y: 11.5 },
+  { x: 15, y: 14.5 },
+];
+
+const alternatePath = [
+  { x: 10, y: -0.5 },
+  { x: 10, y: 1.5 },
+  { x: 8, y: 3.5 },
+  { x: 8, y: 5.5 },
+  { x: 12, y: 7.5 },
+  { x: 16, y: 7.5 },
+  { x: 18, y: 9.5 },
+  { x: 18, y: 12 },
   { x: 15, y: 14.5 },
 ];
 
@@ -91,6 +113,7 @@ export const WONJEONG_MISSION: DefenseMissionConfig = {
   height: HEIGHT,
   terrain: terrainGrid(),
   path,
+  alternatePath,
   commandPost: { x: 15, y: 13 },
   buildNodes: [
     { id: "ridge-west", x: 5, y: 3, label: "西岭" },
@@ -103,9 +126,9 @@ export const WONJEONG_MISSION: DefenseMissionConfig = {
   ],
   waves: [...waves],
   hardModifier: {
-    spawnIntervalMultiplier: 0.2,
-    spawnCountMultiplier: 2,
-    routeSpeedMultiplier: 1.25,
+    spawnIntervalMultiplier: 0.22,
+    spawnCountMultiplier: 1.8,
+    routeSpeedMultiplier: 1.2,
     extraBranch: [{ x: 18, y: 7 }, { x: 18, y: 10 }, { x: 15, y: 12 }, { x: 15, y: 14.5 }],
   },
 };

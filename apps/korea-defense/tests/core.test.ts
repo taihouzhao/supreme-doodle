@@ -78,6 +78,29 @@ describe("温井塔防固定步长核心", () => {
     expect(definition.damage).toBe(28);
   });
 
+  it("每个 seed 固定战术变体，变体不会被重置吞掉", () => {
+    const first = createDefenseState({ seed: 1 });
+    const second = createDefenseState({ seed: 2 });
+    expect(first.variant).not.toBe(second.variant);
+    expect(snapshot(first).variant).toBe(first.variant);
+  });
+
+  it("波次清除后会进入有限补给间隔并自动开始下一波", () => {
+    const state = createDefenseState({ seed: 1 });
+    dispatchCommand(state, { type: "START_WAVE" });
+    for (let tick = 0; tick < 20_000 && (state.activeWave || state.result === "playing"); tick += 1) {
+      stepSimulation(state, 1);
+      if (!state.activeWave && state.intermissionTicks > 0) break;
+    }
+    expect(state.result).toBe("playing");
+    expect(state.currentWave).toBe(1);
+    expect(state.intermissionTicks).toBeGreaterThan(0);
+    const remaining = state.intermissionTicks;
+    stepSimulation(state, remaining);
+    expect(state.activeWave?.number).toBe(2);
+    expect(state.intermissionTicks).toBe(0);
+  });
+
   it("普通标准布局能在六波后得到胜负结果并可计算星级", () => {
     const state = play(0x9876);
     expect(["won", "lost"]).toContain(state.result);

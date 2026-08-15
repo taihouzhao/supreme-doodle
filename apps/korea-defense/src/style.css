@@ -86,6 +86,7 @@ h1, h2, p { margin: 0; }
 .control-panel { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid #456050; border-radius: 14px; background: var(--panel); }
 .wave-card { display: flex; justify-content: space-between; gap: 10px; align-items: flex-end; }
 .wave-card strong { display: block; margin-top: 5px; font-size: 1.15rem; }
+.wave-card small { display: block; max-width: 32ch; margin-top: 5px; color: var(--muted); line-height: 1.35; }
 .wave-count { color: var(--accent); font-weight: 700; }
 .integrity-bar { height: 6px; border-radius: 5px; overflow: hidden; background: #354239; }
 .integrity-bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--danger), var(--accent), var(--ok)); transition: width .2s; }

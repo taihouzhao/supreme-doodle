@@ -37,6 +37,18 @@ function soloRun(mode: DefenseMode, seed: number) {
   return { result: state.result, stars: calculateStars(state).stars, integrity: state.commandPostIntegrity };
 }
 
+function duoRun(seed: number) {
+  const state = createDefenseState({ mode: "normal", seed });
+  dispatchCommand(state, { type: "DEPLOY", towerType: "infantry", nodeId: "ridge-west" });
+  dispatchCommand(state, { type: "DEPLOY", towerType: "machineGun", nodeId: "road-west" });
+  dispatchCommand(state, { type: "START_WAVE" });
+  for (let tick = 0; tick < 250_000 && state.result === "playing"; tick += 1) {
+    stepSimulation(state, 1);
+    if (!state.activeWave && state.currentWave < state.mission.waves.length) dispatchCommand(state, { type: "START_WAVE" });
+  }
+  return { result: state.result, stars: calculateStars(state).stars, integrity: state.commandPostIntegrity };
+}
+
 describe("温井平衡模拟", () => {
   it("标准普通布局在约 8–12 分钟内稳定三星", () => {
     const results = [1, 2, 3, 4, 5].map((seed) => stagedRun("normal", EMPTY, seed));
@@ -57,5 +69,10 @@ describe("温井平衡模拟", () => {
     const hard = [1, 2, 3].map((seed) => soloRun("hard", seed));
     expect(normal.some((result) => result.result !== "won" || result.stars < 3 || result.integrity < 85)).toBe(true);
     expect(hard.some((result) => result.result !== "won" || result.stars < 3 || result.integrity < 85)).toBe(true);
+  });
+
+  it("普通模式两座基础塔不能稳定三星", () => {
+    const results = [1, 2, 3, 4, 5].map(duoRun);
+    expect(results.every((result) => result.stars < 3 || result.result !== "won" || result.integrity < 85)).toBe(true);
   });
 });
