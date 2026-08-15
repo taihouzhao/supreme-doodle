@@ -10,16 +10,14 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:browser": "node tests/browser-smoke.mjs"
-  },
-  "dependencies": {
-    "three": "0.185.1"
+    "test:browser": "node tests/browser-smoke.mjs",
+    "test:browser:assets": "node tests/asset-failure.mjs",
+    "test:browser:all": "npm run test:browser && npm run test:browser:assets"
   },
   "devDependencies": {
-    "@types/three": "0.185.4",
+    "@sparticuz/chromium": "149.0.0",
     "@types/node": "^26.1.2",
     "puppeteer-core": "25.1.0",
-    "@sparticuz/chromium": "149.0.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.11",
     "vitest": "^4.1.10"

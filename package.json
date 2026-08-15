@@ -21,7 +21,7 @@
     "test:mobile": "npm run test:mobile -w @dashjie/korea-tactics",
     "test:viewport": "npm run test:viewport -w @dashjie/korea-tactics",
     "test:playtest": "npm run test:playtest -w @dashjie/korea-tactics",
-    "test:defense": "npm run test:browser -w @dashjie/korea-defense",
+    "test:defense": "npm run test:browser:all -w @dashjie/korea-defense",
     "sim": "npm run sim -w @dashjie/korea-tactics --",
     "balance:tune": "npm run balance:tune -w @dashjie/korea-tactics --",
     "ship": "npm run ship -w @dashjie/korea-tactics",

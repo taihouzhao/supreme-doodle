@@ -29,7 +29,7 @@ h1, h2, p { margin: 0; }
 .home-hero h1 { margin-top: 12px; font-size: clamp(2.3rem, 7vw, 5.4rem); line-height: .95; letter-spacing: -.06em; }
 .home-hero h1 em { color: var(--accent); font-style: normal; }
 .home-hero p { margin-top: 12px; color: var(--muted); font-size: 1.05rem; }
-.brief-card, .armory-card { border: 1px solid var(--line); background: linear-gradient(130deg, rgba(43, 67, 55, .92), rgba(22, 34, 29, .96)); padding: 22px; border-radius: 14px; }
+.brief-card, .armory-card { border: 1px solid var(--line); background: linear-gradient(100deg, rgba(22, 38, 31, .98) 0%, rgba(22, 38, 31, .92) 58%, rgba(22, 38, 31, .78)), url('/assets/terrain/hill-snow.png') right center / 280px 280px no-repeat, linear-gradient(130deg, rgba(43, 67, 55, .92), rgba(22, 34, 29, .96)); padding: 22px; border-radius: 14px; }
 .brief-card { margin-bottom: 18px; }
 .brief-card__heading, .section-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
 .brief-card__heading img { width: 44px; height: 44px; }
@@ -81,6 +81,7 @@ h1, h2, p { margin: 0; }
 .battlefield-wrap { min-width: 0; min-height: 440px; position: relative; overflow: hidden; border: 1px solid #456050; border-radius: 14px; background: #17251f; }
 .battlefield { position: absolute; inset: 0; }
 .battlefield canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.battlefield canvas:focus-visible { outline: 2px solid var(--accent-strong); outline-offset: -3px; }
 .battlefield-caption { position: absolute; top: 10px; left: 12px; right: 12px; display: flex; justify-content: space-between; pointer-events: none; color: #c7d9c8; font-size: .7rem; text-shadow: 0 1px 3px #0a120e; }
 .control-panel { min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid #456050; border-radius: 14px; background: var(--panel); }
 .wave-card { display: flex; justify-content: space-between; gap: 10px; align-items: flex-end; }
@@ -110,10 +111,13 @@ h1, h2, p { margin: 0; }
 .speed-buttons button { flex: 1; padding: 0 8px; background: #1c3026; }
 .speed-buttons button.is-active { color: #1b271e; background: var(--accent); border-color: var(--accent); }
 .mobile-hint { color: #718879; font-size: .7rem; line-height: 1.4; }
-.webgl-fallback { position: absolute; inset: 0; display: grid; place-content: center; gap: 8px; padding: 24px; text-align: center; color: #e5c779; }
-.webgl-fallback span { max-width: 320px; color: var(--muted); font-size: .8rem; line-height: 1.5; }
-.webgl-context-notice { position: absolute; inset: 0; z-index: 3; display: grid; place-content: center; padding: 24px; background: rgba(5, 12, 9, .72); color: var(--accent-strong); text-align: center; font-size: .85rem; line-height: 1.5; pointer-events: none; }
-.webgl-context-notice[hidden] { display: none; }
+.canvas-status { position: absolute; inset: 0; z-index: 3; display: grid; place-content: center; justify-items: center; gap: 8px; padding: 24px; background: rgba(11, 24, 19, .78); color: var(--accent-strong); text-align: center; font-size: .85rem; line-height: 1.45; }
+.canvas-status span { max-width: 300px; color: var(--muted); font-size: .78rem; }
+.canvas-status strong { font-size: .94rem; }
+.canvas-status button { margin-top: 5px; }
+.canvas-status__mark { width: 18px; height: 18px; border: 2px solid rgba(229, 199, 121, .28); border-top-color: var(--accent-strong); border-radius: 50%; animation: canvas-status-spin .8s linear infinite; }
+@keyframes canvas-status-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .canvas-status__mark { animation: none; } }
 .tutorial, .result-overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(5, 12, 9, .7); z-index: 5; }
 .tutorial[hidden], .result-overlay[hidden] { display: none; }
 .tutorial-card, .result-card { width: min(440px, 100%); padding: 24px; border: 1px solid #70886f; border-radius: 15px; background: #1b2e25; box-shadow: 0 20px 90px rgba(0,0,0,.42); }

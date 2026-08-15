@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { access, readFile } from "node:fs/promises";
-import { extname, join, normalize } from "node:path";
+import { access, mkdir, readFile } from "node:fs/promises";
+import { extname, isAbsolute, join, normalize } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import chromium from "@sparticuz/chromium";
@@ -9,7 +9,10 @@ import puppeteer from "puppeteer-core";
 
 const execFileAsync = promisify(execFile);
 const DIST = join(process.cwd(), "dist");
-const mime = { ".css": "text/css", ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml" };
+const mime = { ".css": "text/css", ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".svg": "image/svg+xml", ".webp": "image/webp" };
+const SCREENSHOT_DIR = process.env.SCREENSHOT_DIR ? (isAbsolute(process.env.SCREENSHOT_DIR) ? process.env.SCREENSHOT_DIR : join(process.cwd(), process.env.SCREENSHOT_DIR)) : null;
+
+if (SCREENSHOT_DIR) await mkdir(SCREENSHOT_DIR, { recursive: true });
 
 function staticServer() {
   return createServer(async (request, response) => {
@@ -87,14 +90,29 @@ try {
     await page.locator('[data-action="next-tutorial"]').click();
     assert.equal(await page.$eval('[data-region="tutorial"]', (element) => element.hidden), true);
   }
-  await page.evaluate(() => {
-    const canvas = document.querySelector('[data-region="defense-canvas"]');
-    if (!canvas) throw new Error("WebGL canvas missing");
-    canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+  await page.waitForFunction(() => Number(document.querySelector('[data-region="battlefield"]')?.dataset.resourceAssets ?? 0) >= 8, { timeout: 10_000 });
+  const rendererState = await page.$eval('[data-region="battlefield"]', (element) => ({
+    renderer: element.dataset.renderer,
+    assets: element.dataset.resourceAssets,
+    failed: element.dataset.failedAssets,
+    canvas2d: Boolean(element.querySelector('[data-region="defense-canvas"]')?.getContext?.("2d")),
+  }));
+  assert.equal(rendererState.renderer, "canvas2d");
+  assert.equal(rendererState.assets, "8");
+  assert.equal(rendererState.failed, "0");
+  assert.equal(rendererState.canvas2d, true);
+  const mapClick = await page.$eval('[data-region="defense-canvas"]', (canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    const mapWidth = 22 * 64;
+    const mapHeight = 14 * 64;
+    const scale = Math.min((rect.width - 36) / mapWidth, (rect.height - 36) / mapHeight);
+    const worldX = (5 + 0.5) * 64;
+    const worldY = (3 + 0.5) * 64;
+    return { x: rect.left + rect.width / 2 + (worldX - mapWidth / 2) * scale, y: rect.top + rect.height / 2 + (worldY - mapHeight / 2) * scale };
   });
-  assert.equal(await page.$eval('[data-context-notice]', (element) => !element.hidden), true);
-  await page.evaluate(() => document.querySelector('[data-region="defense-canvas"]')?.dispatchEvent(new Event("webglcontextrestored")));
-  await page.waitForFunction(() => document.querySelector('[data-context-notice]')?.hidden === true);
+  await page.mouse.click(mapClick.x, mapClick.y);
+  assert.match(await page.$eval('[data-testid="selection"]', (element) => element.textContent ?? ""), /西岭/);
+  if (SCREENSHOT_DIR) await page.screenshot({ path: join(SCREENSHOT_DIR, "defense-desktop-selected.png"), fullPage: true });
   await page.locator('[data-action="select-tower"][data-type="infantry"]').click();
   await page.locator('[data-action="select-node"][data-node-id="ridge-west"]').click();
   await page.click('[data-action="deploy-selected"]');
@@ -103,6 +121,11 @@ try {
   assert.match(await page.$eval('[data-testid="selection"]', (element) => element.textContent ?? ""), /2 级/);
   await page.locator('[data-action="start-wave"]').click();
   await page.waitForFunction(() => (document.querySelector('[data-testid="wave-status"]')?.textContent ?? "").includes("第 1 波"));
+  if (SCREENSHOT_DIR) {
+    await page.waitForFunction(() => Number(document.querySelector('[data-region="battlefield"]')?.dataset.activeEnemies ?? 0) > 0, { timeout: 15_000 });
+    await page.screenshot({ path: join(SCREENSHOT_DIR, "defense-desktop-wave.png"), fullPage: true });
+  }
+  await page.waitForFunction(() => Number(document.querySelector('[data-region="battlefield"]')?.dataset.activeEnemies ?? 0) > 0, { timeout: 15_000 });
   await page.locator('[data-action="pause"]').click();
   assert.equal(await page.$eval('[data-action="pause"]', (element) => element.textContent ?? ""), "继续");
   await page.locator('[data-action="speed"][data-speed="2"]').click();
@@ -116,10 +139,13 @@ try {
     await page.waitForSelector('[data-region="battlefield"]');
     const tutorial = await page.$('[data-action="skip-tutorial"]');
     if (tutorial) await tutorial.evaluate((element) => element.click());
+    await page.waitForFunction(() => Number(document.querySelector('[data-region="battlefield"]')?.dataset.resourceAssets ?? 0) >= 8, { timeout: 10_000 });
     assert.equal((await page.$$('[data-region="defense-canvas"]')).length, 1);
     resourceSamples.push(await page.$eval('[data-region="battlefield"]', (element) => ({
-      geometries: element.dataset.resourceGeometries,
-      textures: element.dataset.resourceTextures,
+      renderer: element.dataset.renderer,
+      assets: element.dataset.resourceAssets,
+      cache: element.dataset.staticCacheBuilds,
+      failed: element.dataset.failedAssets,
     })));
   }
   assert.equal(new Set(resourceSamples.map((sample) => JSON.stringify(sample))).size, 1, `renderer resources changed across resets: ${JSON.stringify(resourceSamples)}`);
@@ -134,6 +160,8 @@ try {
     await mobile.waitForSelector('[data-region="battlefield"]');
     const skip = await mobile.$('[data-action="skip-tutorial"]');
     if (skip) await skip.evaluate((element) => element.click());
+    await mobile.waitForFunction(() => Number(document.querySelector('[data-region="battlefield"]')?.dataset.resourceAssets ?? 0) >= 8, { timeout: 10_000 });
+    if (SCREENSHOT_DIR && viewport.width === 390) await mobile.screenshot({ path: join(SCREENSHOT_DIR, "defense-mobile-portrait.png"), fullPage: true });
     const frameCount = await mobile.evaluate(() => new Promise((resolve) => {
       let frames = 0;
       const started = performance.now();
@@ -161,7 +189,7 @@ try {
     await mobile.close();
     process.stdout.write(`✓ defense browser ${viewport.width}×${viewport.height}: responsive battlefield and touch controls\n`);
   }
-  process.stdout.write("✓ defense browser smoke: tutorial, deploy, wave, pause, 2×, context recovery, ten scene resets\n");
+  process.stdout.write("✓ defense browser smoke: tutorial, canvas assets, map selection, deploy, wave, pause, 2×, ten scene resets\n");
 } finally {
   await browser.close();
   await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));

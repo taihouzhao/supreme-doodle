@@ -4,6 +4,7 @@ import { applyMissionResult, buyArmoryUpgrade, loadProfile, resetArmory, savePro
 import type { DefenseCommand, DefenseMode, DefenseState, TowerType } from "../core/types";
 import { WONJEONG_MISSION } from "../content/wonjeong";
 import { SoundBank } from "./audio";
+import type { PresentationState } from "./renderer";
 import { DefenseScene } from "./scene";
 
 const rootElement = document.querySelector<HTMLElement>("#app");
@@ -152,7 +153,7 @@ export class DefenseApp {
           <aside class="control-panel" aria-label="部署与战斗控制">
             <div class="wave-card"><div><span class="kicker">防线状态</span><strong data-testid="wave-status">准备开始</strong></div><span class="wave-count" data-testid="wave-count">0 / 6</span></div>
             <div class="integrity-bar"><span data-testid="integrity-bar" style="width:100%"></span></div>
-            <p class="notice" data-testid="notice">选择部署点，或开始第一波。</p>
+            <p class="notice" data-testid="notice" role="status" aria-live="polite">选择部署点，或开始第一波。</p>
             <section class="deploy-section"><div class="section-heading"><h2>部署火力</h2><span class="muted">点选节点后部署</span></div><div class="tower-list">${this.deployMarkup()}</div><div class="node-list" aria-label="部署节点">${WONJEONG_MISSION.buildNodes.map((node) => `<button data-action="select-node" data-node-id="${node.id}">${node.label}</button>`).join("")}</div></section>
             <section class="selected-card" data-testid="selection"><span class="muted">未选择节点</span><strong>点击战场上的金色节点</strong></section>
             <div class="battle-controls"><button class="primary-button" data-action="start-wave">开始下一波</button><button class="secondary-button" data-action="pause">暂停</button><div class="speed-buttons"><button data-action="speed" data-speed="1" class="is-active">1×</button><button data-action="speed" data-speed="2">2×</button></div></div>
@@ -277,15 +278,34 @@ export class DefenseApp {
       this.lastLeaks = current.leaks;
       this.sound.play("leak");
     }
-    this.scene?.render(current);
+    this.scene?.render(current, this.presentationState());
     const battlefield = root.querySelector<HTMLElement>('[data-region="battlefield"]');
     const resources = this.scene?.resourceCounts();
-    if (battlefield && resources) {
+    const diagnostics = this.scene?.diagnostics();
+    if (battlefield && resources && diagnostics) {
       battlefield.dataset.resourceGeometries = `${resources.geometries}`;
       battlefield.dataset.resourceTextures = `${resources.textures}`;
+      battlefield.dataset.renderer = diagnostics.renderer;
+      battlefield.dataset.resourceAssets = `${diagnostics.loadedAssets}`;
+      battlefield.dataset.staticCacheBuilds = `${diagnostics.staticCacheBuilds}`;
+      battlefield.dataset.failedAssets = `${diagnostics.failedAssets.length}`;
+      battlefield.dataset.activeEnemies = `${current.enemies.length}`;
+      battlefield.dataset.activeTowers = `${current.towers.length}`;
     }
     this.renderSelection();
     if (!this.resultRecorded && current.result !== "playing") this.showResult(current.result);
+  }
+
+  private presentationState(): PresentationState {
+    return {
+      selectedNodeId: this.selectedNodeId,
+      selectedTowerId: this.selectedTowerId,
+      selectedTowerType: this.selectedTowerType,
+      mode: this.state?.mode ?? "normal",
+      quality: this.profile.settings.quality,
+      armory: this.profile.armory,
+      reducedMotion: typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true,
+    };
   }
 
   private frame(now: number): void {
