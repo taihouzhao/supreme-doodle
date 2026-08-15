@@ -8,8 +8,15 @@ export const GAMES = [
     name: "决战朝鲜",
     dist: "apps/korea-tactics/dist",
     prefix: "",
-    preservePrefixes: ["jinyong-heroes/", "games/"],
+    preservePrefixes: ["jinyong-heroes/", "korea-defense/", "games/"],
     url: "https://korea-tactics.dashjie.net/index.html",
+  },
+  {
+    id: "korea-defense",
+    name: "决战朝鲜：塔防",
+    dist: "apps/korea-defense/dist",
+    prefix: "korea-defense",
+    url: "https://korea-tactics.dashjie.net/korea-defense/index.html",
   },
   {
     id: "jinyong-heroes",

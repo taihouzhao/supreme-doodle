@@ -103,5 +103,6 @@ jobs:
             echo "验证地址："
             echo "- 决战朝鲜 https://korea-tactics.dashjie.net/index.html"
             echo "- 金庸群侠传 https://korea-tactics.dashjie.net/jinyong-heroes/index.html"
+            echo "- 决战朝鲜：塔防 https://korea-tactics.dashjie.net/korea-defense/index.html"
             echo "- 游戏目录 https://korea-tactics.dashjie.net/games/index.html"
           } >> "$GITHUB_STEP_SUMMARY"

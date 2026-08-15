@@ -6,6 +6,7 @@
 |------|------|------|------|
 | [决战朝鲜](./apps/korea-tactics/) | `@dashjie/korea-tactics` | 可玩 | https://korea-tactics.dashjie.net/index.html |
 | [金庸群侠传](./apps/jinyong-heroes/) | `@dashjie/jinyong-heroes` | 《连城诀》攻略重建（未导入原版） | https://korea-tactics.dashjie.net/jinyong-heroes/index.html |
+| [决战朝鲜：塔防](./apps/korea-defense/) | `@dashjie/korea-defense` | 温井防御战垂直切片 | https://korea-tactics.dashjie.net/korea-defense/index.html |
 | [游戏目录](./apps/studio-site/) | `@dashjie/studio-site` | 索引页 | https://korea-tactics.dashjie.net/games/index.html |
 
 决战朝鲜继续占据站点根路径，旧书签不用改。其它游戏写在独立 URL 前缀下，部署时不会互相删文件。
@@ -16,6 +17,7 @@
 apps/
   korea-tactics/     决战朝鲜（规则核心、关卡、模拟器、网页）
   jinyong-heroes/    金庸群侠传 Classic Engine（无画面核心 + PRD）
+  korea-defense/     决战朝鲜：塔防（温井实时防御战）
   studio-site/       /games/ 目录页
 packages/
   deploy/            多游戏 R2 同步
@@ -29,6 +31,8 @@ packages/
 npm install
 npm run dev:korea          # 决战朝鲜
 npm run dev:jinyong        # 金庸群侠传落地页
+npm run dev:defense        # 决战朝鲜：塔防温井试玩
+npm run test:defense       # 塔防三视口浏览器冒烟
 npm run build              # 构建全部站点
 npm run test               # 全部包的测试
 npm run sim                # 仅决战朝鲜蒙特卡洛

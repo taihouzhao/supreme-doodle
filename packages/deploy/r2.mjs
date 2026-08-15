@@ -26,12 +26,12 @@ import {
 import { GAMES } from "./catalog.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const dryRun = process.env.DRY_RUN === "1";
 const accountId = required("CLOUDFLARE_ACCOUNT_ID");
 const accessKeyId = required("R2_ACCESS_KEY_ID");
 const secretAccessKey = required("R2_SECRET_ACCESS_KEY");
 const bucket = required("R2_BUCKET_NAME");
 const endpoint = process.env.R2_ENDPOINT ?? `https://${accountId}.r2.cloudflarestorage.com`;
-const dryRun = process.env.DRY_RUN === "1";
 const onlyId = process.env.DEPLOY_GAME;
 
 const client = new S3Client({
@@ -60,6 +60,7 @@ const MIME = {
 
 function required(name) {
   const value = process.env[name];
+  if (dryRun && !value) return "dry-run";
   if (!value) {
     console.error(`缺少环境变量 ${name}`);
     process.exit(1);
@@ -96,6 +97,7 @@ function headersFor(filePath) {
 }
 
 async function listRemoteKeys(prefix) {
+  if (dryRun) return [];
   const keys = [];
   let token;
   do {
