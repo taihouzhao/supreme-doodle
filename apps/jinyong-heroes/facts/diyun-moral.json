@@ -1,0 +1,17 @@
+{
+  "id": "diyun-moral",
+  "status": "reconstructed-from-walkthrough",
+  "source": [
+    "https://www.52miji.com/cheats/X,MBPYff_Q.shtml",
+    "https://www.bilibili.com/read/cv24093037/",
+    "https://forum.gamer.com.tw/G2.php?bsn=10859&sn=561"
+  ],
+  "repro": [
+    "Dalun temple (114,297): fight monks, get orange key, open the cell.",
+    "If moral >= 60, Diyun joins and names cave 364,279; items: blood knife, blood-knife script, Shenzhao script, Wucan armor.",
+    "If moral is lower (start is ~50), he does not join and the coordinates he gives are wrong."
+  ],
+  "before": { "moral": 50, "party": ["player"] },
+  "after_low_moral": { "party": ["player"], "flags.diyun_lied": true },
+  "disputed": "Some remake notes say moral 65. This pack uses 60 from the majority of DOS walkthroughs. Opening the cell is recorded as a small moral gain."
+}

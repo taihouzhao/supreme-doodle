@@ -1,8 +1,8 @@
 {
-  "id": "battle-golden/tianning_guard",
+  "id": "battle-golden/tianning_raid",
   "status": "pending-original",
   "formulaStatus": "unverified-vs-original",
-  "battleId": "tianning_guard",
+  "battleId": "tianning_raid",
   "seed": 1,
-  "notes": "Placeholder until a hashed DOS 1996 binary is locked. Replay must stay byte-stable in this engine."
+  "notes": "Community damage formula (skill+atk-def*2 ±30). Replay must stay stable; not yet checked against a hashed DOS binary."
 }

@@ -43,6 +43,9 @@ jobs:
       - name: Playtest smoke
         run: npm run test:playtest
 
+      - name: Korea defense browser smoke
+        run: npm run test:defense
+
       - name: Balance gates (smoke)
         # 小样本下胜率标准差会偏大；gates.ts 对 <50 战役 / <100 分关样本放宽。
         # --quiet 仍会打印失败门槛，避免再出现“只看到 exit 1”的日志。
@@ -55,5 +58,6 @@ jobs:
           path: |
             apps/korea-tactics/dist/
             apps/jinyong-heroes/dist/
+            apps/korea-defense/dist/
             apps/studio-site/dist/
           retention-days: 7

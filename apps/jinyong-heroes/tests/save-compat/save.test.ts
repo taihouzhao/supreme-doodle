@@ -7,7 +7,7 @@ import { runPath } from "../quest-paths/script";
 
 describe("存档往返", () => {
   it("序列化后再读回，状态指纹不变", () => {
-    const { state } = runPath(lianchengContent, LIANCHENG_SHORTEST_PATH.slice(0, 4), 7);
+    const { state } = runPath(lianchengContent, LIANCHENG_SHORTEST_PATH.slice(0, 12), 7);
     const restored = deserializeSave(serializeSave(state));
     expect(fingerprint(restored)).toBe(fingerprint(state));
     expect(restored.inventory.tang_poetry).toBe(1);

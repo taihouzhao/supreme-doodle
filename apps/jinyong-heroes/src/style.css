@@ -102,3 +102,169 @@ h1 {
 .links a:hover {
   border-bottom-color: var(--ink);
 }
+
+body.playing {
+  background: #0d0b09;
+}
+
+body.playing #app {
+  display: block;
+  padding: 10px 14px 14px;
+  min-height: 100dvh;
+  height: 100dvh;
+}
+
+.play-stage {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  width: min(100%, 1600px);
+  height: calc(100dvh - 24px);
+  margin: 0 auto;
+}
+
+.play-canvas-wrap {
+  min-height: 0;
+  border: 1px solid #6b5d4a;
+  background: #16120e;
+  overflow: hidden;
+}
+
+.play-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: auto;
+  outline: none;
+}
+
+.play-canvas:focus {
+  outline: 1px solid #c9b896;
+  outline-offset: -1px;
+}
+
+.play-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.shell {
+  max-width: 52rem;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.shell h1 {
+  letter-spacing: 0.2em;
+  font-size: clamp(1.6rem, 4vw, 2.2rem);
+  margin-left: 0;
+}
+
+.shell-banner {
+  color: var(--seal);
+  font-size: 0.85rem;
+}
+
+.shell .lede {
+  margin-left: 0;
+  text-align: left;
+}
+
+.grid {
+  background: color-mix(in srgb, var(--wash) 80%, black);
+  border: 1px solid #3d342a;
+  padding: 0.85rem 1rem;
+  overflow: auto;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.inv,
+.muted {
+  color: var(--muted);
+}
+
+.shell h2 {
+  font-family: "Noto Serif SC", serif;
+  font-size: 1rem;
+  margin: 1.4rem 0 0.5rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.shell button {
+  background: var(--wash);
+  color: var(--ink);
+  border: 1px solid #6b5d4a;
+  padding: 0.4rem 0.7rem;
+  font: inherit;
+  cursor: pointer;
+}
+
+.shell button:hover {
+  border-color: var(--ink);
+}
+
+.world-map {
+  display: block;
+  width: 100%;
+  max-height: min(70vh, 36rem);
+  background:
+    radial-gradient(800px 400px at 70% 40%, #3a3126 0%, transparent 55%),
+    #241e18;
+  border: 1px solid #3d342a;
+}
+
+.world-map .land {
+  fill: #2a231c;
+}
+
+.world-map .water {
+  fill: none;
+  stroke: #4a6a78;
+  stroke-width: 8;
+  opacity: 0.45;
+}
+
+.world-map .ridge {
+  fill: none;
+  stroke: #6b5d4a;
+  stroke-width: 2;
+  opacity: 0.55;
+}
+
+.world-map .rose {
+  fill: var(--muted);
+  font-size: 14px;
+  text-anchor: middle;
+}
+
+.world-map .pin {
+  cursor: pointer;
+}
+
+.world-map .pin circle {
+  fill: #c9b896;
+  stroke: #1a1612;
+  stroke-width: 1;
+}
+
+.world-map .pin.here circle {
+  fill: var(--seal);
+}
+
+.world-map .pin text {
+  fill: var(--ink);
+  font-size: 13px;
+  text-anchor: middle;
+}
+
+.map-wrap h2 {
+  margin-top: 0.4rem;
+}

@@ -4,6 +4,7 @@ import type { WorldState } from "../core/types";
 export function renderTextGrid(state: WorldState): string {
   const lines = [
     `loc=${state.locationId}`,
+    `moral=${state.moral}`,
     `known=${[...state.knownLocations].sort().join(",")}`,
     `inv=${formatRecord(state.inventory)}`,
     `books=${[...state.heavenBooks].sort().join(",")}`,

@@ -1,0 +1,21 @@
+{
+  "id": "world-coordinates-liancheng",
+  "status": "reconstructed-from-walkthrough",
+  "source": "https://www.tls999.com/n/20150409/154833.html",
+  "repro": "Compare public coordinate tables; do not treat as byte-accurate until a DOS hash is locked.",
+  "coords": {
+    "home": [352, 233],
+    "heluo_inn": [359, 229],
+    "nanxian_house": [388, 325],
+    "fuwei_biaoju": [369, 258],
+    "jiangnan_cave": [364, 279],
+    "dalun_temple": [114, 297],
+    "beichou_house": [51, 109],
+    "tianning_temple": [330, 237]
+  },
+  "disputed": {
+    "home": "357,235 in Bahamut / 52miji",
+    "jiangnan_cave": "365,279 in some lists",
+    "beichou_house": "049,111 in 52miji"
+  }
+}

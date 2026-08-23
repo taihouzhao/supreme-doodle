@@ -1,0 +1,11 @@
+{
+  "id": "overworld-map-known-only",
+  "status": "reconstructed-from-walkthrough",
+  "source": "https://www.tls999.com/n/20150409/154833.html",
+  "repro": [
+    "Walk the public 480×480 coord space (origin north-west, Y increases south).",
+    "Visible buildings are house sprites. The hidden cave is never labeled; rumors do not fog-bust it."
+  ],
+  "before": { "knownLocations": ["home"] },
+  "after": { "spritesShow": ["自宅", "河洛客栈", "南贤居"], "spritesHide": ["唐诗山洞"] }
+}

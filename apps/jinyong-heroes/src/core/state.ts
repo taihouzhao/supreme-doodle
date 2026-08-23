@@ -1,6 +1,6 @@
 import type { ContentPack, Presentation, UiMode, WorldState } from "./types";
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 
 export function emptyPresentation(): Presentation {
   return { dialogue: [], audio: [], animation: [] };
@@ -16,6 +16,11 @@ export function createInitialWorld(
     throw new Error(`start location missing: ${content.startLocationId}`);
   }
 
+  const startScene = content.scenes[start.id];
+  if (!startScene) {
+    throw new Error(`start scene missing: ${start.id}`);
+  }
+
   const npcAlive: Record<string, boolean> = {};
   for (const npc of content.interactables.filter((entry) => entry.kind === "npc")) {
     npcAlive[npc.id] = true;
@@ -25,12 +30,20 @@ export function createInitialWorld(
     saveVersion: SAVE_VERSION,
     mode,
     rngSeed: seed >>> 0,
+    view: "scene",
     locationId: start.id,
+    overworldX: start.worldX + startScene.leave.dx,
+    overworldY: start.worldY + startScene.leave.dy,
+    sceneX: startScene.spawn.x,
+    sceneY: startScene.spawn.y,
+    facing: startScene.spawn.facing,
+    menuReturnView: "scene",
     knownLocations: [...content.startKnownLocations],
-    inventory: {},
+    visitedLocations: [start.id],
+    inventory: { ...content.startInventory },
     flags: {},
     heavenBooks: [],
-    moral: 0,
+    moral: content.startMoral,
     reputation: 0,
     party: [content.playerId],
     partyMax: content.partyMax,
@@ -44,6 +57,7 @@ export function createInitialWorld(
 export function cloneWorld(state: WorldState): WorldState {
   return {
     ...state,
+    visitedLocations: [...state.visitedLocations],
     knownLocations: [...state.knownLocations],
     inventory: { ...state.inventory },
     flags: { ...state.flags },

@@ -4,6 +4,7 @@ export { fingerprint, stableStringify } from "./hash";
 export { SAVE_VERSION, cloneWorld, createInitialWorld, emptyPresentation } from "./state";
 export { deserializeSave, serializeSave } from "./save";
 export { dispatch } from "./dispatch";
+export { enterLocation, faceInteract, facingTileId, stepWorld } from "./move";
 export type {
   BattleState,
   ConditionTree,
@@ -11,7 +12,9 @@ export type {
   DispatchResult,
   EventAction,
   EventDefinition,
+  Facing,
   GameAction,
   Presentation,
+  ViewMode,
   WorldState,
 } from "./types";
