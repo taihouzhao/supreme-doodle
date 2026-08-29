@@ -52,7 +52,13 @@ function makeRoofGeometry(): THREE.BufferGeometry {
   return geo;
 }
 
-export function buildCityView(model: CityModel): CityView {
+export interface ViewOptions {
+  /** 软件渲染 / 弱设备档：降树木密度、去屋顶细节、贴图减半 */
+  lite?: boolean;
+}
+
+export function buildCityView(model: CityModel, opts: ViewOptions = {}): CityView {
+  const lite = opts.lite === true;
   const group = new THREE.Group();
   const disposables: { dispose: () => void }[] = [];
   const track = <T extends { dispose: () => void }>(obj: T): T => {
@@ -61,7 +67,7 @@ export function buildCityView(model: CityModel): CityView {
   };
 
   // —— 地面 ——
-  const cityCanvas = paintCityTexture(model);
+  const cityCanvas = paintCityTexture(model, lite ? 2048 : 4096);
   const cityTex = track(new THREE.CanvasTexture(cityCanvas));
   cityTex.colorSpace = THREE.SRGBColorSpace;
   cityTex.anisotropy = 8;
@@ -140,9 +146,10 @@ export function buildCityView(model: CityModel): CityView {
   group.add(roofMesh);
 
   // —— 屋顶设备 ——
+  const roofUnits = lite ? [] : model.roofUnits;
   const unitMat = track(new THREE.MeshLambertMaterial({ color: 0x9d9d99 }));
-  const unitMesh = makeInstanced(boxGeo, unitMat, model.roofUnits.length, { cast: false, receive: false });
-  model.roofUnits.forEach((u, i) => {
+  const unitMesh = makeInstanced(boxGeo, unitMat, roofUnits.length, { cast: false, receive: false });
+  roofUnits.forEach((u, i) => {
     dummy.position.set(u.x, u.y - u.h / 2, u.z);
     dummy.rotation.set(0, u.rot, 0);
     dummy.scale.set(u.w, u.h, u.d);
@@ -151,14 +158,16 @@ export function buildCityView(model: CityModel): CityView {
   });
   group.add(unitMesh);
 
-  // —— 树木 ——
+  // —— 树木（lite 档：密度降为 1/3、体积稍放大补偿） ——
+  const trees = lite ? model.trees.filter((_, i) => i % 3 === 0) : model.trees;
   const treeGeo = track(new THREE.IcosahedronGeometry(1, 0));
   const treeMat = track(new THREE.MeshLambertMaterial({ color: 0xffffff }));
-  const treeMesh = makeInstanced(treeGeo, treeMat, model.trees.length, { cast: true, receive: false });
-  model.trees.forEach((t, i) => {
+  const treeMesh = makeInstanced(treeGeo, treeMat, trees.length, { cast: true, receive: false });
+  trees.forEach((t, i) => {
     dummy.position.set(t.x, t.h * 0.62, t.z);
     dummy.rotation.set(0, (i % 16) * 0.4, 0);
-    dummy.scale.set(t.r, t.h * 0.62, t.r);
+    const r = lite ? t.r * 1.35 : t.r;
+    dummy.scale.set(r, t.h * 0.62, r);
     dummy.updateMatrix();
     treeMesh.setMatrixAt(i, dummy.matrix);
     treeMesh.setColorAt(i, tmpColor.setHex(t.color));
@@ -239,8 +248,8 @@ export function buildCityView(model: CityModel): CityView {
     flats.length +
     glasses.length +
     houses.length * 2 +
-    model.roofUnits.length +
-    model.trees.length +
+    roofUnits.length +
+    trees.length +
     model.bridges.length +
     model.boats.length +
     totalCars;
@@ -255,7 +264,7 @@ export function buildCityView(model: CityModel): CityView {
     },
     stats: {
       buildings: model.buildings.length,
-      trees: model.trees.length,
+      trees: trees.length,
       cars: totalCars,
       instances,
     },

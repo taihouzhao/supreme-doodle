@@ -10,11 +10,27 @@ const loading = document.getElementById("loading")!;
 const btnRegen = document.getElementById("btn-regen") as HTMLButtonElement;
 const btnTopdown = document.getElementById("btn-topdown") as HTMLButtonElement;
 
+// —— 画质档位：软件渲染（无 GPU）时自动降级，可用 ?q=high / ?q=lite 强制 ——
+function detectSoftwareRenderer(): boolean {
+  try {
+    const probe = document.createElement("canvas");
+    const gl = probe.getContext("webgl2") ?? probe.getContext("webgl");
+    if (!gl) return true;
+    const ext = gl.getExtension("WEBGL_debug_renderer_info");
+    const name = ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : "";
+    return /swiftshader|llvmpipe|softpipe|software/i.test(name);
+  } catch {
+    return false;
+  }
+}
+const qualityParam = new URLSearchParams(window.location.search).get("q");
+const lite = qualityParam === "lite" || (qualityParam !== "high" && detectSoftwareRenderer());
+
 // —— 渲染器 ——
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+const renderer = new THREE.WebGLRenderer({ antialias: !lite, powerPreference: "high-performance" });
+renderer.setPixelRatio(lite ? Math.min(window.devicePixelRatio, 1) : Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
+renderer.shadowMap.enabled = !lite;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
@@ -85,13 +101,14 @@ function rebuild(newSeed: number): void {
       }
       const t0 = performance.now();
       const model = generateCity(seed);
-      view = buildCityView(model);
+      view = buildCityView(model, { lite });
       scene.add(view.group);
       const ms = Math.round(performance.now() - t0);
       const s = view.stats;
       hudStats.textContent =
         `种子 ${seed} · 建筑 ${s.buildings.toLocaleString()} · 树木 ${s.trees.toLocaleString()}` +
-        ` · 车辆 ${s.cars.toLocaleString()} · 实例 ${s.instances.toLocaleString()} · 生成 ${ms}ms`;
+        ` · 车辆 ${s.cars.toLocaleString()} · 实例 ${s.instances.toLocaleString()} · 生成 ${ms}ms` +
+        (lite ? " · 简化画质" : "");
       loading.classList.add("hide");
     });
   });
