@@ -1,0 +1,21 @@
+{
+  "name": "@dashjie/city-map",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "三维虚构卫星地图：three.js 程序化城市俯瞰",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/three": "^0.185.4",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11"
+  }
+}

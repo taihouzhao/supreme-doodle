@@ -59,5 +59,6 @@ jobs:
             apps/korea-tactics/dist/
             apps/jinyong-heroes/dist/
             apps/korea-defense/dist/
+            apps/city-map/dist/
             apps/studio-site/dist/
           retention-days: 7
