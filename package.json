@@ -13,6 +13,7 @@
     "dev:korea": "npm run dev -w @dashjie/korea-tactics",
     "dev:jinyong": "npm run dev -w @dashjie/jinyong-heroes",
     "dev:defense": "npm run dev -w @dashjie/korea-defense",
+    "dev:map": "npm run dev -w @dashjie/city-map",
     "build": "npm run build --workspaces --if-present",
     "preview": "npm run preview -w @dashjie/korea-tactics",
     "preview:defense": "npm run preview -w @dashjie/korea-defense",

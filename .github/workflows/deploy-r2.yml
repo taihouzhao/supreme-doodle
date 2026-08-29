@@ -104,5 +104,6 @@ jobs:
             echo "- 决战朝鲜 https://korea-tactics.dashjie.net/index.html"
             echo "- 金庸群侠传 https://korea-tactics.dashjie.net/jinyong-heroes/"
             echo "- 决战朝鲜：塔防 https://korea-tactics.dashjie.net/korea-defense/"
+            echo "- 虚构卫星地图 https://korea-tactics.dashjie.net/map/"
             echo "- 游戏目录 https://korea-tactics.dashjie.net/games/"
           } >> "$GITHUB_STEP_SUMMARY"

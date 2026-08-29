@@ -8,7 +8,7 @@ export const GAMES = [
     name: "决战朝鲜",
     dist: "apps/korea-tactics/dist",
     prefix: "",
-    preservePrefixes: ["jinyong-heroes/", "korea-defense/", "games/"],
+    preservePrefixes: ["jinyong-heroes/", "korea-defense/", "games/", "map/"],
     url: "https://korea-tactics.dashjie.net/index.html",
   },
   {
@@ -24,6 +24,13 @@ export const GAMES = [
     dist: "apps/jinyong-heroes/dist",
     prefix: "jinyong-heroes",
     url: "https://korea-tactics.dashjie.net/jinyong-heroes/",
+  },
+  {
+    id: "city-map",
+    name: "虚构卫星地图",
+    dist: "apps/city-map/dist",
+    prefix: "map",
+    url: "https://korea-tactics.dashjie.net/map/",
   },
   {
     id: "studio-site",

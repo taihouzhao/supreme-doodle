@@ -11,6 +11,7 @@ alwaysApply: true
 |----|------|------------|
 | `@dashjie/korea-tactics` | `apps/korea-tactics/` | `npm run dev:korea` / `npm run sim` |
 | `@dashjie/jinyong-heroes` | `apps/jinyong-heroes/` | `npm run dev:jinyong` |
+| `@dashjie/city-map` | `apps/city-map/` | `npm run dev:map`，部署在 `/map/` |
 | `@dashjie/studio-site` | `apps/studio-site/` | 随 `npm run build` 产出 `/games/` |
 | `@dashjie/deploy` | `packages/deploy/` | `npm run deploy:r2` |
 
