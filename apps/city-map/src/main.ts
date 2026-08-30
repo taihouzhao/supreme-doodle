@@ -151,7 +151,7 @@ function setSeed(next: number): void {
     requestAnimationFrame(() => {
       const t0 = performance.now();
       streamer.sync(controls.target.x, controls.target.z, camera.position.y);
-      streamer.grow(9);
+      streamer.grow(25);
       const ms = Math.round(performance.now() - t0);
       const s = streamer.stats(controls.target.x, controls.target.z);
       writeHud(s, ms);

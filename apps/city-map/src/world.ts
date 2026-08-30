@@ -125,6 +125,9 @@ export function createWorld(seed: number): World {
     if (!forced && h > 0.48) return null;
     const jx = hash2(ix, iz, seed + 7);
     const jz = hash2(ix, iz, seed + 13);
+    if (forced) {
+      return { x: 0, z: 0, radius: 2800, oldAng: jx * Math.PI * 2, indAng: jz * Math.PI * 2 };
+    }
     return {
       x: (ix + 0.32 + jx * 0.36) * CORE_CELL,
       z: (iz + 0.32 + jz * 0.36) * CORE_CELL,
