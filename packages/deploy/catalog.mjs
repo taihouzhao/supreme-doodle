@@ -1,6 +1,6 @@
 /**
  * 本仓所有可部署站点。新增游戏时：在 apps/ 建包，并在这里登记 prefix。
- * prefix 为空表示桶根（决战朝鲜沿用 korea-tactics.dashjie.net/index.html）。
+ * prefix 为空表示桶根（决战朝鲜沿用 supreme-doodle.dashjie.net/index.html）。
  */
 export const GAMES = [
   {
@@ -9,34 +9,34 @@ export const GAMES = [
     dist: "apps/korea-tactics/dist",
     prefix: "",
     preservePrefixes: ["jinyong-heroes/", "korea-defense/", "games/", "map/"],
-    url: "https://korea-tactics.dashjie.net/index.html",
+    url: "https://supreme-doodle.dashjie.net/index.html",
   },
   {
     id: "korea-defense",
     name: "决战朝鲜：塔防",
     dist: "apps/korea-defense/dist",
     prefix: "korea-defense",
-    url: "https://korea-tactics.dashjie.net/korea-defense/",
+    url: "https://supreme-doodle.dashjie.net/korea-defense/",
   },
   {
     id: "jinyong-heroes",
     name: "金庸群侠传",
     dist: "apps/jinyong-heroes/dist",
     prefix: "jinyong-heroes",
-    url: "https://korea-tactics.dashjie.net/jinyong-heroes/",
+    url: "https://supreme-doodle.dashjie.net/jinyong-heroes/",
   },
   {
     id: "city-map",
     name: "虚构卫星地图",
     dist: "apps/city-map/dist",
     prefix: "map",
-    url: "https://korea-tactics.dashjie.net/map/",
+    url: "https://supreme-doodle.dashjie.net/map/",
   },
   {
     id: "studio-site",
     name: "游戏目录",
     dist: "apps/studio-site/dist",
     prefix: "games",
-    url: "https://korea-tactics.dashjie.net/games/",
+    url: "https://supreme-doodle.dashjie.net/games/",
   },
 ];
