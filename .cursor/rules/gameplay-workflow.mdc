@@ -32,9 +32,10 @@ alwaysApply: true
 3. 本地切回并 `git pull` 同步 `main`
 4. GitHub Actions **Deploy to R2** 会对 `cursor/**` 与 `main` 自动构建上传全部游戏
 5. 试玩地址：
-   - 决战朝鲜 https://korea-tactics.dashjie.net/index.html
-   - 金庸群侠传 https://korea-tactics.dashjie.net/jinyong-heroes/index.html
-   - 目录 https://korea-tactics.dashjie.net/games/index.html
+   - 决战朝鲜 https://supreme-doodle.dashjie.net/index.html
+   - 金庸群侠传 https://supreme-doodle.dashjie.net/jinyong-heroes/index.html
+   - 虚构卫星地图 https://supreme-doodle.dashjie.net/map/
+   - 目录 https://supreme-doodle.dashjie.net/games/index.html
 6. 可用 `npm run ship` 一键：模拟门槛 → 构建检查 → 提醒推送部署（朝鲜战争玩法收尾）
 
 不要把「只开了 PR、没推送/没进部署白名单/没 merge」当成已完成。CI 红则先修再合；用户明确说不要 merge 时才停在 PR。
